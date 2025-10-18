@@ -6,6 +6,8 @@ const OropendolaProvider = require('./src/ai/providers/oropendola-provider');
 const AuthManager = require('./src/auth/auth-manager');
 const OropendolaSidebarProvider = require('./src/sidebar/sidebar-provider');
 const OropendolaSettingsProvider = require('./src/sidebar/settings-provider');
+const OropendolaAutocompleteProvider = require('./src/autocomplete/autocomplete-provider');
+const EditMode = require('./src/edit/edit-mode');
 
 let gitHubManager;
 let chatManager;
@@ -16,6 +18,8 @@ let sidebarProvider;
 let settingsProvider;
 let statusBarItem;
 let lastResponseTime = 0;
+let autocompleteProvider;
+let editMode;
 
 /**
  * Extension activation
@@ -181,6 +185,18 @@ function initializeOropendolaProvider() {
         });
 
         oropendolaProvider.setStatusBarItem(statusBarItem);
+
+        // Initialize autocomplete provider
+        if (!autocompleteProvider && config.get('autocomplete.enabled', true)) {
+            autocompleteProvider = new OropendolaAutocompleteProvider(oropendolaProvider);
+            console.log('✅ Autocomplete provider initialized');
+        }
+
+        // Initialize edit mode
+        if (!editMode) {
+            editMode = new EditMode(oropendolaProvider);
+            console.log('✅ Edit mode initialized');
+        }
     }
 }
 
@@ -336,6 +352,42 @@ function registerCommands(context) {
         })
     );
 
+    // Edit Code (Cmd+I)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.editCode', async () => {
+            if (!oropendolaProvider || !editMode) {
+                vscode.window.showWarningMessage('Please sign in first to use Edit Mode');
+                return;
+            }
+            await editMode.startEdit();
+        })
+    );
+
+    // Toggle Autocomplete
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.toggleAutocomplete', () => {
+            if (!autocompleteProvider) {
+                vscode.window.showWarningMessage('Autocomplete not initialized. Please sign in first.');
+                return;
+            }
+            const newState = !autocompleteProvider.isEnabled;
+            autocompleteProvider.setEnabled(newState);
+            vscode.window.showInformationMessage(
+                `Autocomplete ${newState ? 'enabled' : 'disabled'} ✨`
+            );
+        })
+    );
+
+    // Clear Autocomplete Cache
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.clearAutocompleteCache', () => {
+            if (autocompleteProvider) {
+                autocompleteProvider.clearCache();
+                vscode.window.showInformationMessage('Autocomplete cache cleared');
+            }
+        })
+    );
+
     // Find Similar Repositories
     context.subscriptions.push(
         vscode.commands.registerCommand('oropendola.findSimilar', async () => {
@@ -349,6 +401,17 @@ function registerCommands(context) {
             await listRepositories();
         })
     );
+
+    // Register autocomplete provider for all languages
+    if (autocompleteProvider) {
+        context.subscriptions.push(
+            vscode.languages.registerInlineCompletionItemProvider(
+                { pattern: '**' }, // All files
+                autocompleteProvider
+            )
+        );
+        console.log('✅ Autocomplete provider registered for all languages');
+    }
 }
 
 /**

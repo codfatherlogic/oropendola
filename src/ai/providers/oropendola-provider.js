@@ -341,6 +341,51 @@ class OropendolaProvider {
             remainingRequests: this.remainingRequests
         };
     }
+
+    /**
+     * Fast completion endpoint for autocomplete
+     * Optimized for speed with lower temperature and smaller token limits
+     * @param {string} prompt - Code completion prompt
+     * @param {Object} options - Completion options
+     * @returns {Promise<string>} Completion text
+     */
+    async complete(prompt, options = {}) {
+        const endpoint = `${this.apiUrl}/api/method/ai_assistant.api.chat_completion`;
+
+        const requestBody = {
+            message: prompt,
+            stream: false,
+            model_preference: options.model || 'fast', // Use fast model for autocomplete
+            temperature: options.temperature || 0.2, // Lower temperature for deterministic results
+            max_tokens: options.maxTokens || 100 // Shorter completions
+        };
+
+        try {
+            const response = await axios.post(
+                endpoint,
+                requestBody,
+                {
+                    headers: this.getHeaders(),
+                    timeout: 5000 // Shorter timeout for autocomplete
+                }
+            );
+
+            // Extract completion
+            if (response.data.message) {
+                return response.data.message;
+            } else if (response.data.choices?.[0]?.message?.content) {
+                return response.data.choices[0].message.content;
+            } else if (response.data.content) {
+                return response.data.content;
+            } else {
+                return '';
+            }
+        } catch (error) {
+            // Don't throw errors for autocomplete failures - just return empty
+            console.warn('Autocomplete request failed:', error.message);
+            return '';
+        }
+    }
 }
 
 module.exports = OropendolaProvider;

@@ -126,6 +126,24 @@
         "title": "Show Keyboard Shortcuts",
         "category": "Oropendola",
         "icon": "$(keyboard)"
+      },
+      {
+        "command": "oropendola.editCode",
+        "title": "Edit Code with AI",
+        "category": "Oropendola",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "oropendola.toggleAutocomplete",
+        "title": "Toggle Autocomplete",
+        "category": "Oropendola",
+        "icon": "$(symbol-method)"
+      },
+      {
+        "command": "oropendola.clearAutocompleteCache",
+        "title": "Clear Autocomplete Cache",
+        "category": "Oropendola",
+        "icon": "$(clear-all)"
       }
     ],
     "views": {
@@ -248,6 +266,21 @@
           "default": "",
           "description": "Session cookies (automatically managed - do not modify manually)",
           "scope": "application"
+        },
+        "oropendola.autocomplete.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered autocomplete suggestions"
+        },
+        "oropendola.autocomplete.debounceDelay": {
+          "type": "number",
+          "default": 200,
+          "description": "Delay in milliseconds before triggering autocomplete"
+        },
+        "oropendola.edit.showDiffView": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show diff view when editing code with AI"
         }
       }
     },
@@ -288,9 +321,22 @@
         {
           "command": "oropendola.improveCode",
           "when": "editorHasSelection"
+        },
+        {
+          "command": "oropendola.editCode",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "oropendola.toggleAutocomplete",
+          "when": "true"
         }
       ],
       "editor/context": [
+        {
+          "command": "oropendola.editCode",
+          "when": "editorHasSelection",
+          "group": "oropendola@0"
+        },
         {
           "command": "oropendola.explainCode",
           "when": "editorHasSelection",
@@ -335,10 +381,19 @@
       },
       {
         "command": "oropendola.openChat",
-        "key": "cmd+shift+c",
-        "mac": "cmd+shift+c", 
-        "win": "ctrl+shift+c",
-        "linux": "ctrl+shift+c"
+        "key": "cmd+l",
+        "mac": "cmd+l", 
+        "win": "ctrl+l",
+        "linux": "ctrl+l",
+        "when": "editorFocus"
+      },
+      {
+        "command": "oropendola.editCode",
+        "key": "cmd+i",
+        "mac": "cmd+i",
+        "win": "ctrl+i",
+        "linux": "ctrl+i",
+        "when": "editorTextFocus && editorHasSelection"
       },
       {
         "command": "oropendola.explainCode",
