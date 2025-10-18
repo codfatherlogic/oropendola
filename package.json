@@ -1,0 +1,400 @@
+{
+  "name": "oropendola-ai-assistant",
+  "displayName": "Oropendola AI Assistant",
+  "description": "AI-powered coding assistant with real-time streaming (Based on Roo-Code architecture)",
+  "version": "2.0.0",
+  "publisher": "oropendola",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codfatherlogic/oropendola-ai"
+  },
+  "bugs": {
+    "url": "https://oropendola.ai/support"
+  },
+  "homepage": "https://oropendola.ai",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "SCM Providers",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "chat",
+    "github",
+    "fork",
+    "repository",
+    "code-analysis",
+    "assistant"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "oropendola.test",
+        "title": "Test Extension",
+        "category": "Oropendola",
+        "icon": "$(heart)"
+      },
+      {
+        "command": "oropendola.login",
+        "title": "Sign In",
+        "category": "Oropendola",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "oropendola.logout",
+        "title": "Sign Out",
+        "category": "Oropendola",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "oropendola.setup",
+        "title": "Setup",
+        "category": "Oropendola",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "oropendola.openChat",
+        "title": "Chat",
+        "category": "Oropendola",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "oropendola.checkSubscription",
+        "title": "Check Subscription",
+        "category": "Oropendola",
+        "icon": "$(info)"
+      },
+      {
+        "command": "oropendola.forkRepository",
+        "title": "Fork Repository",
+        "category": "Oropendola",
+        "icon": "$(repo-forked)"
+      },
+      {
+        "command": "oropendola.analyzeCode",
+        "title": "Analyze Code",
+        "category": "Oropendola",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "oropendola.reviewCode",
+        "title": "Review Code",
+        "category": "Oropendola",
+        "icon": "$(check)"
+      },
+      {
+        "command": "oropendola.explainCode",
+        "title": "Explain Code",
+        "category": "Oropendola",
+        "icon": "$(question)"
+      },
+      {
+        "command": "oropendola.fixCode",
+        "title": "Fix Code",
+        "category": "Oropendola",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "oropendola.improveCode",
+        "title": "Improve Code",
+        "category": "Oropendola",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "oropendola.findSimilar",
+        "title": "Find Similar Repositories",
+        "category": "Oropendola",
+        "icon": "$(search)"
+      },
+      {
+        "command": "oropendola.listRepositories",
+        "title": "List My Repositories",
+        "category": "Oropendola",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "oropendola.showShortcuts",
+        "title": "Show Keyboard Shortcuts",
+        "category": "Oropendola",
+        "icon": "$(keyboard)"
+      }
+    ],
+    "views": {
+      "oropendola-sidebar": [
+        {
+          "id": "oropendola.chatView",
+          "name": "Chat",
+          "type": "webview",
+          "contextualTitle": "Oropendola AI Chat"
+        },
+        {
+          "id": "oropendola.settingsView",
+          "name": "Settings",
+          "type": "webview",
+          "contextualTitle": "Oropendola Settings"
+        }
+      ],
+      "explorer": [
+        {
+          "id": "oropendola-repositories",
+          "name": "Oropendola Repositories",
+          "when": "oropendola.enabled"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "oropendola-sidebar",
+          "title": "Oropendola AI",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Oropendola AI",
+      "properties": {
+        "oropendola.api.url": {
+          "type": "string",
+          "default": "https://oropendola.ai",
+          "description": "Oropendola API base URL (HTTPS on port 443)",
+          "scope": "application"
+        },
+        "oropendola.api.key": {
+          "type": "string",
+          "default": "",
+          "description": "Your Oropendola API key from oropendola.ai",
+          "scope": "application"
+        },
+        "oropendola.api.secret": {
+          "type": "string",
+          "default": "",
+          "description": "Your Oropendola API secret from oropendola.ai",
+          "scope": "application"
+        },
+        "oropendola.user.email": {
+          "type": "string",
+          "default": "",
+          "description": "Your Oropendola account email",
+          "scope": "application"
+        },
+        "oropendola.user.token": {
+          "type": "string",
+          "default": "",
+          "description": "Your Oropendola session token (automatically set after login)",
+          "scope": "application"
+        },
+        "oropendola.ai.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Controls creativity (0.0 = focused, 2.0 = creative)"
+        },
+        "oropendola.ai.maxTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Maximum response length in tokens"
+        },
+        "oropendola.github.token": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub Personal Access Token for repository operations",
+          "scope": "application"
+        },
+        "oropendola.github.defaultOrg": {
+          "type": "string",
+          "default": "",
+          "description": "Default organization for forked repositories"
+        },
+        "oropendola.analysis.autoAnalyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically analyze repositories when forked"
+        },
+        "oropendola.analysis.excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules",
+            ".git",
+            "dist",
+            "build",
+            "out",
+            "vendor",
+            ".vscode",
+            "*.min.js"
+          ],
+          "description": "Patterns to exclude from repository analysis"
+        },
+        "oropendola.chat.historySize": {
+          "type": "number",
+          "default": 50,
+          "description": "Maximum number of chat messages to keep in history"
+        },
+        "oropendola.session.cookies": {
+          "type": "string",
+          "default": "",
+          "description": "Session cookies (automatically managed - do not modify manually)",
+          "scope": "application"
+        }
+      }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "oropendola.setup",
+          "when": "true"
+        },
+        {
+          "command": "oropendola.openChat",
+          "when": "true"
+        },
+        {
+          "command": "oropendola.checkSubscription",
+          "when": "true"
+        },
+        {
+          "command": "oropendola.forkRepository",
+          "when": "true"
+        },
+        {
+          "command": "oropendola.analyzeCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "oropendola.reviewCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "oropendola.explainCode",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "oropendola.fixCode",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "oropendola.improveCode",
+          "when": "editorHasSelection"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "oropendola.explainCode",
+          "when": "editorHasSelection",
+          "group": "oropendola@1"
+        },
+        {
+          "command": "oropendola.fixCode",
+          "when": "editorHasSelection",
+          "group": "oropendola@2"
+        },
+        {
+          "command": "oropendola.improveCode",
+          "when": "editorHasSelection",
+          "group": "oropendola@3"
+        },
+        {
+          "command": "oropendola.analyzeCode",
+          "when": "editorIsOpen",
+          "group": "oropendola@4"
+        },
+        {
+          "command": "oropendola.reviewCode",
+          "when": "editorIsOpen",
+          "group": "oropendola@5"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "oropendola.test", 
+        "key": "cmd+shift+t",
+        "mac": "cmd+shift+t",
+        "win": "ctrl+shift+t",
+        "linux": "ctrl+shift+t"
+      },
+      {
+        "command": "oropendola.login",
+        "key": "cmd+shift+l",
+        "mac": "cmd+shift+l",
+        "win": "ctrl+shift+l",
+        "linux": "ctrl+shift+l"
+      },
+      {
+        "command": "oropendola.openChat",
+        "key": "cmd+shift+c",
+        "mac": "cmd+shift+c", 
+        "win": "ctrl+shift+c",
+        "linux": "ctrl+shift+c"
+      },
+      {
+        "command": "oropendola.explainCode",
+        "key": "cmd+shift+e",
+        "mac": "cmd+shift+e",
+        "win": "ctrl+shift+e", 
+        "linux": "ctrl+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "oropendola.fixCode",
+        "key": "cmd+shift+f",
+        "mac": "cmd+shift+f",
+        "win": "ctrl+shift+f",
+        "linux": "ctrl+shift+f", 
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "oropendola.improveCode",
+        "key": "cmd+shift+i",
+        "mac": "cmd+shift+i",
+        "win": "ctrl+shift+i",
+        "linux": "ctrl+shift+i",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "oropendola.showShortcuts",
+        "key": "cmd+shift+h",
+        "mac": "cmd+shift+h",
+        "win": "ctrl+shift+h",
+        "linux": "ctrl+shift+h"
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "node ./test/runTest.js",
+    "vscode:prepublish": "npm run lint",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.2",
+    "axios": "^1.6.2",
+    "simple-git": "^3.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.74.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.55.0",
+    "prettier": "^3.1.0",
+    "sharp": "^0.34.4"
+  },
+  "icon": "media/icon.png",
+  "license": "MIT"
+}

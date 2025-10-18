@@ -1,0 +1,730 @@
+/**
+ * ConversationTask - Task-based conversation management
+ * Inspired by KiloCode's Task abstraction pattern
+ *
+ * Encapsulates a single conversation instance with:
+ * - Message history
+ * - Tool execution
+ * - Error recovery
+ * - State management
+ */
+
+const EventEmitter = require('events');
+const vscode = require('vscode');
+
+class ConversationTask extends EventEmitter {
+    constructor(taskId, options = {}) {
+        super();
+
+        this.taskId = taskId;
+        this.instanceId = Date.now();
+        this.status = 'idle'; // 'idle' | 'running' | 'waiting' | 'paused' | 'completed' | 'error'
+        this.createdAt = new Date();
+
+        // Configuration
+        this.apiUrl = options.apiUrl;
+        this.sessionCookies = options.sessionCookies;
+        this.mode = options.mode || 'agent'; // 'ask' | 'edit' | 'agent'
+        this.providerRef = options.providerRef; // WeakRef to parent provider
+
+        // Conversation state
+        this.messages = [];
+        this.toolResults = [];
+        this.conversationId = null;
+
+        // Error handling
+        this.consecutiveMistakeCount = 0;
+        this.consecutiveMistakeLimit = options.consecutiveMistakeLimit || 3;
+        this.retryCount = 0;
+        this.maxRetries = 3;
+
+        // Context management
+        this.maxContextTokens = 128000; // GPT-4 default
+
+        // Abort control
+        this.abort = false;
+        this.abortController = null;
+    }
+
+    /**
+     * Start the task execution loop
+     */
+    async run(initialMessage, images = []) {
+        try {
+            this.status = 'running';
+            this.emit('taskStarted', this.taskId);
+
+            console.log(`🚀 Task ${this.taskId} started`);
+
+            // Add initial user message
+            this.addMessage('user', initialMessage, images);
+
+            // Main execution loop
+            while (!this.abort && this.status === 'running') {
+                try {
+                    // Make AI request with retry logic
+                    const response = await this._makeAIRequestWithRetry();
+
+                    if (!response) {
+                        console.log('❌ No response from AI, ending task');
+                        break;
+                    }
+
+                    // Parse tool calls from response
+                    const toolCalls = this._parseToolCalls(response);
+
+                    if (toolCalls.length > 0) {
+                        console.log(`🔧 Found ${toolCalls.length} tool call(s) to execute`);
+
+                        // Execute all tool calls
+                        const toolResults = await this._executeToolCalls(toolCalls);
+
+                        // Add tool results to conversation
+                        for (const result of toolResults) {
+                            this.addMessage('tool_result', result.content, [], result.tool_name);
+                        }
+
+                        // Continue loop with tool results
+                        this.consecutiveMistakeCount = 0; // Reset on successful tool execution
+                    } else {
+                        console.log('ℹ️ No tool calls found, task completing');
+
+                        // Emit the assistant's final response to display in UI
+                        this.emit('assistantMessage', this.taskId, response);
+
+                        // Check if task is complete or needs continuation
+                        const shouldContinue = await this._checkTaskCompletion();
+
+                        if (!shouldContinue) {
+                            break;
+                        }
+
+                        this.consecutiveMistakeCount++;
+                    }
+
+                    // Check consecutive mistakes
+                    if (this.consecutiveMistakeCount >= this.consecutiveMistakeLimit) {
+                        console.warn(`⚠️ Consecutive mistake limit reached (${this.consecutiveMistakeCount})`);
+
+                        // Ask user for guidance
+                        const shouldRetry = await this._handleMistakeLimit();
+                        if (!shouldRetry) {
+                            break;
+                        }
+
+                        this.consecutiveMistakeCount = 0;
+                    }
+
+                } catch (loopError) {
+                    console.error('❌ Error in task loop:', loopError);
+
+                    // Handle context window errors
+                    if (this._isContextWindowError(loopError)) {
+                        await this._handleContextWindowError();
+                        continue; // Retry with reduced context
+                    }
+
+                    // Handle rate limit errors
+                    if (this._isRateLimitError(loopError)) {
+                        await this._handleRateLimitError();
+                        continue; // Retry after delay
+                    }
+
+                    // Other errors - re-throw
+                    throw loopError;
+                }
+            }
+
+            // Task completed
+            this.status = 'completed';
+            this.emit('taskCompleted', this.taskId);
+            console.log(`✅ Task ${this.taskId} completed`);
+
+        } catch (error) {
+            this.status = 'error';
+            this.emit('taskError', this.taskId, error);
+            console.error(`❌ Task ${this.taskId} error:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Make AI request with exponential backoff retry logic
+     * KiloCode pattern: Retry with progressive delays
+     */
+    async _makeAIRequestWithRetry(retryCount = 0) {
+        const axios = require('axios');
+        const http = require('http');
+        const https = require('https');
+
+        try {
+            // Check context window before making request
+            this._ensureContextWithinLimits();
+
+            // Build messages for API
+            const apiMessages = this._buildApiMessages();
+
+            // Create abort controller for this request
+            this.abortController = new AbortController();
+
+            console.log(`📤 Making AI request (attempt ${retryCount + 1}/${this.maxRetries + 1})`);
+
+            // Create custom HTTP/HTTPS agents to bypass Expect header
+            const httpAgent = new http.Agent({ keepAlive: true });
+            const httpsAgent = new https.Agent({ keepAlive: true });
+
+            const response = await axios({
+                method: 'POST',
+                url: `${this.apiUrl}/api/method/ai_assistant.api.chat`,
+                data: {
+                    message: apiMessages[apiMessages.length - 1].content,
+                    conversation_id: this.conversationId,
+                    mode: this.mode,
+                    context: this._buildContext()
+                },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cookie': this.sessionCookies,
+                    'Content-Length': Buffer.byteLength(JSON.stringify({
+                        message: apiMessages[apiMessages.length - 1].content,
+                        conversation_id: this.conversationId,
+                        mode: this.mode,
+                        context: this._buildContext()
+                    }))
+                },
+                timeout: 120000,
+                signal: this.abortController.signal,
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity,
+                httpAgent: httpAgent,
+                httpsAgent: httpsAgent,
+                // Prevent axios from adding any automatic headers
+                transformRequest: [(data) => {
+                    return JSON.stringify(data);
+                }]
+            });
+
+            // Save conversation ID
+            if (response.data?.message?.conversation_id) {
+                this.conversationId = response.data.message.conversation_id;
+            }
+
+            // Extract AI response
+            const aiResponse = response.data?.message?.response ||
+                              response.data?.message?.content ||
+                              response.data?.message?.text;
+
+            if (!aiResponse) {
+                throw new Error('No AI response in server reply');
+            }
+
+            // Add AI response to messages
+            this.addMessage('assistant', aiResponse);
+
+            // Reset retry count on success
+            this.retryCount = 0;
+
+            return aiResponse;
+
+        } catch (error) {
+            console.error(`❌ AI request error (attempt ${retryCount + 1}):`, error.message);
+
+            // Check if we should retry
+            if (retryCount < this.maxRetries && this._shouldRetry(error)) {
+                // Calculate exponential backoff delay
+                // 1s, 2s, 4s, 8s... up to 60s max
+                const delay = Math.min(Math.pow(2, retryCount) * 1000, 60000);
+
+                console.log(`⏳ Retrying in ${delay / 1000}s...`);
+
+                // Emit retry event
+                this.emit('taskRetrying', this.taskId, retryCount + 1, delay);
+
+                // Wait with exponential backoff
+                await new Promise(resolve => setTimeout(resolve, delay));
+
+                // Retry
+                return this._makeAIRequestWithRetry(retryCount + 1);
+            }
+
+            // Max retries exceeded or non-retryable error
+            throw error;
+        }
+    }
+
+    /**
+     * Check if error is retryable
+     */
+    _shouldRetry(error) {
+        // Retry on timeout
+        if (error.code === 'ECONNABORTED') return true;
+
+        // Retry on network errors
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') return true;
+
+        // Retry on rate limits
+        if (error.response?.status === 429) return true;
+
+        // Retry on 417 Expectation Failed (axios Expect header issue)
+        if (error.response?.status === 417) return true;
+
+        // Retry on server errors (500-599)
+        if (error.response?.status >= 500) return true;
+
+        // Don't retry on client errors (400-499) except 429 and 417
+        if (error.response?.status >= 400 && error.response?.status < 500) return false;
+
+        return false;
+    }
+
+    /**
+     * Parse tool calls from AI response
+     * Supports markdown format (current Oropendola backend)
+     * Modes:
+     * - ASK: Tool calls are ignored (read-only)
+     * - AGENT: All tool calls allowed + autonomous context discovery
+     */
+    _parseToolCalls(aiResponse) {
+        // In ASK mode, ignore all tool calls - just return empty array
+        if (this.mode === 'ask') {
+            console.log('ℹ️ ASK mode: Ignoring tool calls (read-only mode)');
+            return [];
+        }
+
+        // AGENT mode: Parse tool calls
+        const toolCalls = [];
+
+        try {
+            // Support multiple tool calls in one response
+            const toolCallRegex = /```tool_call\s*\n([\s\S]*?)\n```/g;
+            let match;
+            let callIndex = 0;
+
+            while ((match = toolCallRegex.exec(aiResponse)) !== null) {
+                callIndex++;
+                console.log(`🔍 Found tool call #${callIndex}`);
+
+                const jsonStr = match[1].trim();
+
+                try {
+                    // Try direct JSON parse first
+                    const toolCall = JSON.parse(jsonStr);
+
+                    toolCalls.push({
+                        id: `call_${this.taskId}_${Date.now()}_${callIndex}`,
+                        ...toolCall
+                    });
+                    console.log(`✅ Parsed tool call #${callIndex}:`, toolCall.action);
+
+                } catch (parseError) {
+                    console.log(`⚠️ Direct parse failed for call #${callIndex}, using manual extraction`);
+
+                    // Fallback: Manual field extraction (handles newlines)
+                    const toolCall = this._extractToolCallManually(jsonStr);
+                    if (toolCall) {
+                        toolCalls.push({
+                            id: `call_${this.taskId}_${Date.now()}_${callIndex}`,
+                            ...toolCall
+                        });
+                        console.log(`✅ Manually extracted tool call #${callIndex}:`, toolCall.action);
+                    }
+                }
+            }
+
+            console.log(`📊 Total tool calls found: ${toolCalls.length}`);
+
+        } catch (error) {
+            console.error('❌ Error parsing tool calls:', error);
+        }
+
+        return toolCalls;
+    }
+
+    /**
+     * Manually extract tool call fields (handles malformed JSON)
+     * KiloCode pattern: Fallback extraction for robustness
+     */
+    _extractToolCallManually(jsonStr) {
+        try {
+            const actionMatch = jsonStr.match(/"action"\s*:\s*"([^"]+)"/);
+            const pathMatch = jsonStr.match(/"path"\s*:\s*"([^"]+)"/);
+            const descMatch = jsonStr.match(/"description"\s*:\s*"([^"]+)"/);
+
+            // Extract content field (may have newlines)
+            const contentStart = jsonStr.indexOf('"content"');
+            let content = '';
+
+            if (contentStart !== -1) {
+                const afterContent = jsonStr.substring(contentStart);
+                const contentValueStart = afterContent.indexOf('"', afterContent.indexOf(':') + 1) + 1;
+                let contentEnd = afterContent.indexOf('",', contentValueStart);
+
+                if (contentEnd === -1) {
+                    contentEnd = afterContent.lastIndexOf('"', afterContent.length - 2);
+                }
+
+                content = afterContent.substring(contentValueStart, contentEnd);
+            }
+
+            return {
+                action: actionMatch ? actionMatch[1] : 'unknown',
+                path: pathMatch ? pathMatch[1] : '',
+                content: content,
+                description: descMatch ? descMatch[1] : ''
+            };
+
+        } catch (error) {
+            console.error('❌ Manual extraction failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Execute multiple tool calls
+     * KiloCode pattern: Sequential execution with results tracking
+     */
+    async _executeToolCalls(toolCalls) {
+        const results = [];
+
+        this.status = 'running'; // Ensure we're in running state
+        this.emit('toolsExecuting', this.taskId, toolCalls.length);
+
+        for (let i = 0; i < toolCalls.length; i++) {
+            if (this.abort) {
+                console.log('⏹ Tool execution aborted');
+                break;
+            }
+
+            const tool = toolCalls[i];
+            console.log(`🔧 [${i + 1}/${toolCalls.length}] Executing: ${tool.action}`);
+
+            try {
+                const result = await this._executeSingleTool(tool);
+                results.push(result);
+
+                this.emit('toolCompleted', this.taskId, tool, result);
+
+            } catch (toolError) {
+                console.error('❌ Tool execution error:', toolError);
+
+                results.push({
+                    tool_use_id: tool.id,
+                    tool_name: tool.action,
+                    content: `Error: ${toolError.message}`,
+                    success: false
+                });
+
+                this.emit('toolError', this.taskId, tool, toolError);
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Execute a single tool call
+     */
+    async _executeSingleTool(toolCall) {
+        const { action, path, content, description } = toolCall;
+
+        switch (action) {
+            case 'create_file':
+                return await this._executeCreateFile(path, content, description);
+
+            case 'modify_file':
+            case 'edit_file':
+                return await this._executeModifyFile(path, content, description);
+
+            case 'read_file':
+                return await this._executeReadFile(path);
+
+            default:
+                throw new Error(`Unknown tool action: ${action}`);
+        }
+    }
+
+    /**
+     * Execute create_file tool
+     */
+    async _executeCreateFile(filePath, content, _description) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        try {
+            // Get workspace path
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            // Create directory if needed
+            const dirPath = pathModule.dirname(fullPath);
+            await fs.mkdir(dirPath, { recursive: true });
+
+            // Write file
+            await fs.writeFile(fullPath, content || '', 'utf8');
+
+            // Open file in editor
+            const document = await vscode.workspace.openTextDocument(fullPath);
+            await vscode.window.showTextDocument(document);
+
+            console.log(`✅ Created file: ${filePath}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'create_file',
+                content: `Successfully created file: ${filePath}`,
+                success: true
+            };
+
+        } catch (error) {
+            throw new Error(`Failed to create file ${filePath}: ${error.message}`);
+        }
+    }
+
+    /**
+     * Execute modify_file tool
+     */
+    async _executeModifyFile(filePath, newContent, _description) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            // Write updated content
+            await fs.writeFile(fullPath, newContent, 'utf8');
+
+            console.log(`✅ Modified file: ${filePath}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'modify_file',
+                content: `Successfully modified file: ${filePath}`,
+                success: true
+            };
+
+        } catch (error) {
+            throw new Error(`Failed to modify file ${filePath}: ${error.message}`);
+        }
+    }
+
+    /**
+     * Execute read_file tool
+     */
+    async _executeReadFile(filePath) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            const content = await fs.readFile(fullPath, 'utf8');
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'read_file',
+                content: content,
+                success: true
+            };
+
+        } catch (error) {
+            throw new Error(`Failed to read file ${filePath}: ${error.message}`);
+        }
+    }
+
+    /**
+     * Context window management
+     * KiloCode pattern: Auto-reduction when approaching limits
+     */
+    _ensureContextWithinLimits() {
+        const totalTokens = this._estimateTokenCount();
+        const maxTokens = this.maxContextTokens * 0.9; // 90% threshold
+
+        if (totalTokens > maxTokens) {
+            console.warn(`⚠️ Context window nearly full (${totalTokens}/${this.maxContextTokens}), reducing...`);
+            this._reduceContext();
+        }
+    }
+
+    /**
+     * Estimate token count (rough approximation)
+     */
+    _estimateTokenCount() {
+        let totalChars = 0;
+
+        for (const msg of this.messages) {
+            totalChars += (msg.content || '').length;
+        }
+
+        // Rough estimate: 1 token ≈ 4 characters
+        return Math.ceil(totalChars / 4);
+    }
+
+    /**
+     * Reduce context by keeping only recent messages
+     */
+    _reduceContext() {
+        const keepCount = 15; // Keep last 15 messages
+
+        if (this.messages.length > keepCount) {
+            const removed = this.messages.length - keepCount;
+            this.messages = this.messages.slice(-keepCount);
+            console.log(`📉 Reduced context: removed ${removed} old messages, kept ${keepCount} recent messages`);
+
+            this.emit('contextReduced', this.taskId, removed, keepCount);
+        }
+    }
+
+    /**
+     * Handle context window error
+     */
+    async _handleContextWindowError() {
+        console.warn('⚠️ Context window exceeded, reducing by 50%...');
+
+        const keepCount = Math.floor(this.messages.length / 2);
+        this.messages = this.messages.slice(-keepCount);
+
+        console.log(`📉 Kept ${keepCount} most recent messages`);
+    }
+
+    /**
+     * Handle rate limit error
+     */
+    async _handleRateLimitError() {
+        const delay = 5000; // 5 seconds
+        console.warn(`⚠️ Rate limit hit, waiting ${delay / 1000}s...`);
+
+        this.emit('rateLimited', this.taskId, delay);
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    /**
+     * Check if error is context window related
+     */
+    _isContextWindowError(error) {
+        const message = error.message?.toLowerCase() || '';
+        return message.includes('context') ||
+               message.includes('token') ||
+               message.includes('length') ||
+               error.response?.status === 413; // Payload too large
+    }
+
+    /**
+     * Check if error is rate limit related
+     */
+    _isRateLimitError(error) {
+        return error.response?.status === 429 ||
+               error.message?.toLowerCase().includes('rate limit');
+    }
+
+    /**
+     * Check if task should continue
+     */
+    async _checkTaskCompletion() {
+        // For now, end task when no tools are used
+        // In future, could ask user if task is complete
+        return false;
+    }
+
+    /**
+     * Handle consecutive mistake limit
+     */
+    async _handleMistakeLimit() {
+        console.warn('⚠️ AI made too many mistakes, requesting user guidance');
+
+        // Emit event for UI to show prompt
+        this.emit('mistakeLimitReached', this.taskId, this.consecutiveMistakeCount);
+
+        // For now, just continue
+        // In future, wait for user response
+        return true;
+    }
+
+    /**
+     * Build API messages
+     */
+    _buildApiMessages() {
+        return this.messages.map(msg => ({
+            role: msg.role === 'tool_result' ? 'user' : msg.role,
+            content: msg.content
+        }));
+    }
+
+    /**
+     * Build context object
+     */
+    _buildContext() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const activeEditor = vscode.window.activeTextEditor;
+
+        return {
+            workspace: workspaceFolders ? workspaceFolders[0].name : null,
+            activeFile: activeEditor ? {
+                path: activeEditor.document.fileName,
+                language: activeEditor.document.languageId
+            } : null
+        };
+    }
+
+    /**
+     * Add message to conversation
+     */
+    addMessage(role, content, images = [], toolName = null) {
+        this.messages.push({
+            role: role,
+            content: content,
+            images: images,
+            toolName: toolName,
+            timestamp: new Date()
+        });
+    }
+
+    /**
+     * Abort the task
+     */
+    abortTask() {
+        console.log(`⏹ Aborting task ${this.taskId}`);
+        this.abort = true;
+        this.status = 'completed';
+
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+
+        this.emit('taskAborted', this.taskId);
+    }
+
+    /**
+     * Get task summary
+     */
+    getSummary() {
+        return {
+            taskId: this.taskId,
+            instanceId: this.instanceId,
+            status: this.status,
+            messageCount: this.messages.length,
+            conversationId: this.conversationId,
+            createdAt: this.createdAt,
+            duration: Date.now() - this.createdAt.getTime()
+        };
+    }
+}
+
+module.exports = ConversationTask;

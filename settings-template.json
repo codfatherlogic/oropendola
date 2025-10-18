@@ -1,0 +1,49 @@
+{
+    // ============================================
+    // OROPENDOLA AI ASSISTANT - SETTINGS
+    // ============================================
+    // Copy these into your VS Code User Settings (JSON)
+    // Cmd+Shift+P → "Preferences: Open User Settings (JSON)"
+    
+    // -----------------------------------------
+    // REQUIRED: Backend API URL
+    // -----------------------------------------
+    "oropendola.api.url": "https://oropendola.ai",
+    
+    
+    // -----------------------------------------
+    // AUTOMATIC: Filled after login
+    // -----------------------------------------
+    // These are set automatically when you login with Cmd+Shift+L
+    "oropendola.user.email": "",
+    "oropendola.user.token": "",
+    "oropendola.api.key": "",
+    "oropendola.api.secret": "",
+    
+    
+    // -----------------------------------------
+    // OPTIONAL: OpenAI API (For AI Chat)
+    // -----------------------------------------
+    // Get your API key from: https://platform.openai.com/api-keys
+    // This enables AI chat responses
+    "oropendola.openai.apiKey": "",
+    // Example: "oropendola.openai.apiKey": "sk-proj-abc123...",
+    
+    
+    // -----------------------------------------
+    // OPTIONAL: GitHub Integration
+    // -----------------------------------------
+    // Get token from: https://github.com/settings/tokens
+    // Scopes needed: repo, read:org, read:user
+    "oropendola.github.token": "",
+    // Example: "oropendola.github.token": "ghp_abc123...",
+    
+    
+    // -----------------------------------------
+    // ADVANCED: Custom Configuration
+    // -----------------------------------------
+    "oropendola.workspace.autoAnalyze": true,
+    "oropendola.workspace.maxFileSize": 1048576,
+    "oropendola.chat.streamingEnabled": true,
+    "oropendola.chat.maxTokens": 2000
+}
