@@ -7,10 +7,12 @@
  * - Tool execution
  * - Error recovery
  * - State management
+ * - File change tracking (Qoder-style)
  */
 
 const EventEmitter = require('events');
 const vscode = require('vscode');
+const FileChangeTracker = require('../utils/file-change-tracker');
 
 class ConversationTask extends EventEmitter {
     constructor(taskId, options = {}) {
@@ -44,6 +46,12 @@ class ConversationTask extends EventEmitter {
         // Abort control
         this.abort = false;
         this.abortController = null;
+
+        // File change tracking (Qoder-style)
+        this.fileChangeTracker = new FileChangeTracker();
+        this.taskStartTime = null;
+        this.taskEndTime = null;
+        this.errors = [];
     }
 
     /**
@@ -52,6 +60,7 @@ class ConversationTask extends EventEmitter {
     async run(initialMessage, images = []) {
         try {
             this.status = 'running';
+            this.taskStartTime = new Date().toISOString();
             this.emit('taskStarted', this.taskId);
 
             console.log(`🚀 Task ${this.taskId} started`);
@@ -66,7 +75,7 @@ class ConversationTask extends EventEmitter {
                     const response = await this._makeAIRequestWithRetry();
 
                     if (!response) {
-                        console.log('❌ No response from AI, ending task');
+                        console.log('ℹ️ No response from AI (user canceled or error), ending task');
                         break;
                     }
 
@@ -76,6 +85,9 @@ class ConversationTask extends EventEmitter {
                     if (toolCalls.length > 0) {
                         console.log(`🔧 Found ${toolCalls.length} tool call(s) to execute`);
 
+                        // Emit tool execution event (keeps thinking indicator visible)
+                        this.emit('toolsExecuting', this.taskId, toolCalls.length);
+
                         // Execute all tool calls
                         const toolResults = await this._executeToolCalls(toolCalls);
 
@@ -84,13 +96,22 @@ class ConversationTask extends EventEmitter {
                             this.addMessage('tool_result', result.content, [], result.tool_name);
                         }
 
-                        // Continue loop with tool results
-                        this.consecutiveMistakeCount = 0; // Reset on successful tool execution
-                    } else {
-                        console.log('ℹ️ No tool calls found, task completing');
+                        // Mark that tools were executed - we'll want one more AI response to summarize
+                        this.toolsExecutedInLastIteration = true;
 
-                        // Emit the assistant's final response to display in UI
-                        this.emit('assistantMessage', this.taskId, response);
+                        // Continue loop with tool results - AI will see results and continue
+                        this.consecutiveMistakeCount = 0; // Reset on successful tool execution
+
+                        // Continue the conversation loop automatically
+                        continue;
+                    } else {
+                        console.log('ℹ️ No tool calls found, final response');
+
+                        // Clean the response - remove any remaining tool_call blocks
+                        const cleanedResponse = this._cleanToolCallsFromResponse(response);
+
+                        // ONLY emit assistant message when task is truly done (no tool calls)
+                        this.emit('assistantMessage', this.taskId, cleanedResponse);
 
                         // Check if task is complete or needs continuation
                         const shouldContinue = await this._checkTaskCompletion();
@@ -116,6 +137,12 @@ class ConversationTask extends EventEmitter {
                     }
 
                 } catch (loopError) {
+                    // Check if this is a user cancellation - not a real error
+                    if (loopError.name === 'CanceledError' || loopError.code === 'ERR_CANCELED' || loopError.message?.includes('cancel')) {
+                        console.log('⏹ Task loop canceled by user');
+                        break; // Exit loop gracefully, don't treat as error
+                    }
+
                     console.error('❌ Error in task loop:', loopError);
 
                     // Handle context window errors
@@ -137,14 +164,30 @@ class ConversationTask extends EventEmitter {
 
             // Task completed
             this.status = 'completed';
+            this.taskEndTime = new Date().toISOString();
             this.emit('taskCompleted', this.taskId);
             console.log(`✅ Task ${this.taskId} completed`);
 
+            // Generate and emit task summary
+            this._emitTaskSummary();
+
         } catch (error) {
+            // Don't emit error event for user cancellations
+            if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || error.message?.includes('cancel')) {
+                console.log('⏹ Task canceled by user - completing normally');
+                this.status = 'completed';
+                this.emit('taskCompleted', this.taskId);
+                return; // Exit without throwing
+            }
+
             this.status = 'error';
             this.emit('taskError', this.taskId, error);
             console.error(`❌ Task ${this.taskId} error:`, error);
             throw error;
+        } finally {
+            // ALWAYS ensure typing indicator is hidden, regardless of how task ended
+            console.log('🧹 Task cleanup: ensuring typing indicator is hidden');
+            this.emit('taskCleanup', this.taskId);
         }
     }
 
@@ -168,25 +211,38 @@ class ConversationTask extends EventEmitter {
             this.abortController = new AbortController();
 
             console.log(`📤 Making AI request (attempt ${retryCount + 1}/${this.maxRetries + 1})`);
+            console.log(`🔍 DEBUG: Sending mode = '${this.mode}'`);
+            console.log(`🔍 DEBUG: API URL = ${this.apiUrl}/api/method/ai_assistant.api.chat`);
 
             // Create custom HTTP/HTTPS agents to bypass Expect header
             const httpAgent = new http.Agent({ keepAlive: true });
             const httpsAgent = new https.Agent({ keepAlive: true });
 
+            const requestData = {
+                messages: apiMessages,  // Send full conversation history
+                conversation_id: this.conversationId,
+                mode: this.mode,  // CRITICAL: This should be 'agent' for tool calls
+                context: this._buildContext()
+            };
+
+            console.log('🔍 DEBUG: Request payload:', JSON.stringify({
+                message_count: apiMessages.length,
+                conversation_id: this.conversationId,
+                mode: this.mode,
+                has_context: !!this._buildContext(),
+                has_images: apiMessages.some(m => Array.isArray(m.content)),
+                payload_size_kb: Math.round(Buffer.byteLength(JSON.stringify(requestData)) / 1024)
+            }, null, 2));
+
             const response = await axios({
                 method: 'POST',
                 url: `${this.apiUrl}/api/method/ai_assistant.api.chat`,
-                data: {
-                    message: apiMessages[apiMessages.length - 1].content,
-                    conversation_id: this.conversationId,
-                    mode: this.mode,
-                    context: this._buildContext()
-                },
+                data: requestData,
                 headers: {
                     'Content-Type': 'application/json',
                     'Cookie': this.sessionCookies,
                     'Content-Length': Buffer.byteLength(JSON.stringify({
-                        message: apiMessages[apiMessages.length - 1].content,
+                        messages: apiMessages,
                         conversation_id: this.conversationId,
                         mode: this.mode,
                         context: this._buildContext()
@@ -201,8 +257,24 @@ class ConversationTask extends EventEmitter {
                 // Prevent axios from adding any automatic headers
                 transformRequest: [(data) => {
                     return JSON.stringify(data);
-                }]
+                }],
+                // Add request/response interceptors for better debugging
+                validateStatus: function (status) {
+                    return status >= 200 && status < 600; // Accept all status codes to handle manually
+                }
             });
+
+            console.log('✅ Received response from API');
+            console.log('🔍 Response status:', response.status);
+            console.log('🔍 Response data keys:', Object.keys(response.data || {}));
+            console.log('🔍 Response data:', JSON.stringify(response.data, null, 2).substring(0, 500));
+
+            // Check for HTTP errors
+            if (response.status >= 400) {
+                console.error('❌ HTTP Error:', response.status, response.statusText);
+                console.error('❌ Error data:', response.data);
+                throw new Error(`HTTP ${response.status}: ${response.data?.message || response.statusText}`);
+            }
 
             // Save conversation ID
             if (response.data?.message?.conversation_id) {
@@ -214,7 +286,10 @@ class ConversationTask extends EventEmitter {
                               response.data?.message?.content ||
                               response.data?.message?.text;
 
+            console.log('🔍 AI Response extracted:', aiResponse ? `${aiResponse.substring(0, 200)}...` : 'NONE');
+
             if (!aiResponse) {
+                console.error('❌ No AI response found in:', response.data);
                 throw new Error('No AI response in server reply');
             }
 
@@ -227,7 +302,20 @@ class ConversationTask extends EventEmitter {
             return aiResponse;
 
         } catch (error) {
+            // Check if error is due to user abort - this is NOT an error, it's expected behavior
+            if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || error.message?.includes('cancel')) {
+                console.log('⏹ Request canceled by user');
+                return null; // Return null to indicate cancellation, not error
+            }
+
             console.error(`❌ AI request error (attempt ${retryCount + 1}):`, error.message);
+            console.error('🔍 Error details:', {
+                code: error.code,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                headers: error.response?.headers
+            });
 
             // Check if we should retry
             if (retryCount < this.maxRetries && this._shouldRetry(error)) {
@@ -341,6 +429,26 @@ class ConversationTask extends EventEmitter {
     }
 
     /**
+     * Clean tool call blocks from response text
+     * This prevents raw tool calls from being displayed to users
+     */
+    _cleanToolCallsFromResponse(responseText) {
+        if (!responseText) return '';
+
+        // Remove ```tool_call ... ``` blocks
+        let cleaned = responseText.replace(/```tool_call[\s\S]*?```/g, '');
+
+        // Remove extra whitespace and empty lines
+        cleaned = cleaned
+            .split('\n')
+            .filter(line => line.trim().length > 0)
+            .join('\n')
+            .trim();
+
+        return cleaned || 'Task completed.';
+    }
+
+    /**
      * Manually extract tool call fields (handles malformed JSON)
      * KiloCode pattern: Fallback extraction for robustness
      */
@@ -425,7 +533,7 @@ class ConversationTask extends EventEmitter {
      * Execute a single tool call
      */
     async _executeSingleTool(toolCall) {
-        const { action, path, content, description } = toolCall;
+        const { action, path, content, description, command } = toolCall;
 
         switch (action) {
             case 'create_file':
@@ -438,6 +546,10 @@ class ConversationTask extends EventEmitter {
             case 'read_file':
                 return await this._executeReadFile(path);
 
+            case 'run_terminal':
+            case 'execute_command':
+                return await this._executeTerminalCommand(command || content, description);
+
             default:
                 throw new Error(`Unknown tool action: ${action}`);
         }
@@ -446,11 +558,22 @@ class ConversationTask extends EventEmitter {
     /**
      * Execute create_file tool
      */
-    async _executeCreateFile(filePath, content, _description) {
+    async _executeCreateFile(filePath, content, description) {
         const fs = require('fs').promises;
         const pathModule = require('path');
 
         try {
+            // Track file change - GENERATING
+            const change = this.fileChangeTracker.addChange(filePath, 'create', {
+                description,
+                newContent: typeof content === 'object' ? JSON.stringify(content, null, 2) : content
+            });
+            this.emit('fileChangeAdded', change);
+
+            // Update status - APPLYING
+            this.fileChangeTracker.updateStatus(filePath, 'applying');
+            this.emit('fileChangeUpdated', change);
+
             // Get workspace path
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
@@ -464,8 +587,22 @@ class ConversationTask extends EventEmitter {
             const dirPath = pathModule.dirname(fullPath);
             await fs.mkdir(dirPath, { recursive: true });
 
+            // Handle content - convert object to string if needed
+            let fileContent = content || '';
+            if (typeof fileContent === 'object') {
+                // AI sometimes sends JSON objects instead of strings for package.json
+                fileContent = JSON.stringify(fileContent, null, 2);
+                console.log(`ℹ️ Converted object content to JSON string for ${filePath}`);
+            }
+
             // Write file
-            await fs.writeFile(fullPath, content || '', 'utf8');
+            await fs.writeFile(fullPath, fileContent, 'utf8');
+
+            // Update status - APPLIED
+            this.fileChangeTracker.updateStatus(filePath, 'applied', {
+                newContent: fileContent
+            });
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
 
             // Open file in editor
             const document = await vscode.workspace.openTextDocument(fullPath);
@@ -481,6 +618,13 @@ class ConversationTask extends EventEmitter {
             };
 
         } catch (error) {
+            // Track error
+            this.fileChangeTracker.updateStatus(filePath, 'failed', {
+                error: error.message
+            });
+            this.errors.push(error);
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
             throw new Error(`Failed to create file ${filePath}: ${error.message}`);
         }
     }
@@ -545,6 +689,66 @@ class ConversationTask extends EventEmitter {
 
         } catch (error) {
             throw new Error(`Failed to read file ${filePath}: ${error.message}`);
+        }
+    }
+
+    /**
+     * Execute terminal command
+     */
+    async _executeTerminalCommand(command, _description) {
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execPromise = util.promisify(exec);
+
+        try {
+            // Get workspace path
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+
+            console.log(`💻 Executing command: ${command}`);
+            console.log(`📁 Working directory: ${workspacePath}`);
+
+            // Show notification to user
+            vscode.window.showInformationMessage(`⚙️ Running: ${command}`);
+
+            // Execute command with timeout
+            // Inherit PATH from VS Code environment to find npm, git, etc.
+            const { stdout, stderr } = await execPromise(command, {
+                cwd: workspacePath,
+                timeout: 120000, // 2 minute timeout
+                maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+                env: { ...process.env } // Inherit environment variables (PATH, etc.)
+            });
+
+            const output = stdout + (stderr ? `\n⚠️ Warnings:\n${stderr}` : '');
+            console.log(`✅ Command output:\n${output}`);
+
+            // Show success notification
+            vscode.window.showInformationMessage(`✅ Command completed: ${command}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'run_terminal',
+                content: `Command executed successfully:
+
+$ ${command}
+
+${output}`,
+                success: true
+            };
+
+        } catch (error) {
+            console.error(`❌ Command failed: ${command}`);
+            console.error(`Error: ${error.message}`);
+
+            // Show error notification
+            vscode.window.showErrorMessage(`❌ Command failed: ${command}`);
+
+            throw new Error(`Failed to execute command "${command}": ${error.message}`);
         }
     }
 
@@ -638,9 +842,15 @@ class ConversationTask extends EventEmitter {
      * Check if task should continue
      */
     async _checkTaskCompletion() {
-        // For now, end task when no tools are used
-        // In future, could ask user if task is complete
-        return false;
+        // If tools were just executed, allow one more AI response to summarize
+        if (this.toolsExecutedInLastIteration) {
+            console.log('ℹ️ Tools were executed, allowing one more response for summary');
+            this.toolsExecutedInLastIteration = false;
+            return false; // End task after this summary response
+        }
+
+        // Task is complete - conversation will continue with next user message
+        return false;  // Task completes, waiting for next user input
     }
 
     /**
@@ -661,10 +871,33 @@ class ConversationTask extends EventEmitter {
      * Build API messages
      */
     _buildApiMessages() {
-        return this.messages.map(msg => ({
-            role: msg.role === 'tool_result' ? 'user' : msg.role,
-            content: msg.content
-        }));
+        return this.messages.map(msg => {
+            const apiMsg = {
+                role: msg.role === 'tool_result' ? 'user' : msg.role
+            };
+
+            // If message has images, format as multi-part content (for vision models)
+            if (msg.images && msg.images.length > 0) {
+                apiMsg.content = [
+                    {
+                        type: 'text',
+                        text: msg.content
+                    },
+                    ...msg.images.map(img => ({
+                        type: 'image_url',
+                        image_url: {
+                            url: img.content || img.url, // Support both base64 content and URLs
+                            detail: 'high' // Request high-detail analysis
+                        }
+                    }))
+                ];
+            } else {
+                // Simple text message
+                apiMsg.content = msg.content;
+            }
+
+            return apiMsg;
+        });
     }
 
     /**
@@ -674,22 +907,45 @@ class ConversationTask extends EventEmitter {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         const activeEditor = vscode.window.activeTextEditor;
 
-        return {
+        const context = {
             workspace: workspaceFolders ? workspaceFolders[0].name : null,
             activeFile: activeEditor ? {
                 path: activeEditor.document.fileName,
                 language: activeEditor.document.languageId
             } : null
         };
+
+        // Include attachments from the most recent user message if any
+        const lastUserMessage = [...this.messages].reverse().find(m => m.role === 'user');
+        if (lastUserMessage && lastUserMessage.images && lastUserMessage.images.length > 0) {
+            context.attachments = lastUserMessage.images.map(img => ({
+                type: img.type || 'image/png',
+                content: img.content || img.url,
+                isImage: img.isImage !== undefined ? img.isImage : true,
+                name: img.name || 'attachment'
+            }));
+        }
+
+        return context;
     }
 
     /**
      * Add message to conversation
      */
     addMessage(role, content, images = [], toolName = null) {
+        // Truncate very long messages to prevent backend errors
+        const MAX_MESSAGE_LENGTH = 1500; // Conservative limit
+        let truncatedContent = content;
+
+        if (content && content.length > MAX_MESSAGE_LENGTH) {
+            truncatedContent = content.substring(0, MAX_MESSAGE_LENGTH) +
+                '\n\n... [Message truncated due to length]';
+            console.log(`⚠️ Truncated ${role} message from ${content.length} to ${truncatedContent.length} chars`);
+        }
+
         this.messages.push({
             role: role,
-            content: content,
+            content: truncatedContent,
             images: images,
             toolName: toolName,
             timestamp: new Date()
@@ -724,6 +980,46 @@ class ConversationTask extends EventEmitter {
             createdAt: this.createdAt,
             duration: Date.now() - this.createdAt.getTime()
         };
+    }
+
+    /**
+     * Generate and emit task summary (Qoder-style)
+     * @private
+     */
+    _emitTaskSummary() {
+        const TaskSummaryGenerator = require('../utils/task-summary-generator');
+
+        // Get provider reference to access TODOs
+        const provider = this.providerRef?.deref?.();
+        const todos = provider?._todoManager?.getAllTodos() || [];
+
+        const summary = TaskSummaryGenerator.generate({
+            taskId: this.taskId,
+            startTime: this.taskStartTime,
+            endTime: this.taskEndTime,
+            fileChanges: this.fileChangeTracker.getAllChanges(),
+            todos: todos,
+            toolResults: this.toolResults,
+            errors: this.errors,
+            mode: this.mode
+        });
+
+        console.log('📊 Task Summary Generated:', summary.overview.summary);
+        this.emit('taskSummaryGenerated', this.taskId, summary);
+    }
+
+    /**
+     * Get file changes
+     */
+    getFileChanges() {
+        return this.fileChangeTracker.getAllChanges();
+    }
+
+    /**
+     * Get file change statistics
+     */
+    getFileChangeStats() {
+        return this.fileChangeTracker.getStats();
     }
 }
 

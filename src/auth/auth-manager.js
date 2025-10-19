@@ -541,18 +541,40 @@ class AuthManager {
         const config = vscode.workspace.getConfiguration('oropendola');
         const token = config.get('user.token');
         const email = config.get('user.email');
+        const sessionCookies = config.get('session.cookies');
 
-        if (token && email) {
+        // Check both authentication methods:
+        // 1. Token-based auth (user.token + user.email)
+        // 2. Session-based auth (session.cookies)
+        if ((token && email) || sessionCookies) {
             this.isAuthenticated = true;
-            this.sessionToken = token;
+            this.sessionToken = token || sessionCookies;
             this.currentUser = {
-                email: email,
-                token: token
+                email: email || this._extractEmailFromCookies(sessionCookies),
+                token: token || sessionCookies
             };
+            console.log('✅ Authentication check passed');
             return true;
         }
 
+        console.log('❌ Authentication check failed - no credentials found');
         return false;
+    }
+
+    /**
+     * Extract email from session cookies (helper method)
+     */
+    _extractEmailFromCookies(cookies) {
+        if (!cookies) return null;
+
+        // Try to extract user_id from cookies
+        const match = cookies.match(/user_id=([^;]+)/);
+        if (match) {
+            // URL decode the email
+            return decodeURIComponent(match[1]);
+        }
+
+        return null;
     }
 
     /**

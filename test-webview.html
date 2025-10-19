@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Webview</title>
+</head>
+<body>
+    <h1>Test HTML - No Errors</h1>
+    <button id="testBtn">Click Me</button>
+    <script>
+        const vscode = acquireVsCodeApi();
+        const testBtn = document.getElementById('testBtn');
+        
+        if (testBtn) {
+            testBtn.addEventListener('click', function() {
+                vscode.postMessage({ type: 'test', message: 'Button clicked!' });
+                alert('Button works!');
+            });
+        }
+        
+        console.log('Script executed successfully');
+    </script>
+</body>
+</html>

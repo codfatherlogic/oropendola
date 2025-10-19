@@ -2,7 +2,7 @@
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
   "description": "AI-powered coding assistant with real-time streaming (Based on Roo-Code architecture)",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -144,6 +144,12 @@
         "title": "Clear Autocomplete Cache",
         "category": "Oropendola",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "oropendola.debugAutocomplete",
+        "title": "Debug Autocomplete Status",
+        "category": "Oropendola",
+        "icon": "$(bug)"
       }
     ],
     "views": {
@@ -153,12 +159,6 @@
           "name": "Chat",
           "type": "webview",
           "contextualTitle": "Oropendola AI Chat"
-        },
-        {
-          "id": "oropendola.settingsView",
-          "name": "Settings",
-          "type": "webview",
-          "contextualTitle": "Oropendola Settings"
         }
       ],
       "explorer": [

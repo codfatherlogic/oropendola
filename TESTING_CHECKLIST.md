@@ -1,409 +1,332 @@
-# ✅ Testing Checklist - Agent & Ask Modes
+# Oropendola Extension Testing Checklist v2.0.1
 
-Use this checklist to verify the Agent & Ask mode implementation is working correctly.
+## 1. Testing & Validation ✅
 
----
+### UI Components
+- [ ] **Auto Context Button**
+  - [ ] Visible above input field
+  - [ ] Shows "Auto context" text with icon
+  - [ ] Click triggers context menu
+  - [ ] Tooltip displays correctly
 
-## 🔧 Pre-Testing Setup
+- [ ] **Attachment Button**
+  - [ ] Visible inline with Auto Context (📎 icon)
+  - [ ] File picker opens on click
+  - [ ] Images display in preview
+  - [ ] Remove attachment works
 
-### 1. Reload VS Code Extension
-- [ ] Press `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux)
-- [ ] Type "Developer: Reload Window"
-- [ ] Press Enter
-- [ ] Wait for extension to reload
+- [ ] **Optimize Input Button (✨)**
+  - [ ] Icon-only display (36px × 36px)
+  - [ ] Tooltip shows "Optimize Input" on hover
+  - [ ] Click optimizes user input
+  - [ ] Disabled state works correctly
 
-### 2. Open Browser Console (for debugging)
-- [ ] Go to Help → Toggle Developer Tools
-- [ ] Click Console tab
-- [ ] Keep it open to see logs
+- [ ] **Send Button (↑)**
+  - [ ] Icon displays correctly (36px × 36px)
+  - [ ] Click sends message
+  - [ ] Disabled when input empty
+  - [ ] Tooltip shows "Send message"
 
-### 3. Open Oropendola Sidebar
-- [ ] Press `Cmd+Shift+C` (macOS) or `Ctrl+Shift+C` (Windows/Linux)
-- [ ] Or click Oropendola icon in activity bar
-- [ ] Sidebar should open
+- [ ] **Stop Button (■)**
+  - [ ] Hidden by default
+  - [ ] Shows during generation
+  - [ ] Click stops AI response
+  - [ ] Returns to send button after stop
 
----
+### Input Field
+- [ ] **Placeholder Text**
+  - [ ] Shows "Ask Oropendola to do anything"
+  - [ ] Disappears on focus
+  - [ ] Returns when empty
 
-## 🎨 Visual Tests
+- [ ] **Text Input**
+  - [ ] Multi-line support (auto-expand)
+  - [ ] Max height limit (160px)
+  - [ ] Shift+Enter for new line
+  - [ ] Enter sends message
 
-### Test 1: Mode Selector Visibility
-- [ ] Mode selector appears below the header
-- [ ] "MODE" label is visible
-- [ ] Two buttons visible: 🤖 Agent and 💬 Ask
-- [ ] Description text appears below buttons
-- [ ] UI looks clean and professional
+- [ ] **Clipboard Integration**
+  - [ ] Copy text from anywhere
+  - [ ] Paste text into input
+  - [ ] Paste images (shows preview)
+  - [ ] Drag & drop images
 
-**Expected Result**:
-```
-MODE
-[🤖 Agent] [💬 Ask]
-Agent mode can execute actions...
-```
+### Mode Selector
+- [ ] **Mode Dropdown**
+  - [ ] Shows only "Agent" and "Ask"
+  - [ ] No "Edit" mode visible
+  - [ ] Default to "Agent"
+  - [ ] Switches correctly
 
-### Test 2: Default State (Agent Mode)
-- [ ] 🤖 Agent button has blue background
-- [ ] 💬 Ask button has gray/transparent background
-- [ ] Description says "Agent mode can execute actions and modify your workspace files."
-- [ ] Empty state title shows "Build with agent mode"
+### Message Display
+- [ ] **User Messages**
+  - [ ] Right-aligned
+  - [ ] Dark background
+  - [ ] Proper formatting
 
-### Test 3: Hover Effects
-- [ ] Hover over Ask button
-- [ ] Background color changes slightly
-- [ ] Cursor changes to pointer
-- [ ] Hover over Agent button
-- [ ] Same hover effects appear
+- [ ] **Assistant Messages**
+  - [ ] Left-aligned
+  - [ ] Light background with border
+  - [ ] Copy button on hover
+  - [ ] Code blocks formatted
 
----
+- [ ] **System Messages**
+  - [ ] Center-aligned
+  - [ ] Distinct styling
+  - [ ] Progress indicators
 
-## 🔄 Mode Switching Tests
+### Authentication
+- [ ] **Login Screen**
+  - [ ] Email field validation
+  - [ ] Password field (masked)
+  - [ ] Sign In button functional
+  - [ ] Error messages display
 
-### Test 4: Switch to Ask Mode
-**Steps**:
-1. Click the 💬 Ask button
-
-**Expected Results**:
-- [ ] Ask button turns blue
-- [ ] Agent button turns gray
-- [ ] Description changes to "Ask mode provides answers and suggestions without modifying files."
-- [ ] Empty state title changes to "Ask questions"
-- [ ] Console shows: "🔄 Switched to ask mode"
-
-### Test 5: Switch Back to Agent Mode
-**Steps**:
-1. Click the 🤖 Agent button
-
-**Expected Results**:
-- [ ] Agent button turns blue
-- [ ] Ask button turns gray
-- [ ] Description changes back to Agent description
-- [ ] Empty state title changes to "Build with agent mode"
-- [ ] Console shows: "🔄 Switched to agent mode"
-
-### Test 6: Rapid Mode Switching
-**Steps**:
-1. Click Ask → Agent → Ask → Agent (quickly)
-
-**Expected Results**:
-- [ ] No errors in console
-- [ ] UI updates correctly each time
-- [ ] No lag or freezing
-- [ ] Final mode is correctly highlighted
+- [ ] **Session Management**
+  - [ ] Auto-restore session
+  - [ ] Sign Out works
+  - [ ] Cookies persist correctly
 
 ---
 
-## 🤖 Agent Mode Functional Tests
+## 2. Additional Features 🚀
 
-### Test 7: Create File in Agent Mode
-**Steps**:
-1. Ensure 🤖 Agent is active (blue)
-2. Type: "create a hello.js file with a simple console.log"
-3. Send message
+### A. Enhanced Optimize Input Feature
+**Status:** Basic implementation complete
+**Todo:**
+- [ ] Add preview modal before sending
+- [ ] Show original vs optimized comparison
+- [ ] Confidence level indicator
+- [ ] Context-aware suggestions
+- [ ] Cancel/Edit option
 
-**Expected Results**:
-- [ ] AI processes request
-- [ ] File `hello.js` is created
-- [ ] File appears in workspace explorer
-- [ ] File opens in editor
-- [ ] File contains actual code (not empty)
-- [ ] Console shows: "✅ Created file: hello.js"
-- [ ] Console shows: "🔧 Executing: create_file"
+### B. Keyboard Shortcuts Enhancement
+**Current:** Cmd+L (open chat), Cmd+I (edit code)
+**Todo:**
+- [ ] Cmd+K for quick commands
+- [ ] Cmd+/ for help menu
+- [ ] Escape to cancel generation
+- [ ] Cmd+Enter to send message
 
-### Test 8: Modify File in Agent Mode
-**Steps**:
-1. Ensure 🤖 Agent is active
-2. Type: "add a comment to hello.js explaining the code"
-3. Send message
+### C. File Attachment Preview
+**Status:** Basic support exists
+**Todo:**
+- [ ] Image thumbnails in preview
+- [ ] PDF preview support
+  - [ ] File size display
+- [ ] Multiple file selection
+- [ ] Drag & drop from file explorer
 
-**Expected Results**:
-- [ ] AI processes request
-- [ ] File is modified
-- [ ] Comment is added to file
-- [ ] Console shows tool execution logs
+### D. Conversation Export/Import
+**Todo:**
+- [ ] Export chat as markdown
+- [ ] Export as JSON
+- [ ] Import previous conversations
+- [ ] Search conversation history
 
----
-
-## 💬 Ask Mode Functional Tests
-
-### Test 9: Ask Mode Prevents File Creation
-**Steps**:
-1. Switch to 💬 Ask mode (blue highlight)
-2. Type: "create a test.js file"
-3. Send message
-
-**Expected Results**:
-- [ ] AI provides text response/explanation
-- [ ] NO file is created in workspace
-- [ ] Console shows: "ℹ️ ASK mode: Ignoring tool calls (read-only mode)"
-- [ ] Console shows: "📊 Total tool calls found: 0"
-- [ ] Response is conversational, not actionable
-
-### Test 10: Ask Mode Answers Questions
-**Steps**:
-1. Ensure 💬 Ask mode is active
-2. Type: "explain how async/await works in JavaScript"
-3. Send message
-
-**Expected Results**:
-- [ ] AI provides detailed explanation
-- [ ] No files created or modified
-- [ ] Response is educational
-- [ ] No console errors
-
-### Test 11: Ask Mode for Code Review
-**Steps**:
-1. Open a code file in editor
-2. Select some code
-3. Switch to 💬 Ask mode
-4. Type: "review this code for issues"
-5. Send message
-
-**Expected Results**:
-- [ ] AI analyzes and explains issues
-- [ ] No file modifications occur
-- [ ] Suggestions provided as text only
-- [ ] Code remains unchanged
+### E. Auto Context Enhancement
+**Todo:**
+- [ ] Smart file detection
+- [ ] Recent files suggestion
+- [ ] Workspace summary
+- [ ] Git status integration
 
 ---
 
-## 🔀 Mode Switching During Conversation
+## 3. Bug Fixes 🐛
 
-### Test 12: Switch Mode Mid-Conversation
-**Steps**:
-1. Start in 💬 Ask mode
-2. Type: "What is a REST API?"
-3. AI responds with explanation
-4. Switch to 🤖 Agent mode
-5. Type: "Create a REST API endpoint"
-6. Send message
+### Critical Fixes
+- [x] ~~JavaScript syntax errors (newline escaping)~~
+- [x] ~~Clipboard paste not working~~
+- [x] ~~Button event handlers not firing~~
+- [x] ~~Emoji rendering in HTML~~
 
-**Expected Results**:
-- [ ] First response is explanation only
-- [ ] Mode switch is instant
-- [ ] Second response creates files
-- [ ] Previous messages remain unchanged
-- [ ] Console shows both mode switches
+### Pending Fixes
+- [ ] **Performance**
+  - [ ] Message rendering lag with long conversations
+  - [ ] Optimize HTML generation
+  - [ ] Virtualize message list
 
----
+- [ ] **Error Handling**
+  - [ ] Network timeout handling
+  - [ ] Session expiry detection
+  - [ ] Graceful API error display
 
-## 🐛 Error Handling Tests
-
-### Test 13: Mode Persistence
-**Steps**:
-1. Switch to 💬 Ask mode
-2. Send a message
-3. Wait for response
-4. Check if mode is still Ask
-
-**Expected Results**:
-- [ ] Mode remains in Ask after message
-- [ ] Mode doesn't reset to Agent
-- [ ] UI state is consistent
-
-### Test 14: Console Error Check
-**Steps**:
-1. Perform all above tests
-2. Check console for errors
-
-**Expected Results**:
-- [ ] No red errors in console
-- [ ] Only info/log messages
-- [ ] No undefined errors
-- [ ] No failed network requests (related to modes)
+- [ ] **UI/UX**
+  - [ ] Scroll to bottom on new message
+  - [ ] Loading state improvements
+  - [ ] Better error messages
 
 ---
 
-## 📊 Console Output Verification
+## 4. Feature Enhancements 🎯
 
-### Test 15: Console Logs Are Correct
+### A. Message Formatting
+**Current:** Basic markdown support
+**Enhancements:**
+- [ ] Syntax highlighting for code
+- [ ] Better table rendering
+- [ ] Collapsible sections
+- [ ] Message threading
 
-**When switching to Ask mode**, console should show:
-```
-✅ 🔄 Switched to ask mode
+### B. Smart Context Detection
+**Todo:**
+- [ ] Detect selected code language
+- [ ] Auto-include related files
+- [ ] Detect project type
+- [ ] Suggest relevant context
+
+### C. Response Actions
+**Current:** Copy button
+**Add:**
+- [ ] Insert at cursor
+- [ ] Replace selection
+- [ ] Create new file
+- [ ] Apply as diff
+
+### D. Conversation Management
+**Todo:**
+- [ ] Save conversation
+- [ ] Load previous chats
+- [ ] Search messages
+- [ ] Pin important messages
+- [ ] Clear conversation
+
+### E. Settings Panel
+**Todo:**
+- [ ] Temperature control
+- [ ] Max tokens setting
+- [ ] Provider selection
+- [ ] Theme customization
+- [ ] Shortcut customization
+
+---
+
+## Installation & Testing Instructions
+
+### Install Extension
+```bash
+# In VS Code:
+# 1. Press Cmd+Shift+P
+# 2. Type: "Extensions: Install from VSIX"
+# 3. Select: /Users/sammishthundiyil/oropendola/oropendola-ai-assistant-2.0.1.vsix
+# 4. Reload window
 ```
 
-**When in Ask mode and AI responds**, console should show:
-```
-✅ ℹ️ ASK mode: Ignoring tool calls (read-only mode)
-✅ 📊 Total tool calls found: 0
-```
+### Test Scenarios
 
-**When switching to Agent mode**, console should show:
-```
-✅ 🔄 Switched to agent mode
-```
+#### Scenario 1: Basic Chat
+1. Open Oropendola sidebar
+2. Type a simple question
+3. Click Send
+4. Verify response appears
+5. Check formatting
 
-**When in Agent mode and creating files**, console should show:
-```
-✅ 🔧 [1/1] Executing: create_file
-✅ ✅ Created file: filename.js
-```
+#### Scenario 2: Optimize Input
+1. Type vague input: "make it better"
+2. Click ✨ Optimize button
+3. Verify optimized prompt sent
+4. Check AI response quality
 
----
+#### Scenario 3: File Attachment
+1. Click 📎 button
+2. Select image file
+3. Verify preview appears
+4. Send with message
+5. Check image in conversation
 
-## 🎯 Integration Tests
+#### Scenario 4: Clipboard Operations
+1. Copy text from editor
+2. Paste into chat input
+3. Verify text appears
+4. Copy image from browser
+5. Paste into chat
+6. Verify image preview
 
-### Test 16: New Chat Resets to Agent
-**Steps**:
-1. Switch to 💬 Ask mode
-2. Click ➕ (New Chat) button
-3. Check which mode is active
-
-**Expected Results**:
-- [ ] Mode resets to 🤖 Agent (default)
-- [ ] Agent button is blue
-- [ ] Chat history clears
-- [ ] Empty state appears
-
-### Test 17: Settings Don't Affect Mode
-**Steps**:
-1. Switch to 💬 Ask mode
-2. Click ⚙️ Settings button
-3. Go back to chat
-4. Check mode state
-
-**Expected Results**:
-- [ ] Mode remains in Ask
-- [ ] Settings open correctly
-- [ ] Returning to chat preserves mode
+#### Scenario 5: Mode Switching
+1. Switch to "Ask" mode
+2. Send question
+3. Verify read-only behavior
+4. Switch to "Agent" mode
+5. Verify full editing capability
 
 ---
 
-## 📱 Responsive Tests
+## Performance Metrics
 
-### Test 18: Narrow Window
-**Steps**:
-1. Resize VS Code window to be very narrow
-2. Check mode selector appearance
+### Load Time
+- [ ] Extension activation < 2s
+- [ ] Sidebar view load < 1s
+- [ ] First message send < 3s
 
-**Expected Results**:
-- [ ] Mode selector still visible
-- [ ] Buttons don't overlap
-- [ ] Text is readable
-- [ ] Layout adapts gracefully
+### Response Time
+- [ ] Message send < 500ms
+- [ ] Typing indicator < 200ms
+- [ ] UI interaction < 100ms
 
----
-
-## ✅ Final Verification
-
-### All Tests Passed?
-
-**Visual Tests** (1-3):
-- [ ] All passed ✅
-
-**Mode Switching Tests** (4-6):
-- [ ] All passed ✅
-
-**Agent Mode Tests** (7-8):
-- [ ] All passed ✅
-
-**Ask Mode Tests** (9-11):
-- [ ] All passed ✅
-
-**Conversation Tests** (12):
-- [ ] Passed ✅
-
-**Error Handling** (13-14):
-- [ ] All passed ✅
-
-**Console Logs** (15):
-- [ ] All correct ✅
-
-**Integration Tests** (16-17):
-- [ ] All passed ✅
-
-**Responsive Tests** (18):
-- [ ] Passed ✅
+### Memory Usage
+- [ ] Idle: < 50MB
+- [ ] Active chat: < 150MB
+- [ ] Max conversations: 50 messages
 
 ---
 
-## 🎉 Success Criteria
+## Browser Console Checks
 
-**Minimum Requirements** (Must Pass):
-- ✅ Mode selector visible
-- ✅ Mode switching works
-- ✅ Agent mode creates files
-- ✅ Ask mode prevents file creation
-- ✅ No console errors
-
-**Excellent Implementation** (All Should Pass):
-- ✅ All visual tests pass
-- ✅ All functional tests pass
-- ✅ Smooth user experience
-- ✅ Proper console logging
-- ✅ No bugs or glitches
-
----
-
-## 🐛 If Tests Fail
-
-### Common Issues
-
-**Issue**: Mode selector not visible
-**Fix**: 
-1. Reload window (Developer: Reload Window)
-2. Check sidebar-provider.js for syntax errors
-3. Clear VS Code cache
-
-**Issue**: Mode not switching
-**Fix**:
-1. Check console for errors
-2. Verify switchMode function exists
-3. Check message handler is registered
-
-**Issue**: Ask mode still creating files
-**Fix**:
-1. Verify mode state in console
-2. Check _parseToolCalls logic
-3. Ensure mode is passed to ConversationTask
-
-**Issue**: Console errors
-**Fix**:
-1. Copy error message
-2. Check file syntax
-3. Review recent changes
-4. Restart VS Code
-
----
-
-## 📝 Test Results
-
-**Date Tested**: _______________
-
-**Tester Name**: _______________
-
-**Overall Result**: 
-- [ ] ✅ All tests passed
-- [ ] ⚠️ Some tests failed (see notes)
-- [ ] ❌ Major issues found
-
-**Notes**:
+### Expected Logs
 ```
-[Write any observations, issues, or comments here]
-
-
-
-
+✅ Oropendola AI Extension is now active!
+✅ Sidebar provider registered
+✅ ChatManager initialized
+✅ Authentication check passed
 ```
 
-**Recommendation**:
-- [ ] Ready for production
-- [ ] Needs minor fixes
-- [ ] Needs major revision
+### Error Checks
+- [ ] No JavaScript syntax errors
+- [ ] No uncaught exceptions
+- [ ] No CSP violations
+- [ ] No network errors (except 404 for marketplace)
 
 ---
 
-## 🚀 Next Steps
+## Next Steps
 
-After all tests pass:
-1. [ ] Document any findings
-2. [ ] Update README if needed
-3. [ ] Consider user feedback
-4. [ ] Deploy to users
-5. [ ] Monitor for issues
+### Priority 1 (This Week)
+1. [ ] Complete all UI testing
+2. [ ] Implement Optimize Input preview
+3. [ ] Add keyboard shortcuts
+4. [ ] Fix performance issues
+
+### Priority 2 (Next Week)
+1. [ ] Add conversation export
+2. [ ] Enhance Auto Context
+3. [ ] Improve error handling
+4. [ ] Add settings panel
+
+### Priority 3 (Future)
+1. [ ] Message threading
+2. [ ] Advanced formatting
+3. [ ] Plugin system
+4. [ ] Multi-provider support
 
 ---
 
-**Testing Guide Version**: 1.0  
-**For**: Oropendola AI Assistant v2.0.0  
-**Feature**: Agent & Ask Modes  
-**Last Updated**: 2025-10-18
+## Version History
+
+### v2.0.1 (Current)
+- ✅ UI layout restructured
+- ✅ Optimize Input button added
+- ✅ Clipboard fixes
+- ✅ JavaScript syntax fixes
+- ✅ Button size adjustments
+
+### v2.0.0
+- Two-mode system (Agent/Ask)
+- ConversationTask integration
+- Session-based authentication
+- Auto Context support
+
+---
+
+**Last Updated:** 2025-10-19
+**Status:** Ready for comprehensive testing

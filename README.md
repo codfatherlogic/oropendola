@@ -58,6 +58,16 @@ One powerful AI assistant that handles everything:
 - Automatic repository analysis
 - Find similar repositories
 
+### 🔗 Intelligent URL Analysis (NEW!)
+- **Auto-detect Git URLs** - Paste GitHub, GitLab, or Bitbucket links for instant analysis
+- **Repository insights** - Get structure, languages, README, and metadata automatically
+- **Context-aware responses** - AI understands repository patterns and generates relevant code
+- **Multi-platform support** - Works with GitHub, GitLab, Bitbucket, and generic Git URLs
+- **Web URL support** - Analyze documentation, blogs, and technical articles
+
+📚 **Quick Start**: [`QUICK_START_URL_ANALYSIS.md`](./docs/QUICK_START_URL_ANALYSIS.md)  
+📖 **Full Guide**: [`URL_ANALYSIS_FEATURE.md`](./docs/URL_ANALYSIS_FEATURE.md)
+
 ### 📊 Subscription Management
 - Real-time usage tracking
 - Status bar indicator with color coding:

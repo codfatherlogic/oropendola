@@ -126,7 +126,16 @@ class OropendolaProvider {
                 });
 
             }).catch(error => {
-                reject(error);
+                // Enhance error messages for common network issues
+                if (error.code === 'ENOTFOUND') {
+                    reject(new Error(`Cannot connect to ${this.apiUrl}. Please check your network connection and API URL configuration.`));
+                } else if (error.code === 'ETIMEDOUT') {
+                    reject(new Error('Request timed out. The backend may be experiencing issues. Please try again or contact support.'));
+                } else if (error.code === 'ECONNREFUSED') {
+                    reject(new Error('Connection refused. The Oropendola backend may be offline.'));
+                } else {
+                    reject(error);
+                }
             });
         });
     }
@@ -143,7 +152,8 @@ class OropendolaProvider {
             { ...requestBody, stream: false },
             {
                 headers: this.getHeaders(),
-                timeout: 60000
+                timeout: 60000,
+                validateStatus: (status) => status < 500
             }
         );
 
@@ -188,12 +198,20 @@ class OropendolaProvider {
                 const content = context.activeFile.content.length > 3000
                     ? context.activeFile.content.substring(0, 3000) + '\n...[truncated]'
                     : context.activeFile.content;
-                contextParts.push(`\nFile Content:\n\`\`\`${context.activeFile.language}\n${content}\n\`\`\``);
+                contextParts.push(`
+File Content:
+\`\`\`${context.activeFile.language}
+${content}
+\`\`\``);
             }
         }
 
         if (context.selection) {
-            contextParts.push(`\nSelected Code:\n\`\`\`\n${context.selection}\n\`\`\``);
+            contextParts.push(`
+Selected Code:
+\`\`\`
+${context.selection}
+\`\`\``);
         }
 
         if (contextParts.length > 0) {
@@ -220,24 +238,59 @@ class OropendolaProvider {
      * @returns {Promise<Object>} Subscription information
      */
     async checkSubscription() {
-        try {
-            const response = await axios.get(
-                `${this.apiUrl}/api/method/ai_assistant.api.subscription_status`,
-                { headers: this.getHeaders() }
-            );
+        const maxRetries = 2;
+        const timeout = 5000; // 5 second timeout
 
-            this.subscriptionStatus = response.data;
-            this.remainingRequests = response.data.remaining_requests;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`🔍 Checking subscription (attempt ${attempt}/${maxRetries})...`);
 
-            return {
-                tier: response.data.tier || 'unknown',
-                remainingRequests: response.data.remaining_requests,
-                totalRequests: response.data.total_requests,
-                expiresAt: response.data.expires_at,
-                isActive: response.data.is_active
-            };
-        } catch (error) {
-            throw new Error(`Failed to check subscription: ${error.message}`);
+                const response = await axios.get(
+                    `${this.apiUrl}/api/method/ai_assistant.api.subscription_status`,
+                    {
+                        headers: this.getHeaders(),
+                        timeout: timeout,
+                        validateStatus: (status) => status < 500 // Don't throw on 4xx errors
+                    }
+                );
+
+                this.subscriptionStatus = response.data;
+                this.remainingRequests = response.data.remaining_requests;
+
+                return {
+                    tier: response.data.tier || 'unknown',
+                    remainingRequests: response.data.remaining_requests,
+                    totalRequests: response.data.total_requests,
+                    expiresAt: response.data.expires_at,
+                    isActive: response.data.is_active
+                };
+            } catch (error) {
+                const isLastAttempt = attempt === maxRetries;
+                const isNetworkError = error.code === 'ENOTFOUND' ||
+                                      error.code === 'ETIMEDOUT' ||
+                                      error.code === 'ECONNREFUSED' ||
+                                      error.code === 'ECONNRESET';
+
+                console.warn(`⚠️ Subscription check attempt ${attempt} failed: ${error.message}`);
+
+                if (isLastAttempt) {
+                    // On final attempt, throw a user-friendly error
+                    if (isNetworkError) {
+                        throw new Error(`Network issue detected. Cannot reach ${this.apiUrl}. Please check your internet connection and firewall settings.`);
+                    } else if (error.response?.status === 401) {
+                        throw new Error('Authentication failed. Please sign in again.');
+                    } else if (error.response?.status === 402) {
+                        throw new Error('Subscription expired or request limit reached.');
+                    } else {
+                        throw new Error(`Failed to check subscription: ${error.message}`);
+                    }
+                }
+
+                // Wait before retry (exponential backoff)
+                const waitTime = attempt * 1000;
+                console.log(`⏳ Network issue detected. Retrying in ${waitTime/1000}s... (attempt ${attempt})`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
         }
     }
 

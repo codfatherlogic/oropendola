@@ -5,7 +5,7 @@ const RepositoryAnalyzer = require('./src/analysis/repository-analyzer');
 const OropendolaProvider = require('./src/ai/providers/oropendola-provider');
 const AuthManager = require('./src/auth/auth-manager');
 const OropendolaSidebarProvider = require('./src/sidebar/sidebar-provider');
-const OropendolaSettingsProvider = require('./src/sidebar/settings-provider');
+// const OropendolaSettingsProvider = require('./src/sidebar/settings-provider'); // Removed
 const OropendolaAutocompleteProvider = require('./src/autocomplete/autocomplete-provider');
 const EditMode = require('./src/edit/edit-mode');
 
@@ -15,17 +15,19 @@ let repositoryAnalyzer;
 let oropendolaProvider;
 let authManager;
 let sidebarProvider;
-let settingsProvider;
+// let settingsProvider; // Removed
 let statusBarItem;
 let lastResponseTime = 0;
 let autocompleteProvider;
 let editMode;
+let extensionContext; // Store context for later use
 
 /**
  * Extension activation
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+    extensionContext = context; // Store for later registration
     console.log('🐦 Oropendola AI Extension is now active!');
 
     // Register sidebar webview provider FIRST
@@ -52,29 +54,29 @@ function activate(context) {
         authManager.setAuthSuccessCallback(() => {
             initializeOropendolaProvider();
             updateStatusBarForAuthenticated();
-            // Refresh settings view when user logs in
-            if (settingsProvider) {
-                settingsProvider.refreshSettings();
-            }
+            // Settings view removed
+            // if (settingsProvider) {
+            //     settingsProvider.refreshSettings();
+            // }
         });
     } catch (error) {
         console.error('❌ AuthManager error:', error);
     }
 
-    // Register settings webview provider
-    settingsProvider = new OropendolaSettingsProvider(context, authManager);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
-            'oropendola.settingsView',
-            settingsProvider,
-            {
-                webviewOptions: {
-                    retainContextWhenHidden: true
-                }
-            }
-        )
-    );
-    console.log('✅ Settings provider registered');
+    // Settings provider removed - no longer needed
+    // settingsProvider = new OropendolaSettingsProvider(context, authManager);
+    // context.subscriptions.push(
+    //     vscode.window.registerWebviewViewProvider(
+    //         'oropendola.settingsView',
+    //         settingsProvider,
+    //         {
+    //             webviewOptions: {
+    //                 retainContextWhenHidden: true
+    //             }
+    //         }
+    //     )
+    // );
+    // console.log('✅ Settings provider registered');
 
     // Register all commands
     console.log('🔧 Registering commands...');
@@ -142,54 +144,78 @@ function activate(context) {
         console.error('❌ Provider setup error:', error);
     }
 
-    // Check subscription status on startup if authenticated
+    // Check subscription status on startup if authenticated (with delay to allow network to stabilize)
     if (authManager && authManager.isAuthenticated) {
-        checkSubscriptionStatus();
+        setTimeout(() => {
+            checkSubscriptionStatus(false, true); // silent check with network validation
+        }, 3000); // Wait 3 seconds after activation
     }
 
     // Set workspace context
     vscode.commands.executeCommand('setContext', 'oropendola.enabled', true);
 
-    // Show welcome message with keyboard shortcuts
-    setTimeout(() => {
-        vscode.window.showInformationMessage(
-            '🐦 Oropendola AI Assistant activated! Press Cmd+Shift+L (Ctrl+Shift+L on Windows/Linux) to login or Cmd+Shift+H for help.',
-            'View Shortcuts', 'Login Now'
-        ).then(selection => {
-            if (selection === 'View Shortcuts') {
-                vscode.commands.executeCommand('workbench.action.openGlobalKeybindings', '@ext:oropendola.oropendola-ai-assistant');
-            } else if (selection === 'Login Now') {
-                vscode.commands.executeCommand('oropendola.login');
-            }
-        });
-    }, 1000);
+    // Welcome notification removed - silent activation
+    // setTimeout(() => {
+    //     vscode.window.showInformationMessage(
+    //         '🐦 Oropendola AI Assistant activated! Press Cmd+Shift+L (Ctrl+Shift+L on Windows/Linux) to login or Cmd+Shift+H for help.',
+    //         'View Shortcuts', 'Login Now'
+    //     ).then(selection => {
+    //         if (selection === 'View Shortcuts') {
+    //             vscode.commands.executeCommand('workbench.action.openGlobalKeybindings', '@ext:oropendola.oropendola-ai-assistant');
+    //         } else if (selection === 'Login Now') {
+    //             vscode.commands.executeCommand('oropendola.login');
+    //         }
+    //     });
+    // }, 1000);
 
     console.log('✅ Oropendola AI Assistant fully activated!');
 }
 
 /**
- * Initialize Oropendola AI provider - the only AI assistant
+ * Initialize Oropendola AI Provider and related services
  */
 function initializeOropendolaProvider() {
+    console.log('🔧 Initializing Oropendola provider...');
     const config = vscode.workspace.getConfiguration('oropendola');
     const apiKey = config.get('api.key');
     const apiSecret = config.get('api.secret');
+    const sessionCookies = config.get('session.cookies');
 
-    if (apiKey && apiSecret) {
+    console.log(`🔍 API Key: ${apiKey ? 'Present' : 'Missing'}`);
+    console.log(`🔍 API Secret: ${apiSecret ? 'Present' : 'Missing'}`);
+    console.log(`🔍 Session Cookies: ${sessionCookies ? 'Present' : 'Missing'}`);
+
+    // Support both authentication methods
+    if ((apiKey && apiSecret) || sessionCookies) {
         oropendolaProvider = new OropendolaProvider({
             apiUrl: config.get('api.url', 'https://oropendola.ai'),
-            apiKey,
-            apiSecret,
+            apiKey: apiKey || 'session', // Use 'session' as placeholder if using cookies
+            apiSecret: apiSecret || sessionCookies, // Pass cookies as secret if no API secret
             temperature: config.get('ai.temperature', 0.7),
-            maxTokens: config.get('ai.maxTokens', 4096)
+            maxTokens: config.get('ai.maxTokens', 4096),
+            sessionCookies: sessionCookies // Pass cookies explicitly
         });
 
         oropendolaProvider.setStatusBarItem(statusBarItem);
+        console.log('✅ Oropendola provider created');
 
         // Initialize autocomplete provider
         if (!autocompleteProvider && config.get('autocomplete.enabled', true)) {
             autocompleteProvider = new OropendolaAutocompleteProvider(oropendolaProvider);
             console.log('✅ Autocomplete provider initialized');
+
+            // Register with VS Code immediately
+            if (extensionContext) {
+                extensionContext.subscriptions.push(
+                    vscode.languages.registerInlineCompletionItemProvider(
+                        { pattern: '**' }, // All files
+                        autocompleteProvider
+                    )
+                );
+                console.log('✅ Autocomplete provider registered for all languages');
+            } else {
+                console.error('❌ extensionContext not available for autocomplete registration');
+            }
         }
 
         // Initialize edit mode
@@ -197,6 +223,9 @@ function initializeOropendolaProvider() {
             editMode = new EditMode(oropendolaProvider);
             console.log('✅ Edit mode initialized');
         }
+    } else {
+        console.error('❌ Cannot initialize Oropendola provider - no credentials found');
+        console.error('   Please check that either (api.key + api.secret) or session.cookies are set');
     }
 }
 
@@ -240,10 +269,10 @@ function registerCommands(context) {
             oropendolaProvider = null;
             updateStatusBarForLogin();
 
-            // Refresh settings view to show signed-out state
-            if (settingsProvider) {
-                await settingsProvider.refreshSettings();
-            }
+            // Settings view removed
+            // if (settingsProvider) {
+            //     await settingsProvider.refreshSettings();
+            // }
 
             // Refresh sidebar to show login screen
             if (sidebarProvider && sidebarProvider._view) {
@@ -275,31 +304,11 @@ function registerCommands(context) {
         })
     );
 
-    // Oropendola: Chat
+    // Oropendola: Chat - Open sidebar instead of panel
     context.subscriptions.push(
-        vscode.commands.registerCommand('oropendola.openChat', () => {
-            if (!authManager.isAuthenticated) {
-                vscode.window.showWarningMessage(
-                    'Please sign in to use Oropendola AI',
-                    'Sign In'
-                ).then(selection => {
-                    if (selection === 'Sign In') {
-                        authManager.showLoginPanel();
-                    }
-                });
-                return;
-            }
-
-            if (!oropendolaProvider) {
-                initializeOropendolaProvider();
-            }
-
-            chatManager.setProvider(oropendolaProvider);
-            chatManager.openChatPanel();
-
-            // Simulate response time display (like LYZO AI)
-            const simulatedTime = Math.floor(Math.random() * 400) + 100; // 100-500ms
-            updateResponseTime(simulatedTime);
+        vscode.commands.registerCommand('oropendola.openChat', async () => {
+            // Focus on the Oropendola sidebar view
+            await vscode.commands.executeCommand('oropendola.chatView.focus');
         })
     );
 
@@ -402,23 +411,45 @@ function registerCommands(context) {
         })
     );
 
-    // Register autocomplete provider for all languages
-    if (autocompleteProvider) {
-        context.subscriptions.push(
-            vscode.languages.registerInlineCompletionItemProvider(
-                { pattern: '**' }, // All files
-                autocompleteProvider
-            )
-        );
-        console.log('✅ Autocomplete provider registered for all languages');
-    }
+    // Debug Autocomplete Status
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.debugAutocomplete', async () => {
+            const editor = vscode.window.activeTextEditor;
+            const config = vscode.workspace.getConfiguration('oropendola');
+
+            const debugInfo = [
+                '🔍 **Autocomplete Debug Info**\n',
+                `Provider Initialized: ${autocompleteProvider ? '✅ YES' : '❌ NO'}`,
+                `Provider Enabled: ${autocompleteProvider?.isEnabled ? '✅ YES' : '❌ NO'}`,
+                `Oropendola Provider Ready: ${oropendolaProvider ? '✅ YES' : '❌ NO'}`,
+                `Config Setting Enabled: ${config.get('autocomplete.enabled', true) ? '✅ YES' : '❌ NO'}`,
+                `Debounce Delay: ${config.get('autocomplete.debounceDelay', 200)}ms`,
+                `Cache Size: ${autocompleteProvider?.cache?.size || 0} items`,
+                '\n📄 **Active Editor**',
+                `File: ${editor?.document?.fileName || 'No file open'}`,
+                `Language: ${editor?.document?.languageId || 'N/A'}`,
+                `Position: Line ${editor?.selection?.active?.line || 0}, Col ${editor?.selection?.active?.character || 0}`
+            ].join('\n');
+
+            console.log(debugInfo);
+            vscode.window.showInformationMessage(
+                'Check Output panel (View → Output → Oropendola AI) for debug info',
+                'Open Output'
+            ).then(choice => {
+                if (choice === 'Open Output') {
+                    vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+                }
+            });
+        })
+    );
 }
 
 /**
  * Check subscription status
  * @param {boolean} showMessage - Show info message
+ * @param {boolean} validateNetwork - Check network connectivity first
  */
-async function checkSubscriptionStatus(showMessage = false) {
+async function checkSubscriptionStatus(showMessage = false, validateNetwork = false) {
     if (!oropendolaProvider) {
         if (showMessage) {
             vscode.window.showWarningMessage('Oropendola not configured. Run "Oropendola: Setup" first.');
@@ -427,6 +458,19 @@ async function checkSubscriptionStatus(showMessage = false) {
     }
 
     try {
+        // Check network connectivity first if requested
+        if (validateNetwork) {
+            const isOnline = await checkNetworkConnectivity();
+            if (!isOnline) {
+                console.log('⚠️ Network unavailable, skipping subscription check');
+                if (showMessage) {
+                    vscode.window.showWarningMessage('⚠️ Network unavailable. Subscription check skipped. Working in offline mode.');
+                }
+                updateStatusBarForOffline();
+                return;
+            }
+        }
+
         const subscription = await oropendolaProvider.checkSubscription();
 
         if (showMessage) {
@@ -443,7 +487,20 @@ Status: ${subscription.isActive ? '✅ Active' : '❌ Inactive'}`;
 
         oropendolaProvider.updateStatusBar();
     } catch (error) {
-        if (showMessage) {
+        console.error('Subscription check failed:', error);
+
+        // Check if it's a network error
+        const isNetworkError = error.message.includes('ENOTFOUND') ||
+                               error.message.includes('ETIMEDOUT') ||
+                               error.message.includes('ECONNREFUSED') ||
+                               error.message.includes('Network error');
+
+        if (isNetworkError) {
+            updateStatusBarForOffline();
+            if (showMessage) {
+                vscode.window.showWarningMessage('⚠️ Cannot connect to Oropendola servers. Please check your network connection.');
+            }
+        } else if (showMessage) {
             vscode.window.showErrorMessage(`Failed to check subscription: ${error.message}`);
         }
     }
@@ -723,6 +780,40 @@ async function listRepositories() {
         }
     } catch (error) {
         vscode.window.showErrorMessage(`Failed to list repositories: ${error.message}`);
+    }
+}
+
+/**
+ * Check network connectivity
+ * @returns {Promise<boolean>} True if online
+ */
+async function checkNetworkConnectivity() {
+    const config = vscode.workspace.getConfiguration('oropendola');
+    const apiUrl = config.get('api.url', 'https://oropendola.ai');
+
+    try {
+        // Extract hostname from API URL
+        const url = new URL(apiUrl);
+        const dns = require('dns').promises;
+
+        // Try to resolve the hostname
+        await dns.resolve(url.hostname);
+        return true;
+    } catch (error) {
+        console.log(`Network check failed: ${error.message}`);
+        return false;
+    }
+}
+
+/**
+ * Update status bar for offline state
+ */
+function updateStatusBarForOffline() {
+    if (statusBarItem) {
+        statusBarItem.text = '⚠️ Oropendola: Offline';
+        statusBarItem.tooltip = 'Oropendola AI is offline\nClick to retry connection';
+        statusBarItem.command = 'oropendola.checkSubscription';
+        statusBarItem.show();
     }
 }
 
