@@ -13,6 +13,7 @@
 const EventEmitter = require('events');
 const vscode = require('vscode');
 const FileChangeTracker = require('../utils/file-change-tracker');
+const RealtimeManager = require('./RealtimeManager');
 
 class ConversationTask extends EventEmitter {
     constructor(taskId, options = {}) {
@@ -52,6 +53,75 @@ class ConversationTask extends EventEmitter {
         this.taskStartTime = null;
         this.taskEndTime = null;
         this.errors = [];
+
+        // Real-time WebSocket connection
+        this.realtimeManager = null;
+        this.realtimeConnected = false;
+
+        // Initialize realtime connection if session cookies provided
+        if (options.sessionCookies && options.apiUrl) {
+            this._setupRealtimeConnection(options.apiUrl, options.sessionCookies);
+        } else {
+            console.warn('⚠️ [ConversationTask] No session cookies - realtime updates disabled');
+        }
+    }
+
+    /**
+     * Set up WebSocket connection for real-time progress updates
+     * Connects to oropendola.ai's Socket.IO server
+     *
+     * @param {string} apiUrl - Base URL (https://oropendola.ai)
+     * @param {string} sessionCookies - Session cookies for authentication
+     */
+    _setupRealtimeConnection(apiUrl, sessionCookies) {
+        console.log('🔌 [ConversationTask] Setting up realtime connection for task:', this.taskId);
+
+        try {
+            this.realtimeManager = new RealtimeManager(apiUrl, sessionCookies);
+
+            // Forward ai_progress events to task listeners
+            this.realtimeManager.on('ai_progress', (data) => {
+                console.log(`📊 [ConversationTask ${this.taskId}] AI Progress [${data.type}]:`, data.message || '');
+
+                // Emit to sidebar webview
+                this.emit('aiProgress', this.taskId, data);
+
+                // Update task status based on progress type
+                if (data.type === 'thinking') {
+                    this.status = 'thinking';
+                } else if (data.type === 'working') {
+                    this.status = 'executing';
+                } else if (data.type === 'complete') {
+                    this.status = 'completed';
+                } else if (data.type === 'error') {
+                    this.status = 'failed';
+                }
+            });
+
+            // Handle connection events
+            this.realtimeManager.on('connected', () => {
+                console.log(`✅ [ConversationTask ${this.taskId}] Realtime connection established`);
+                this.realtimeConnected = true;
+                this.emit('realtimeConnected', this.taskId);
+            });
+
+            this.realtimeManager.on('disconnected', (reason) => {
+                console.log(`❌ [ConversationTask ${this.taskId}] Realtime connection lost:`, reason);
+                this.realtimeConnected = false;
+                this.emit('realtimeDisconnected', this.taskId, reason);
+            });
+
+            this.realtimeManager.on('error', (error) => {
+                console.error(`❌ [ConversationTask ${this.taskId}] Realtime error:`, error);
+                this.emit('realtimeError', this.taskId, error);
+            });
+
+            // Connect immediately
+            this.realtimeManager.connect();
+
+        } catch (error) {
+            console.error(`❌ [ConversationTask ${this.taskId}] Failed to setup realtime:`, error);
+        }
     }
 
     /**
@@ -111,7 +181,18 @@ class ConversationTask extends EventEmitter {
                         const cleanedResponse = this._cleanToolCallsFromResponse(response);
 
                         // ONLY emit assistant message when task is truly done (no tool calls)
-                        this.emit('assistantMessage', this.taskId, cleanedResponse);
+                        // Include TODOs and file_changes if available
+                        try {
+                            console.log('🔔 Emitting assistantMessage with extras keys:', response ? Object.keys(response).filter(k=>k.startsWith('_') || k==='todos' || k==='file_changes' || k==='todo_stats') : []);
+                        } catch(e) {
+                            // Log parsing error
+                            console.warn('Failed to log extras keys:', e);
+                        }
+                        this.emit('assistantMessage', this.taskId, cleanedResponse, {
+                            todos: response._todos,
+                            todo_stats: response._todo_stats,
+                            file_changes: response._file_changes
+                        });
 
                         // Check if task is complete or needs continuation
                         const shouldContinue = await this._checkTaskCompletion();
@@ -188,6 +269,22 @@ class ConversationTask extends EventEmitter {
             // ALWAYS ensure typing indicator is hidden, regardless of how task ended
             console.log('🧹 Task cleanup: ensuring typing indicator is hidden');
             this.emit('taskCleanup', this.taskId);
+
+            // Disconnect realtime connection
+            this._cleanupRealtimeConnection();
+        }
+    }
+
+    /**
+     * Clean up realtime WebSocket connection
+     */
+    _cleanupRealtimeConnection() {
+        if (this.realtimeManager) {
+            console.log(`🔌 [ConversationTask ${this.taskId}] Disconnecting realtime connection`);
+            this.realtimeManager.disconnect();
+            this.realtimeManager.removeAllListeners();
+            this.realtimeManager = null;
+            this.realtimeConnected = false;
         }
     }
 
@@ -281,20 +378,70 @@ class ConversationTask extends EventEmitter {
                 this.conversationId = response.data.message.conversation_id;
             }
 
-            // Extract AI response
-            const aiResponse = response.data?.message?.response ||
-                              response.data?.message?.content ||
-                              response.data?.message?.text;
+            // Extract AI response and tool_calls
+            const messageData = response.data?.message || {};
+            const responseText = messageData.response ||
+                                messageData.content ||
+                                messageData.text;
 
-            console.log('🔍 AI Response extracted:', aiResponse ? `${aiResponse.substring(0, 200)}...` : 'NONE');
+            console.log('🔍 AI Response extracted:', responseText ? `${responseText.substring(0, 200)}...` : 'NONE');
 
-            if (!aiResponse) {
+            if (!responseText) {
                 console.error('❌ No AI response found in:', response.data);
                 throw new Error('No AI response in server reply');
             }
 
-            // Add AI response to messages
-            this.addMessage('assistant', aiResponse);
+            // Create a response object that can hold both text and tool_calls
+            const aiResponse = {
+                toString: function() { return responseText; },
+                valueOf: function() { return responseText; },
+                text: responseText,
+                // For backward compatibility with code expecting a string
+                substring: function(...args) { return responseText.substring(...args); },
+                includes: function(...args) { return responseText.includes(...args); },
+                indexOf: function(...args) { return responseText.indexOf(...args); },
+                replace: function(...args) { return responseText.replace(...args); },
+                replaceAll: function(...args) { return responseText.replaceAll(...args); },
+                split: function(...args) { return responseText.split(...args); },
+                trim: function(...args) { return responseText.trim(...args); },
+                toLowerCase: function(...args) { return responseText.toLowerCase(...args); },
+                toUpperCase: function(...args) { return responseText.toUpperCase(...args); },
+                match: function(...args) { return responseText.match(...args); },
+                search: function(...args) { return responseText.search(...args); },
+                slice: function(...args) { return responseText.slice(...args); },
+                startsWith: function(...args) { return responseText.startsWith(...args); },
+                endsWith: function(...args) { return responseText.endsWith(...args); },
+                charAt: function(...args) { return responseText.charAt(...args); },
+                charCodeAt: function(...args) { return responseText.charCodeAt(...args); },
+                length: responseText.length
+            };
+
+            // Check for tool_calls in backend response (if backend returns them separately)
+            if (messageData.tool_calls && Array.isArray(messageData.tool_calls)) {
+                console.log(`🔧 Backend returned ${messageData.tool_calls.length} tool_call(s) in response`);
+                // Store tool_calls on the response object
+                aiResponse._backendToolCalls = messageData.tool_calls;
+            }
+
+            // Store TODOs and file_changes if provided by backend
+            if (messageData.todos) {
+                aiResponse._todos = messageData.todos;
+                console.log(`📋 Backend returned ${messageData.todos.length} TODO(s)`);
+            }
+            if (messageData.todo_stats) {
+                aiResponse._todo_stats = messageData.todo_stats;
+                console.log(`📊 TODO stats: ${messageData.todo_stats.completed}/${messageData.todo_stats.total}`);
+            }
+            if (messageData.file_changes) {
+                aiResponse._file_changes = messageData.file_changes;
+                const totalFiles = (messageData.file_changes.created?.length || 0) +
+                                  (messageData.file_changes.modified?.length || 0) +
+                                  (messageData.file_changes.deleted?.length || 0);
+                console.log(`📂 File changes: ${totalFiles} files affected`);
+            }
+
+            // Add AI response to messages (convert to string)
+            this.addMessage('assistant', responseText);
 
             // Reset retry count on success
             this.retryCount = 0;
@@ -383,7 +530,16 @@ class ConversationTask extends EventEmitter {
         const toolCalls = [];
 
         try {
-            // Support multiple tool calls in one response
+            // Check if backend already parsed and returned tool_calls
+            if (aiResponse._backendToolCalls && Array.isArray(aiResponse._backendToolCalls)) {
+                console.log(`🔧 Using ${aiResponse._backendToolCalls.length} tool_call(s) from backend response`);
+                return aiResponse._backendToolCalls.map((tc, idx) => ({
+                    id: `call_${this.taskId}_${Date.now()}_${idx}`,
+                    ...tc
+                }));
+            }
+
+            // Fallback: Parse from markdown format (in case backend returns text with tool_call blocks)
             const toolCallRegex = /```tool_call\s*\n([\s\S]*?)\n```/g;
             let match;
             let callIndex = 0;
@@ -693,13 +849,10 @@ class ConversationTask extends EventEmitter {
     }
 
     /**
-     * Execute terminal command
+     * Execute terminal command in VS Code's integrated terminal
+     * Shows command execution in the terminal panel at bottom of VS Code
      */
     async _executeTerminalCommand(command, _description) {
-        const { exec } = require('child_process');
-        const util = require('util');
-        const execPromise = util.promisify(exec);
-
         try {
             // Get workspace path
             const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -709,47 +862,89 @@ class ConversationTask extends EventEmitter {
 
             const workspacePath = workspaceFolders[0].uri.fsPath;
 
-            console.log(`💻 Executing command: ${command}`);
+            console.log(`💻 Executing command in terminal: ${command}`);
             console.log(`📁 Working directory: ${workspacePath}`);
 
-            // Show notification to user
+            // Get or create Oropendola terminal
+            let terminal = this._getOropendolaTerminal();
+
+            if (!terminal) {
+                // Create new dedicated terminal for Oropendola AI
+                terminal = vscode.window.createTerminal({
+                    name: 'Oropendola AI',
+                    cwd: workspacePath,
+                    hideFromUser: false // Make visible in terminal panel
+                });
+
+                // Store reference for reuse
+                this._terminal = terminal;
+
+                console.log('✨ Created new Oropendola AI terminal');
+            }
+
+            // Show the terminal panel (but don't steal focus from editor)
+            terminal.show(false);
+
+            // Show notification
             vscode.window.showInformationMessage(`⚙️ Running: ${command}`);
 
-            // Execute command with timeout
-            // Inherit PATH from VS Code environment to find npm, git, etc.
-            const { stdout, stderr } = await execPromise(command, {
-                cwd: workspacePath,
-                timeout: 120000, // 2 minute timeout
-                maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-                env: { ...process.env } // Inherit environment variables (PATH, etc.)
-            });
+            // Send command to terminal (will be visible to user)
+            terminal.sendText(command);
 
-            const output = stdout + (stderr ? `\n⚠️ Warnings:\n${stderr}` : '');
-            console.log(`✅ Command output:\n${output}`);
+            console.log(`✅ Command sent to terminal: ${command}`);
 
-            // Show success notification
-            vscode.window.showInformationMessage(`✅ Command completed: ${command}`);
+            // Note: We can't wait for command completion with terminal.sendText()
+            // It executes asynchronously. User sees real-time output in terminal.
 
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'run_terminal',
-                content: `Command executed successfully:
+                content: `Command executed successfully: $ ${command}
 
-$ ${command}
-
-${output}`,
+Output will appear in the "Oropendola AI" terminal.`,
                 success: true
             };
 
         } catch (error) {
-            console.error(`❌ Command failed: ${command}`);
+            console.error(`❌ Terminal command failed: ${command}`);
             console.error(`Error: ${error.message}`);
 
-            // Show error notification
             vscode.window.showErrorMessage(`❌ Command failed: ${command}`);
 
             throw new Error(`Failed to execute command "${command}": ${error.message}`);
         }
+    }
+
+    /**
+     * Get existing Oropendola terminal or null
+     * Checks if stored terminal still exists and is active
+     */
+    _getOropendolaTerminal() {
+        // Check if we have a stored terminal reference
+        if (this._terminal) {
+            // Verify it still exists in VS Code's terminal list
+            const exists = vscode.window.terminals.some(t => t === this._terminal);
+            if (exists) {
+                console.log('♻️ Reusing existing Oropendola AI terminal');
+                return this._terminal;
+            } else {
+                // Terminal was closed by user
+                this._terminal = null;
+            }
+        }
+
+        // Look for any existing "Oropendola AI" terminal
+        const existingTerminal = vscode.window.terminals.find(
+            t => t.name === 'Oropendola AI'
+        );
+
+        if (existingTerminal) {
+            this._terminal = existingTerminal;
+            console.log('♻️ Found existing Oropendola AI terminal');
+            return existingTerminal;
+        }
+
+        return null;
     }
 
     /**

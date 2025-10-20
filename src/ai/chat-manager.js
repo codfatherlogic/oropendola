@@ -548,6 +548,7 @@ class ChatManager {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         const context = {
             workspace: workspaceFolders ? workspaceFolders[0].name : null,
+            workspacePath: workspaceFolders ? workspaceFolders[0].uri.fsPath : null,
             openFiles: [],
             activeFile: null,
             selection: null,

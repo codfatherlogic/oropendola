@@ -158,7 +158,16 @@ class OropendolaSidebarProvider {
                         await this._handleAcceptPlan(message.messageContent);
                         break;
                     case 'rejectPlan':
-                        this._handleRejectPlan(message.messageContent);
+                        await this._handleRejectPlan(message.messageContent);
+                        break;
+                    case 'openFile':
+                        await this._handleOpenFile(message.filePath, message.highlight);
+                        break;
+                    case 'keepFileChange':
+                        await this._handleKeepFileChange(message.filePath);
+                        break;
+                    case 'undoFileChange':
+                        await this._handleUndoFileChange(message.filePath, message.changeType);
                         break;
                 }
             } catch (error) {
@@ -1053,15 +1062,38 @@ class OropendolaSidebarProvider {
     async _handleToggleTodo(todoId) {
         try {
             console.log('✓ Toggling TODO:', todoId);
-            this._todoManager.toggleTodo(todoId);
-            this._updateTodoDisplay();
 
-            // Sync with backend if conversation exists
-            if (this._conversationId && this._sessionCookies) {
-                const todo = this._todoManager.getAllTodos().find(t => t.id === todoId);
-                if (todo) {
-                    await this._syncTodoWithBackend(todoId, todo.completed);
+            if (!this._sessionCookies) {
+                vscode.window.showWarningMessage('Please sign in to manage TODOs');
+                return;
+            }
+
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const apiUrl = config.get('api.url', 'https://oropendola.ai');
+            const axios = require('axios');
+
+            // Toggle on backend using DocType API
+            const response = await axios.post(
+                `${apiUrl}/api/method/ai_assistant.api.todos.toggle_todo_doctype`,
+                { todo_id: todoId },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cookie': this._sessionCookies
+                    },
+                    timeout: 10000
                 }
+            );
+
+            if (response.data && response.data.message && response.data.message.success) {
+                console.log(`✅ Toggled TODO: ${todoId}`);
+
+                // Refresh TODO list from backend
+                if (this._conversationId) {
+                    await this._fetchTodosFromBackend();
+                }
+            } else {
+                throw new Error('Failed to toggle TODO');
             }
         } catch (error) {
             console.error('Toggle TODO error:', error);
@@ -1086,12 +1118,46 @@ class OropendolaSidebarProvider {
     /**
      * Handle clear all TODOs
      */
-    _handleClearTodos() {
+    async _handleClearTodos() {
         try {
             console.log('🗑️ Clearing all TODOs');
-            this._todoManager.clearAll();
-            this._updateTodoDisplay();
-            vscode.window.showInformationMessage('✅ All TODOs cleared');
+
+            if (!this._conversationId || !this._sessionCookies) {
+                vscode.window.showWarningMessage('No active conversation');
+                return;
+            }
+
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const apiUrl = config.get('api.url', 'https://oropendola.ai');
+            const axios = require('axios');
+
+            // Clear on backend using DocType API
+            const response = await axios.post(
+                `${apiUrl}/api/method/ai_assistant.api.todos.clear_todos_doctype`,
+                { conversation_id: this._conversationId },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cookie': this._sessionCookies
+                    },
+                    timeout: 10000
+                }
+            );
+
+            if (response.data && response.data.message && response.data.message.success) {
+                const deleted = response.data.message.deleted || 0;
+                console.log(`✅ Cleared ${deleted} TODOs`);
+                vscode.window.showInformationMessage(`✅ Cleared ${deleted} TODOs`);
+
+                // Update UI to show empty
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'updateTodos',
+                        todos: [],
+                        stats: { total: 0, completed: 0, pending: 0 }
+                    });
+                }
+            }
         } catch (error) {
             console.error('Clear TODOs error:', error);
             vscode.window.showErrorMessage(`Failed to clear TODOs: ${error.message}`);
@@ -1104,24 +1170,35 @@ class OropendolaSidebarProvider {
     async _handleSyncTodos() {
         try {
             console.log('🔄 Syncing TODOs with backend...');
-            const config = vscode.workspace.getConfiguration('oropendola');
-            const apiUrl = config.get('api.url', 'https://oropendola.ai');
 
             if (!this._sessionCookies || !this._conversationId) {
                 vscode.window.showWarningMessage('Please start a conversation first');
                 return;
             }
 
+            await this._fetchTodosFromBackend();
+            vscode.window.showInformationMessage('✅ TODOs synced successfully');
+
+        } catch (error) {
+            console.error('Sync TODOs error:', error);
+            vscode.window.showErrorMessage(`Failed to sync TODOs: ${error.message}`);
+        }
+    }
+
+    /**
+     * Fetch TODOs from backend and update UI
+     */
+    async _fetchTodosFromBackend() {
+        try {
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const apiUrl = config.get('api.url', 'https://oropendola.ai');
             const axios = require('axios');
 
-            // Send TODOs to backend using the new save_todos endpoint
-            const response = await axios.post(
-                `${apiUrl}/api/method/ai_assistant.api.save_todos`,
+            // Fetch TODOs from backend using DocType API
+            const response = await axios.get(
+                `${apiUrl}/api/method/ai_assistant.api.todos.get_todos_doctype`,
                 {
-                    conversation_id: this._conversationId,
-                    todos: this._todoManager.getAllTodos()
-                },
-                {
+                    params: { conversation_id: this._conversationId },
                     headers: {
                         'Content-Type': 'application/json',
                         'Cookie': this._sessionCookies
@@ -1130,17 +1207,24 @@ class OropendolaSidebarProvider {
                 }
             );
 
-            if (response.data && response.data.message && response.data.message.success) {
-                const count = response.data.message.saved_count || 0;
-                vscode.window.showInformationMessage(`✅ ${count} TODOs synced successfully`);
-                console.log(`✅ ${count} TODOs synced to backend`);
-            } else {
-                throw new Error(response.data.message?.error || response.data.error || 'Sync failed');
-            }
+            if (response.data && response.data.message) {
+                const { todos, stats } = response.data.message;
 
+                // Update UI
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'updateTodos',
+                        todos: todos || [],
+                        stats: stats || { total: 0, completed: 0, pending: 0 },
+                        context: 'Synced from server'
+                    });
+                }
+
+                console.log(`✅ Synced ${todos?.length || 0} TODOs from backend`);
+            }
         } catch (error) {
-            console.error('Sync TODOs error:', error);
-            vscode.window.showErrorMessage(`Failed to sync TODOs: ${error.message}`);
+            console.error('❌ Failed to fetch TODOs:', error);
+            throw error;
         }
     }
 
@@ -1278,16 +1362,20 @@ class OropendolaSidebarProvider {
                     type: 'addMessage',
                     message: {
                         role: 'system',
-                        content: '🚀 Creating files and running setup commands...'
+                        content: '🚀 Creating files... (You\'ll need to run commands manually - terminal commands are restricted for security)'
                     }
                 });
 
                 this._view.webview.postMessage({ type: 'showTyping' });
             }
 
-            // Send the plan back to AI for execution
-            // AI can now create files AND run terminal commands for complete project setup
-            await this._handleSendMessage('Execute the plan you just outlined. Create all the files with their complete implementation. Then run any necessary setup commands (npm install, git init, etc.) to complete the project and make it ready to use.', []);
+            // Send the plan back to AI for execution (silent mode - don't show instruction in UI)
+            // NOTE: Only ask to create files, NOT run terminal commands (backend blocks those)
+            await this._handleSendMessage(
+                'Execute the plan you just outlined. Create all the files with their complete implementation. Do NOT run any terminal commands like npm install, git init, or node commands - just create the files. The user will run commands manually.', 
+                [], 
+                { silent: true }
+            );
 
         } catch (error) {
             console.error('❌ Accept plan error:', error);
@@ -1328,6 +1416,153 @@ class OropendolaSidebarProvider {
 
         } catch (error) {
             console.error('Reject plan error:', error);
+        }
+    }
+
+    /**
+     * Handle opening a file from a file link in chat
+     * @param {string} filePath - Relative path to the file
+     * @param {boolean} highlight - Whether to highlight the file (for GitHub Copilot style)
+     */
+    async _handleOpenFile(filePath, highlight = false) {
+        try {
+            console.log('📂 Opening file:', filePath, highlight ? '(with highlight)' : '');
+
+            // Get workspace folders
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showWarningMessage('No workspace folder open');
+                return;
+            }
+
+            // Build full path
+            const path = require('path');
+            const fullPath = path.join(workspaceFolders[0].uri.fsPath, filePath);
+
+            console.log('📂 Full path:', fullPath);
+
+            // Check if file exists
+            const fs = require('fs');
+            if (!fs.existsSync(fullPath)) {
+                vscode.window.showWarningMessage(`File not found: ${filePath}`);
+                return;
+            }
+
+            // Open file in editor
+            const document = await vscode.workspace.openTextDocument(fullPath);
+            const editor = await vscode.window.showTextDocument(document, {
+                preview: false, // Don't open in preview mode
+                preserveFocus: false // Give focus to the opened file
+            });
+
+            // If highlight flag is set, briefly highlight the document (GitHub Copilot style)
+            if (highlight && editor) {
+                const decorationType = vscode.window.createTextEditorDecorationType({
+                    backgroundColor: 'rgba(100, 150, 255, 0.15)',
+                    isWholeLine: true
+                });
+
+                const fullRange = new vscode.Range(
+                    0, 0,
+                    document.lineCount - 1, 
+                    document.lineAt(document.lineCount - 1).text.length
+                );
+
+                editor.setDecorations(decorationType, [fullRange]);
+
+                // Remove highlight after 1 second
+                setTimeout(() => {
+                    decorationType.dispose();
+                }, 1000);
+            }
+
+            console.log('✅ File opened successfully');
+
+        } catch (error) {
+            console.error('❌ Error opening file:', error);
+            vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
+        }
+    }
+
+    /**
+     * Handle keeping a file change (GitHub Copilot style)
+     * @param {string} filePath - Path to the file
+     */
+    async _handleKeepFileChange(filePath) {
+        try {
+            console.log('✅ Keeping file change:', filePath);
+            
+            // In a full implementation, you might:
+            // - Mark the change as accepted in a database
+            // - Update version control metadata
+            // - Track user preferences for AI changes
+            
+            // For now, just log it
+            vscode.window.showInformationMessage(`Kept changes to ${filePath}`, { modal: false });
+
+        } catch (error) {
+            console.error('❌ Error keeping file change:', error);
+            vscode.window.showErrorMessage(`Failed to keep file change: ${error.message}`);
+        }
+    }
+
+    /**
+     * Handle undoing a file change (GitHub Copilot style)
+     * @param {string} filePath - Path to the file
+     * @param {string} changeType - Type of change (created, modified, deleted)
+     */
+    async _handleUndoFileChange(filePath, changeType) {
+        try {
+            console.log('↩️ Undoing file change:', filePath, `(${changeType})`);
+
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showWarningMessage('No workspace folder open');
+                return;
+            }
+
+            const path = require('path');
+            const fs = require('fs').promises;
+            const fullPath = path.join(workspaceFolders[0].uri.fsPath, filePath);
+
+            if (changeType === 'created') {
+                // Delete the newly created file
+                try {
+                    await fs.unlink(fullPath);
+                    vscode.window.showInformationMessage(`Deleted ${filePath}`, { modal: false });
+                    console.log('✅ File deleted successfully');
+                } catch (err) {
+                    if (err.code === 'ENOENT') {
+                        console.log('ℹ️ File already deleted');
+                    } else {
+                        throw err;
+                    }
+                }
+            } else if (changeType === 'modified' || changeType === 'deleted') {
+                // For modified/deleted files, try to restore from git
+                const { exec } = require('child_process');
+                const util = require('util');
+                const execPromise = util.promisify(exec);
+
+                try {
+                    // Try git checkout to restore the file
+                    await execPromise(`git checkout HEAD -- "${filePath}"`, {
+                        cwd: workspaceFolders[0].uri.fsPath
+                    });
+                    vscode.window.showInformationMessage(`Restored ${filePath} from git`, { modal: false });
+                    console.log('✅ File restored from git');
+                } catch (err) {
+                    // If git fails, inform user
+                    vscode.window.showWarningMessage(
+                        `Could not restore ${filePath}. Make sure the file is tracked in git.`
+                    );
+                    console.warn('⚠️ Git restore failed:', err.message);
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Error undoing file change:', error);
+            vscode.window.showErrorMessage(`Failed to undo file change: ${error.message}`);
         }
     }
 
@@ -1492,21 +1727,92 @@ class OropendolaSidebarProvider {
         });
 
         // Assistant message (final response without tool calls)
-        task.on('assistantMessage', (taskId, message) => {
+        task.on('assistantMessage', (taskId, message, extraData) => {
             console.log('🤖 Assistant response received');
 
-            // Parse TODOs from the AI response
+            // Parse TODOs from the AI response (legacy support)
             this._parseTodosFromResponse(message);
 
             if (this._view) {
+                // Send message with file_changes if available
                 this._view.webview.postMessage({
                     type: 'addMessage',
                     message: {
                         role: 'assistant',
-                        content: message
+                        content: message,
+                        file_changes: extraData?.file_changes
                     }
                 });
+
+                // Update TODOs if provided by backend
+                if (extraData?.todos && Array.isArray(extraData.todos)) {
+                    console.log(`📋 Updating UI with ${extraData.todos.length} TODOs from backend`);
+                    this._view.webview.postMessage({
+                        type: 'updateTodos',
+                        todos: extraData.todos,
+                        stats: extraData.todo_stats || { total: 0, completed: 0, pending: 0 },
+                        context: 'From AI response'
+                    });
+                }
             }
+        });
+
+        // AI Progress events (GitHub Copilot-style + WebSocket real-time)
+        task.on('aiProgress', (taskId, progressData) => {
+            console.log(`📊 [Sidebar] AI Progress [${progressData.type}]:`, progressData.message || '');
+            
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'aiProgress',
+                    taskId: taskId,
+                    data: progressData
+                });
+            }
+
+            // Update VS Code status bar for visual feedback
+            if (progressData.type === 'thinking') {
+                vscode.window.setStatusBarMessage('$(loading~spin) AI is thinking...', 5000);
+            } else if (progressData.type === 'working') {
+                const step = progressData.step || 0;
+                const total = progressData.total || 0;
+                if (step && total) {
+                    vscode.window.setStatusBarMessage(`$(tools) Executing step ${step}/${total}...`, 5000);
+                }
+            } else if (progressData.type === 'complete') {
+                vscode.window.setStatusBarMessage('$(check) Task complete!', 3000);
+            }
+        });
+
+        // Realtime WebSocket connection established
+        task.on('realtimeConnected', (taskId) => {
+            console.log(`✅ [Sidebar] Task ${taskId} realtime connected`);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'realtimeStatus',
+                    taskId: taskId,
+                    connected: true
+                });
+            }
+        });
+
+        // Realtime WebSocket connection lost
+        task.on('realtimeDisconnected', (taskId, reason) => {
+            console.warn(`❌ [Sidebar] Task ${taskId} realtime disconnected:`, reason);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'realtimeStatus',
+                    taskId: taskId,
+                    connected: false,
+                    reason: reason
+                });
+            }
+        });
+
+        // Realtime WebSocket connection error
+        task.on('realtimeError', (taskId, error) => {
+            console.error(`❌ [Sidebar] Task ${taskId} realtime error:`, error);
+            // Don't show realtime errors to user - they're not critical
+            // The extension will still work via HTTP responses
         });
 
         // Task cleanup (ALWAYS hide typing indicator)
@@ -1570,10 +1876,12 @@ class OropendolaSidebarProvider {
     /**
      * Handle sending a chat message (Enhanced with ConversationTask and URL Analysis)
      */
-    async _handleSendMessage(text, attachments = []) {
+    async _handleSendMessage(text, attachments = [], options = {}) {
         if (!text || !text.trim()) {
             return;
         }
+
+        const { silent = false } = options; // Silent mode hides user message from UI
 
         // Detect URLs in the message
         const detectedUrls = this._urlAnalyzer.detectURLs(text);
@@ -1650,8 +1958,8 @@ class OropendolaSidebarProvider {
             timestamp: new Date().toISOString()
         });
 
-        // Show user message in UI (original text, not enhanced)
-        if (this._view) {
+        // Show user message in UI (original text, not enhanced) - unless silent mode
+        if (this._view && !silent) {
             this._view.webview.postMessage({
                 type: 'addMessage',
                 message: {
@@ -1847,6 +2155,7 @@ class OropendolaSidebarProvider {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         const context = {
             workspace: workspaceFolders ? workspaceFolders[0].name : null,
+            workspacePath: workspaceFolders ? workspaceFolders[0].uri.fsPath : null,
             openFiles: [],
             activeFile: null,
             selection: null
@@ -2721,6 +3030,7 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
     /**
      * Get chat interface HTML - shown after successful authentication
      */
+    // eslint-disable-next-line complexity, max-lines-per-function
     _getChatHtml(webview) {
         console.log('🔧 Generating chat HTML...');
         const logoUri = webview.asWebviewUri(
@@ -2749,20 +3059,30 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         '.icon-button { background: transparent; border: none; color: var(--vscode-descriptionForeground); cursor: pointer; padding: 6px; border-radius: 4px; font-size: 14px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; }' +
         '.icon-button:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }' +
         '.messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }' +
-        '.message { padding: 12px; border-radius: 8px; max-width: 90%; word-wrap: break-word; font-size: 13px; line-height: 1.5; display: flex; gap: 12px; align-items: flex-start; width: fit-content; }' +
+        '.message { padding: 12px; border-radius: 8px; max-width: 90%; word-wrap: break-word; font-size: 13px; line-height: 1.5; display: flex; gap: 12px; align-items: flex-start; width: fit-content; position: relative; }' +
         '.message-content { flex: 1; min-width: 0; overflow-wrap: break-word; }' +
         '.message pre { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; overflow-x: auto; margin: 8px 0; }' +
         '.message code { font-family: var(--vscode-editor-font-family); font-size: 12px; background: var(--vscode-textCodeBlock-background); padding: 2px 4px; border-radius: 3px; }' +
         '.message pre code { background: none; padding: 0; }' +
-        '.message-actions { display: flex !important; flex-direction: column; gap: 4px; align-self: flex-start; margin-left: auto; flex-shrink: 0; min-width: 70px; }' +
+        '.message-actions { display: flex !important; flex-direction: row; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.05); justify-content: flex-end; }' +
 
-        '.message-action-btn { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap; min-width: 70px; }' +
-        '.message-action-btn:hover { background: var(--vscode-button-secondaryHoverBackground); }' +
-        '.message-action-accept { background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-weight: 600; }' +
+        '.message-action-btn { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; white-space: nowrap; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }' +
+        '.message-action-btn:hover { background: var(--vscode-button-secondaryHoverBackground); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }' +
+        '.message-action-accept { background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-weight: 600; padding: 8px 20px; }' +
         '.message-action-accept:hover { background: var(--vscode-button-hoverBackground); }' +
-        '.message-action-accept:disabled { opacity: 0.5; cursor: not-allowed; }' +
-        '.message-action-reject { background: transparent; border: 1px solid var(--vscode-button-secondaryBackground); }' +
+        '.message-action-accept:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }' +
+        '.message-action-reject { background: transparent; border: 1px solid var(--vscode-button-border); padding: 8px 16px; }' +
         '.message-action-reject:hover { background: rgba(255, 80, 80, 0.1); border-color: rgba(255, 80, 80, 0.5); color: #FF5252; }' +
+        '.code-block-enhanced { position: relative; margin: 12px 0; border-radius: 8px; background: var(--vscode-textCodeBlock-background); border: 1px solid rgba(255, 255, 255, 0.1); overflow: hidden; }' +
+        '.code-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(0, 0, 0, 0.2); border-bottom: 1px solid rgba(255, 255, 255, 0.1); }' +
+        '.code-language { font-size: 10px; color: var(--vscode-descriptionForeground); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }' +
+        '.code-actions { display: flex; gap: 4px; }' +
+        '.code-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: var(--vscode-foreground); padding: 3px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 4px; }' +
+        '.code-btn:hover { background: var(--vscode-button-secondaryHoverBackground); border-color: var(--vscode-button-secondaryHoverBackground); transform: translateY(-1px); }' +
+        '.code-block-enhanced pre { margin: 0; padding: 12px; overflow-x: auto; background: transparent; }' +
+        '.code-block-enhanced code { font-family: var(--vscode-editor-font-family), monospace; font-size: 12px; line-height: 1.5; }' +
+        '.file-link { color: #4FC3F7; text-decoration: none; border-bottom: 1px dotted rgba(79, 195, 247, 0.5); cursor: pointer; transition: all 0.2s; font-weight: 500; }' +
+        '.file-link:hover { color: #81D4FA; border-bottom-color: #81D4FA; background: rgba(79, 195, 247, 0.1); padding: 0 2px; border-radius: 2px; }' +
         '.message-user { align-self: flex-end; background: #2D2D2D; color: #FFFFFF; border-radius: 12px 12px 4px 12px; }' +
         '.message-assistant { align-self: flex-start; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); }' +
         '.message-error { align-self: center; background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); color: var(--vscode-errorForeground); font-size: 12px; }' +
@@ -2773,6 +3093,24 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         '.typing-dot:nth-child(1) { animation-delay: -0.32s; }' +
         '.typing-dot:nth-child(2) { animation-delay: -0.16s; }' +
         '@keyframes typing-bounce { 0%, 80%, 100% { transform: scale(0); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }' +
+        '.progress-container { margin: 8px 0; }' +
+        '.ai-progress-message { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; margin: 8px 0; border-radius: 6px; animation: slideIn 0.3s ease; align-self: flex-start; max-width: 90%; }' +
+        '@keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }' +
+        '.ai-progress-message.thinking { background: rgba(255, 193, 7, 0.1); border-left: 3px solid #FFC107; }' +
+        '.ai-progress-message.plan { background: rgba(76, 175, 80, 0.1); border-left: 3px solid #4CAF50; }' +
+        '.ai-progress-message.step-complete { background: rgba(76, 175, 80, 0.05); border-left: 3px solid #4CAF50; }' +
+        '.ai-progress-message.error { background: rgba(244, 67, 54, 0.1); border-left: 3px solid #F44336; }' +
+        '.progress-icon { font-size: 20px; flex-shrink: 0; }' +
+        '.progress-text { flex: 1; font-size: 14px; line-height: 1.6; }' +
+        '.ai-progress-bar-container { padding: 12px 16px; margin: 8px 0; background: rgba(33, 150, 243, 0.05); border-radius: 6px; align-self: flex-start; max-width: 90%; }' +
+        '.ai-progress-bar { height: 4px; background: rgba(100, 100, 100, 0.2); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }' +
+        '.ai-progress-fill { height: 100%; background: linear-gradient(90deg, #2196F3, #4FC3F7); transition: width 0.3s ease; width: 0%; }' +
+        '.ai-progress-text { font-size: 12px; color: var(--vscode-descriptionForeground); text-align: center; }' +
+        '.ai-separator { color: var(--vscode-descriptionForeground); opacity: 0.3; margin: 12px 0; font-family: monospace; font-size: 12px; align-self: flex-start; }' +
+        '.step-details { list-style: none; padding: 0; margin: 8px 0 0 0; }' +
+        '.step-details li { font-size: 12px; color: var(--vscode-descriptionForeground); padding: 2px 0; padding-left: 16px; position: relative; }' +
+        '.step-details li:before { content: "→"; position: absolute; left: 0; }' +
+        '.step-message { margin-bottom: 4px; }' +
         '.empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--vscode-descriptionForeground); }' +
         '.empty-icon { font-size: 48px; margin-bottom: 16px; }' +
         '.empty-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--vscode-foreground); }' +
@@ -2856,6 +3194,75 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         '.todo-item-action.accept { color: #00C853; }' +
         '.todo-item-action.reject { color: #FF5252; }' +
         '.todo-empty { text-align: center; padding: 20px; color: var(--vscode-descriptionForeground); font-size: 12px; }' +
+
+        // File Changes Card CSS
+        '.file-changes-card { background: rgba(79, 195, 247, 0.05); border: 1px solid rgba(79, 195, 247, 0.2); border-radius: 8px; margin: 12px 0; overflow: hidden; }' +
+        '.file-changes-header { padding: 12px 16px; background: rgba(79, 195, 247, 0.1); border-bottom: 1px solid rgba(79, 195, 247, 0.2); display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }' +
+        '.file-changes-header:hover { background: rgba(79, 195, 247, 0.15); }' +
+        '.file-changes-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: var(--vscode-foreground); }' +
+        '.file-changes-icon { font-size: 16px; }' +
+        '.file-changes-count { color: #4FC3F7; font-weight: 700; }' +
+        '.file-changes-arrow { font-size: 12px; transition: transform 0.2s; }' +
+        '.file-changes-card.collapsed .file-changes-arrow { transform: rotate(-90deg); }' +
+        '.file-changes-content { padding: 16px; }' +
+        '.file-changes-card.collapsed .file-changes-content { display: none; }' +
+        '.file-change-section { margin-bottom: 16px; }' +
+        '.file-change-section:last-child { margin-bottom: 0; }' +
+        '.file-change-section-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--vscode-descriptionForeground); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }' +
+        '.file-change-list { list-style: none; padding: 0; margin: 0; }' +
+        '.file-change-item { padding: 6px 12px; margin: 4px 0; background: rgba(255, 255, 255, 0.03); border-radius: 4px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s; }' +
+        '.file-change-item:hover { background: rgba(79, 195, 247, 0.1); transform: translateX(4px); }' +
+        '.file-change-item::before { content: "•"; color: #4FC3F7; font-weight: bold; }' +
+        '.file-change-path { color: #4FC3F7; font-family: var(--vscode-editor-font-family); font-size: 12px; font-weight: 500; flex: 1; }' +
+        '.file-change-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(100, 100, 100, 0.2); border-radius: 12px; font-size: 10px; font-weight: 600; }' +
+        '.file-change-badge.diff { background: transparent; }' +
+        '.diff-added { color: #4CAF50; }' +
+        '.diff-removed { color: #F44336; }' +
+        '.file-change-details { list-style: none; padding: 0 0 0 24px; margin: 4px 0; }' +
+        '.file-change-details li { font-size: 11px; color: var(--vscode-descriptionForeground); padding: 2px 0; }' +
+        '.file-change-details li:before { content: "→ "; margin-right: 4px; color: #4FC3F7; }' +
+        '.command-item { padding: 8px 12px; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #4FC3F7; border-radius: 4px; font-family: var(--vscode-editor-font-family); font-size: 12px; color: var(--vscode-terminal-ansiGreen); margin: 4px 0; }' +
+        '.command-output { font-family: monospace; font-size: 11px; background: rgba(0, 0, 0, 0.2); padding: 8px; margin-top: 4px; border-radius: 4px; max-height: 200px; overflow-y: auto; color: var(--vscode-foreground); }' +
+        '.command-error { color: #F44336; font-size: 11px; margin-top: 4px; font-weight: 600; }' +
+        '.copilot-changes-container { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px; margin: 12px 0; overflow: hidden; font-family: var(--vscode-font-family); }' +
+        '.copilot-changes-header { padding: 8px 12px; background: rgba(100, 150, 255, 0.05); border-bottom: 1px solid var(--vscode-panel-border); }' +
+        '.copilot-changes-count { font-size: 12px; font-weight: 600; color: var(--vscode-foreground); }' +
+        '.copilot-changes-list { padding: 4px; }' +
+        '.copilot-change-item { margin: 2px 0; background: rgba(255, 255, 255, 0.02); border-radius: 4px; padding: 4px 8px; transition: all 0.2s; }' +
+        '.copilot-change-item.undoing { transition: all 0.3s ease-out; }' +
+        '.copilot-change-item.kept { opacity: 0.6; }' +
+        '.copilot-change-item:hover { background: rgba(255, 255, 255, 0.05); }' +
+        '.copilot-change-row { display: flex; align-items: center; gap: 6px; min-height: 24px; }' +
+        '.copilot-change-checkbox { flex-shrink: 0; display: flex; align-items: center; }' +
+        '.copilot-checkbox { width: 14px; height: 14px; cursor: pointer; margin: 0; accent-color: #4FC3F7; }' +
+        '.copilot-change-icon { flex-shrink: 0; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border-radius: 2px; }' +
+        '.copilot-change-icon.created { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }' +
+        '.copilot-change-icon.modified { background: rgba(255, 152, 0, 0.2); color: #FF9800; }' +
+        '.copilot-change-icon.deleted { background: rgba(244, 67, 54, 0.2); color: #F44336; }' +
+        '.copilot-file-path { flex: 1; font-family: var(--vscode-editor-font-family); font-size: 12px; color: var(--vscode-textLink-foreground); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
+        '.copilot-file-path:hover { text-decoration: underline; }' +
+        '.copilot-line-count { flex-shrink: 0; font-size: 10px; color: var(--vscode-descriptionForeground); padding: 2px 6px; background: rgba(100, 100, 100, 0.15); border-radius: 3px; }' +
+        '.copilot-diff-badge { flex-shrink: 0; display: flex; gap: 4px; font-size: 10px; font-weight: 600; }' +
+        '.copilot-added { color: #4CAF50; }' +
+        '.copilot-removed { color: #F44336; }' +
+        '.copilot-change-actions { flex-shrink: 0; display: flex; gap: 4px; margin-left: auto; opacity: 0; transition: opacity 0.2s; }' +
+        '.copilot-change-item:hover .copilot-change-actions { opacity: 1; }' +
+        '.copilot-action-btn { background: transparent; border: 1px solid var(--vscode-panel-border); color: var(--vscode-foreground); padding: 2px 8px; border-radius: 3px; font-size: 11px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }' +
+        '.copilot-action-btn:hover { background: rgba(255, 255, 255, 0.08); }' +
+        '.copilot-keep-btn { border-color: rgba(76, 175, 80, 0.4); color: #4CAF50; }' +
+        '.copilot-keep-btn:hover { background: rgba(76, 175, 80, 0.15); border-color: #4CAF50; }' +
+        '.copilot-keep-btn:disabled { opacity: 0.5; cursor: not-allowed; }' +
+        '.copilot-undo-btn { border-color: rgba(244, 67, 54, 0.4); color: #F44336; }' +
+        '.copilot-undo-btn:hover { background: rgba(244, 67, 54, 0.15); border-color: #F44336; }' +
+        '.copilot-change-details { padding: 4px 0 4px 36px; margin-top: 4px; }' +
+        '.copilot-detail-line { font-size: 11px; color: var(--vscode-descriptionForeground); padding: 2px 0; }' +
+        '.copilot-commands-section { border-top: 1px solid var(--vscode-panel-border); padding: 8px 12px; background: rgba(0, 0, 0, 0.1); }' +
+        '.copilot-section-title { font-size: 11px; font-weight: 600; color: var(--vscode-descriptionForeground); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }' +
+        '.copilot-command-item { margin: 4px 0; padding: 6px 8px; background: rgba(0, 0, 0, 0.2); border-radius: 4px; border-left: 2px solid #4FC3F7; }' +
+        '.copilot-command-text { font-family: var(--vscode-editor-font-family); font-size: 11px; color: var(--vscode-terminal-ansiGreen); }' +
+        '.copilot-command-output { font-family: monospace; font-size: 10px; color: var(--vscode-descriptionForeground); margin-top: 4px; padding: 4px; background: rgba(0, 0, 0, 0.2); border-radius: 2px; }' +
+        '.copilot-command-error { font-size: 10px; color: #F44336; margin-top: 4px; font-weight: 600; }' +
+
         '</style>' +
         '</head>' +
         '<body>' +
@@ -2994,12 +3401,26 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         'function handleFileSelect(event) { const files = Array.from(event.target.files); files.forEach(function(file) { const reader = new FileReader(); reader.onload = function(e) { attachedFiles.push({ name: file.name, type: file.type, size: file.size, content: e.target.result, isImage: file.type.startsWith("image/") }); updateAttachmentsPreview(); }; if (file.type.startsWith("image/")) { reader.readAsDataURL(file); } else { reader.readAsText(file); } }); fileInput.value = ""; }' +
         'function removeAttachment(index) { attachedFiles.splice(index, 1); updateAttachmentsPreview(); }' +
         'function updateAttachmentsPreview() { if (attachedFiles.length === 0) { attachmentsPreview.style.display = "none"; attachmentsPreview.innerHTML = ""; return; } attachmentsPreview.style.display = "flex"; attachmentsPreview.innerHTML = attachedFiles.map(function(file, index) { if (file.isImage) { return "<div class=\'attachment-chip image-preview\'><img src=\'" + file.content + "\' class=\'attachment-image\' alt=\'" + file.name + "\' /><div style=\'display: flex; align-items: center; gap: 4px; width: 100%;\'><span class=\'attachment-name\' title=\'" + file.name + "\'> " + file.name + "</span><button class=\'attachment-remove\' data-index=\'" + index + "\' title=\'Remove\'>×</button></div></div>"; } else { return "<div class=\'attachment-chip\'><span>[File]</span><span class=\'attachment-name\' title=\'" + file.name + "\'>" + file.name + "</span><button class=\'attachment-remove\' data-index=\'" + index + "\' title=\'Remove\'>×</button></div>"; } }).join(""); attachmentsPreview.querySelectorAll(".attachment-remove").forEach(function(btn) { btn.addEventListener("click", function() { const index = parseInt(btn.getAttribute("data-index")); removeAttachment(index); }); }); }' +
-        'window.addEventListener("message", function(event) { const message = event.data; switch (message.type) { case "addMessage": addMessageToUI(message.message); if (message.message.role === "assistant" || message.message.role === "error") { resetInputState(); } break; case "showTyping": showTypingIndicator(); break; case "hideTyping": hideTypingIndicator(); resetInputState(); break; case "appendContext": if (messageInput && message.context) { const currentValue = messageInput.value; messageInput.value = currentValue + message.context; messageInput.style.height = "auto"; messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px"; messageInput.focus(); } break; case "updateInput": if (messageInput && message.text) { messageInput.value = message.text; messageInput.style.height = "auto"; messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px"; optimizeButton.disabled = false; optimizeButton.innerHTML = "&#10024;"; messageInput.focus(); } break; case "resetOptimizeButton": optimizeButton.disabled = false; optimizeButton.innerHTML = "&#10024;"; break; case "updateTodos": renderTodos(message.todos, message.stats, message.context); break; } });' +
+        'window.addEventListener("message", function(event) { const message = event.data; switch (message.type) { case "addMessage": addMessageToUI(message.message); if (message.message.role === "assistant" || message.message.role === "error") { resetInputState(); } break; case "showTyping": showTypingIndicator(); break; case "hideTyping": hideTypingIndicator(); resetInputState(); break; case "appendContext": if (messageInput && message.context) { const currentValue = messageInput.value; messageInput.value = currentValue + message.context; messageInput.style.height = "auto"; messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px"; messageInput.focus(); } break; case "updateInput": if (messageInput && message.text) { messageInput.value = message.text; messageInput.style.height = "auto"; messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px"; optimizeButton.disabled = false; optimizeButton.innerHTML = "&#10024;"; messageInput.focus(); } break; case "resetOptimizeButton": optimizeButton.disabled = false; optimizeButton.innerHTML = "&#10024;"; break; case "updateTodos": console.log("[WEBVIEW] updateTodos received", message.todos ? message.todos.length : 0, message.stats); renderTodos(message.todos, message.stats, message.context); break; case "aiProgress": handleAIProgress(message.data); break; } });' +
         'let typingElement = null;' +
+        'let currentProgressBar = null;' +
+        'let progressContainer = null;' +
         'function showTypingIndicator() { if (emptyState) emptyState.style.display = "none"; hideTypingIndicator(); typingElement = document.createElement("div"); typingElement.className = "typing-indicator"; const textSpan = document.createElement("span"); textSpan.textContent = "Oropendola AI thinking"; typingElement.appendChild(textSpan); const dotsContainer = document.createElement("div"); dotsContainer.className = "typing-dots"; for (let i = 0; i < 3; i++) { const dot = document.createElement("div"); dot.className = "typing-dot"; dotsContainer.appendChild(dot); } typingElement.appendChild(dotsContainer); messagesContainer.appendChild(typingElement); messagesContainer.scrollTop = messagesContainer.scrollHeight; }' +
         'function hideTypingIndicator() { if (typingElement) { typingElement.remove(); typingElement = null; } }' +
-        'function addMessageToUI(message) { const hadTypingIndicator = !!typingElement; if (hadTypingIndicator) hideTypingIndicator(); const messageDiv = document.createElement("div"); messageDiv.className = "message message-" + message.role; const contentDiv = document.createElement("div"); contentDiv.className = "message-content"; contentDiv.innerHTML = formatMessageContent(message.content); messageDiv.appendChild(contentDiv); if (message.role === "assistant") { const numberedPlanPattern = new RegExp("(^|\\n)[ \\t]*[0-9]+[.)][ \\t]"); const hasNumberedPlan = numberedPlanPattern.test(message.content); console.log("[DEBUG] Checking numbered plan:", hasNumberedPlan, message.content.substring(0, 100)); const actionsDiv = document.createElement("div"); actionsDiv.className = "message-actions"; if (hasNumberedPlan && !message.accepted) { console.log("[DEBUG] Showing Accept/Reject buttons"); const rejectBtn = document.createElement("button"); rejectBtn.className = "message-action-btn message-action-reject"; rejectBtn.textContent = "Reject"; rejectBtn.onclick = function() { console.log("Plan rejected by user"); rejectBtn.style.display = "none"; const acceptBtn = actionsDiv.querySelector(".message-action-accept"); if (acceptBtn) acceptBtn.style.display = "none"; safePostMessage({ type: "rejectPlan", messageContent: message.content }); }; const acceptBtn = document.createElement("button"); acceptBtn.className = "message-action-btn message-action-accept"; acceptBtn.textContent = "Accept"; acceptBtn.onclick = function() { console.log("Plan accepted by user"); acceptBtn.textContent = "Executing..."; acceptBtn.disabled = true; rejectBtn.style.display = "none"; message.accepted = true; safePostMessage({ type: "acceptPlan", messageContent: message.content }); }; actionsDiv.appendChild(rejectBtn); actionsDiv.appendChild(acceptBtn); } else { console.log("[DEBUG] Showing Copy button, hasNumberedPlan=", hasNumberedPlan, "accepted=", message.accepted); const copyBtn = document.createElement("button"); copyBtn.className = "message-action-btn"; copyBtn.textContent = "Copy"; copyBtn.onclick = function() { navigator.clipboard.writeText(message.content); copyBtn.textContent = "Copied!"; setTimeout(function() { copyBtn.textContent = "Copy"; }, 2000); }; actionsDiv.appendChild(copyBtn); } messageDiv.appendChild(actionsDiv); } messagesContainer.appendChild(messageDiv); if (hadTypingIndicator) showTypingIndicator(); messagesContainer.scrollTop = messagesContainer.scrollHeight; }' +
-        'function formatMessageContent(text) { if (!text) return ""; var formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); var codeBlockParts = formatted.split("```"); for (var i = 1; i < codeBlockParts.length; i += 2) { var block = codeBlockParts[i]; var newlineIdx = block.indexOf("\\\\n"); var code = newlineIdx > 0 ? block.substring(newlineIdx + 1) : block; codeBlockParts[i] = "<pre><code>" + code + "</code></pre>"; } formatted = codeBlockParts.join(""); var inlineCodeParts = formatted.split("`"); for (var j = 1; j < inlineCodeParts.length; j += 2) { inlineCodeParts[j] = "<code>" + inlineCodeParts[j] + "</code>"; } formatted = inlineCodeParts.join(""); var boldParts = formatted.split("**"); for (var k = 1; k < boldParts.length; k += 2) { boldParts[k] = "<strong>" + boldParts[k] + "</strong>"; } formatted = boldParts.join(""); formatted = formatted.replace(/\\\\n/g, "<br>"); return formatted; }' +
+        'function handleAIProgress(data) { try { console.log("[AI Progress]", data.type, data); switch (data.type) { case "thinking": showProgressMessage(data.message, "thinking", "🔍"); break; case "plan": showProgressMessage(data.message, "plan", "📝"); break; case "working": updateProgressBar(data.step, data.total, data.message); break; case "step_complete": showStepComplete(data); break; case "complete": clearProgressIndicators(); break; case "error": showProgressMessage(data.message, "error", "❌"); break; } } catch(e) { console.error("[handleAIProgress error]", e); } }' +
+        'function showProgressMessage(message, className, icon) { try { if (emptyState) emptyState.style.display = "none"; const messageDiv = document.createElement("div"); messageDiv.className = "ai-progress-message " + className; const iconSpan = document.createElement("div"); iconSpan.className = "progress-icon"; iconSpan.textContent = icon; const textDiv = document.createElement("div"); textDiv.className = "progress-text"; if (className === "plan") { const lines = message.split("\\n"); textDiv.innerHTML = lines.map(function(line) { return escapeHtml(line); }).join("<br>"); } else { textDiv.textContent = message; } messageDiv.appendChild(iconSpan); messageDiv.appendChild(textDiv); if (!progressContainer) { progressContainer = document.createElement("div"); progressContainer.className = "progress-container"; messagesContainer.appendChild(progressContainer); } progressContainer.appendChild(messageDiv); if (className === "plan") { const separator = document.createElement("div"); separator.className = "ai-separator"; separator.textContent = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; progressContainer.appendChild(separator); } messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[showProgressMessage error]", e); } }' +
+        'function updateProgressBar(step, total, message) { try { if (!currentProgressBar) { const barContainer = document.createElement("div"); barContainer.className = "ai-progress-bar-container"; barContainer.innerHTML = "<div class=\\"ai-progress-bar\\"><div class=\\"ai-progress-fill\\"></div></div><div class=\\"ai-progress-text\\"></div>"; if (!progressContainer) { progressContainer = document.createElement("div"); progressContainer.className = "progress-container"; messagesContainer.appendChild(progressContainer); } progressContainer.appendChild(barContainer); currentProgressBar = barContainer; } const percentage = (step / total) * 100; const fill = currentProgressBar.querySelector(".ai-progress-fill"); const text = currentProgressBar.querySelector(".ai-progress-text"); if (fill) fill.style.width = percentage + "%"; if (text) text.textContent = message; if (step === total) { setTimeout(function() { if (currentProgressBar) { currentProgressBar.remove(); currentProgressBar = null; } }, 1000); } messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[updateProgressBar error]", e); } }' +
+        'function showStepComplete(data) { try { const messageDiv = document.createElement("div"); messageDiv.className = "ai-progress-message step-complete" + (data.error ? " error" : ""); const icon = data.error ? "❌" : "✅"; const iconSpan = document.createElement("div"); iconSpan.className = "progress-icon"; iconSpan.textContent = icon; const textDiv = document.createElement("div"); textDiv.className = "progress-text"; const stepMsg = document.createElement("div"); stepMsg.className = "step-message"; const lines = (data.message || "").split("\\n"); stepMsg.innerHTML = lines.map(function(line) { return escapeHtml(line); }).join("<br>"); textDiv.appendChild(stepMsg); if (data.details && data.details.length > 0) { const detailsList = document.createElement("ul"); detailsList.className = "step-details"; data.details.forEach(function(detail) { const li = document.createElement("li"); li.textContent = detail; detailsList.appendChild(li); }); textDiv.appendChild(detailsList); } if (data.file_path && data.line_count) { const badge = document.createElement("span"); badge.className = "file-change-badge"; badge.textContent = data.line_count + " lines"; textDiv.appendChild(badge); } messageDiv.appendChild(iconSpan); messageDiv.appendChild(textDiv); if (!progressContainer) { progressContainer = document.createElement("div"); progressContainer.className = "progress-container"; messagesContainer.appendChild(progressContainer); } progressContainer.appendChild(messageDiv); messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[showStepComplete error]", e); } }' +
+        'function clearProgressIndicators() { try { if (currentProgressBar) { currentProgressBar.remove(); currentProgressBar = null; } if (progressContainer) { const separator = document.createElement("div"); separator.className = "ai-separator"; separator.textContent = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; progressContainer.appendChild(separator); setTimeout(function() { if (progressContainer) { progressContainer.remove(); progressContainer = null; } }, 100); } } catch(e) { console.error("[clearProgressIndicators error]", e); } }' +
+        'function addMessageToUI(message) { try { const hadTypingIndicator = !!typingElement; if (hadTypingIndicator) hideTypingIndicator(); const messageDiv = document.createElement("div"); messageDiv.className = "message"; const role = (message && message.role) ? String(message.role).toLowerCase() : "assistant"; if (role === "user" || role === "human") { messageDiv.classList.add("message-user"); } else if (role === "assistant" || role === "ai") { messageDiv.classList.add("message-assistant"); } else if (role === "error") { messageDiv.classList.add("message-error"); } else if (role === "system") { messageDiv.classList.add("message-system"); } else { messageDiv.classList.add("message-assistant"); } const contentDiv = document.createElement("div"); contentDiv.className = "message-content"; contentDiv.innerHTML = formatMessageContent(message.content, message.file_changes); messageDiv.appendChild(contentDiv); if (role === "assistant") { const numberedPlanPattern = new RegExp("(^|\\n)[ \\t]*[0-9]+[.)][ \\t]"); const hasNumberedPlan = numberedPlanPattern.test(message.content || ""); console.log("[DEBUG] Checking numbered plan:", hasNumberedPlan, (message.content || "").substring(0, 100)); const actionsDiv = document.createElement("div"); actionsDiv.className = "message-actions"; if (hasNumberedPlan && !message.accepted) { console.log("[DEBUG] Showing Confirm/Dismiss buttons"); const dismissBtn = document.createElement("button"); dismissBtn.className = "message-action-btn message-action-reject"; dismissBtn.textContent = "✗ Dismiss"; dismissBtn.onclick = function() { console.log("Plan dismissed by user"); dismissBtn.style.display = "none"; const confirmBtn = actionsDiv.querySelector(".message-action-accept"); if (confirmBtn) confirmBtn.style.display = "none"; safePostMessage({ type: "rejectPlan", messageContent: message.content }); }; const confirmBtn = document.createElement("button"); confirmBtn.className = "message-action-btn message-action-accept"; confirmBtn.textContent = "✓ Confirm & Execute"; confirmBtn.onclick = function() { console.log("Plan confirmed by user"); confirmBtn.textContent = "⏳ Executing..."; confirmBtn.disabled = true; dismissBtn.style.display = "none"; message.accepted = true; safePostMessage({ type: "acceptPlan", messageContent: message.content }); }; actionsDiv.appendChild(dismissBtn); actionsDiv.appendChild(confirmBtn); } else { console.log("[DEBUG] Showing Copy button, hasNumberedPlan=", hasNumberedPlan, "accepted=", message.accepted); const copyBtn = document.createElement("button"); copyBtn.className = "message-action-btn"; copyBtn.textContent = "Copy"; copyBtn.onclick = function() { try { navigator.clipboard.writeText(message.content || ""); } catch(e) { console.warn("Copy failed", e); } copyBtn.textContent = "Copied!"; setTimeout(function() { copyBtn.textContent = "Copy"; }, 2000); }; actionsDiv.appendChild(copyBtn); } messageDiv.appendChild(actionsDiv); } messagesContainer.appendChild(messageDiv); if (hadTypingIndicator) showTypingIndicator(); messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[addMessageToUI error]", e); } }' +
+        'function formatMessageContent(text, fileChanges) { if (!text) return ""; var formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); var codeBlockParts = formatted.split("```"); for (var i = 1; i < codeBlockParts.length; i += 2) { var block = codeBlockParts[i]; var newlineIdx = block.indexOf("\\\\n"); var lang = "text"; var code = block; if (newlineIdx > 0) { lang = block.substring(0, newlineIdx).trim() || "text"; code = block.substring(newlineIdx + 1); } var codeId = "code_" + Date.now() + "_" + i; codeBlockParts[i] = "<div class=\\"code-block-enhanced\\"><div class=\\"code-header\\"><span class=\\"code-language\\">" + lang.toUpperCase() + "</span><div class=\\"code-actions\\"><button class=\\"code-btn\\" onclick=\\"copyCodeBlock(" + String.fromCharCode(39) + codeId + String.fromCharCode(39) + ")\\">📋 Copy</button></div></div><pre id=\\"" + codeId + "\\"><code>" + code + "</code></pre></div>"; } formatted = codeBlockParts.join(""); formatted = formatted.replace(/([a-zA-Z0-9_\\-\\/]+\\.(js|ts|tsx|jsx|py|java|cpp|c|h|hpp|html|css|scss|json|md|txt|xml|yaml|yml|sh|bash))/g, "<a class=\\"file-link\\" onclick=\\"openFileLink(" + String.fromCharCode(39) + "$1" + String.fromCharCode(39) + ")\\" title=\\"Open $1\\">$1</a>"); var inlineCodeParts = formatted.split("`"); for (var j = 1; j < inlineCodeParts.length; j += 2) { inlineCodeParts[j] = "<code>" + inlineCodeParts[j] + "</code>"; } formatted = inlineCodeParts.join(""); var boldParts = formatted.split("**"); for (var k = 1; k < boldParts.length; k += 2) { boldParts[k] = "<strong>" + boldParts[k] + "</strong>"; } formatted = boldParts.join(""); formatted = formatted.replace(/\\\\n/g, "<br>"); if (fileChanges) { var fileChangesHtml = displayFileChanges(fileChanges); if (fileChangesHtml) { formatted = fileChangesHtml + formatted; } } return formatted; }' +
+        'function displayFileChanges(fileChanges) { if (!fileChanges) return null; var created = fileChanges.created || []; var modified = fileChanges.modified || []; var deleted = fileChanges.deleted || []; var commands = fileChanges.commands || []; var allChanges = []; if (created.length > 0) { created.forEach(function(file, idx) { var filePath = typeof file === "string" ? file : file.path; var lineCount = file.line_count || 0; allChanges.push({ type: "created", path: filePath, lineCount: lineCount, details: file.details || [], index: idx }); }); } if (modified.length > 0) { modified.forEach(function(file, idx) { var filePath = typeof file === "string" ? file : file.path; var linesAdded = file.lines_added || 0; var linesRemoved = file.lines_removed || 0; allChanges.push({ type: "modified", path: filePath, linesAdded: linesAdded, linesRemoved: linesRemoved, details: file.details || [], index: idx }); }); } if (deleted.length > 0) { deleted.forEach(function(file, idx) { var filePath = typeof file === "string" ? file : file.path; allChanges.push({ type: "deleted", path: filePath, index: idx }); }); } if (allChanges.length === 0) return null; var cardId = "file-changes-" + Date.now(); var html = "<div class=\\"copilot-changes-container\\" id=\\"" + cardId + "\\">"; html += "<div class=\\"copilot-changes-header\\">"; html += "<span class=\\"copilot-changes-count\\">" + allChanges.length + " file" + (allChanges.length !== 1 ? "s" : "") + " changed</span>"; html += "</div>"; html += "<div class=\\"copilot-changes-list\\">"; allChanges.forEach(function(change, idx) { var changeId = cardId + "-change-" + idx; var icon = change.type === "created" ? "+" : (change.type === "modified" ? "~" : "-"); var iconClass = "copilot-change-icon " + change.type; html += "<div class=\\"copilot-change-item\\" id=\\"" + changeId + "\\">"; html += "<div class=\\"copilot-change-row\\">"; html += "<div class=\\"copilot-change-checkbox\\"><input type=\\"checkbox\\" class=\\"copilot-checkbox\\" id=\\"check-" + changeId + "\\" checked /></div>"; html += "<span class=\\"" + iconClass + "\\">" + icon + "</span>"; html += "<span class=\\"copilot-file-path\\" onclick=\\"openFileAndHighlight(" + String.fromCharCode(39) + change.path + String.fromCharCode(39) + ")\\" title=\\"Click to open\\">" + change.path + "</span>"; if (change.lineCount > 0) { html += "<span class=\\"copilot-line-count\\">" + change.lineCount + " lines</span>"; } else if (change.linesAdded > 0 || change.linesRemoved > 0) { html += "<span class=\\"copilot-diff-badge\\">"; if (change.linesAdded > 0) html += "<span class=\\"copilot-added\\">+" + change.linesAdded + "</span>"; if (change.linesRemoved > 0) html += "<span class=\\"copilot-removed\\">-" + change.linesRemoved + "</span>"; html += "</span>"; } html += "<div class=\\"copilot-change-actions\\">"; html += "<button class=\\"copilot-action-btn copilot-keep-btn\\" onclick=\\"keepFileChange(" + String.fromCharCode(39) + changeId + String.fromCharCode(39) + ", " + String.fromCharCode(39) + change.path + String.fromCharCode(39) + ")\\">✓ Keep</button>"; html += "<button class=\\"copilot-action-btn copilot-undo-btn\\" onclick=\\"undoFileChange(" + String.fromCharCode(39) + changeId + String.fromCharCode(39) + ", " + String.fromCharCode(39) + change.path + String.fromCharCode(39) + ", " + String.fromCharCode(39) + change.type + String.fromCharCode(39) + ")\\">✗ Undo</button>"; html += "</div>"; html += "</div>"; if (change.details && change.details.length > 0) { html += "<div class=\\"copilot-change-details\\">"; change.details.forEach(function(detail) { html += "<div class=\\"copilot-detail-line\\">• " + escapeHtml(detail) + "</div>"; }); html += "</div>"; } html += "</div>"; }); html += "</div>"; if (commands && commands.length > 0) { html += "<div class=\\"copilot-commands-section\\">"; html += "<div class=\\"copilot-section-title\\">⚡ Commands executed</div>"; commands.forEach(function(cmd) { var cmdText = typeof cmd === "string" ? cmd : cmd.command; html += "<div class=\\"copilot-command-item\\">"; html += "<code class=\\"copilot-command-text\\">$ " + escapeHtml(cmdText) + "</code>"; if (cmd.output) { html += "<div class=\\"copilot-command-output\\">" + escapeHtml(cmd.output.substring(0, 200)) + (cmd.output.length > 200 ? "..." : "") + "</div>"; } if (cmd.exit_code !== undefined && cmd.exit_code !== 0) { html += "<div class=\\"copilot-command-error\\">Exit code: " + cmd.exit_code + "</div>"; } html += "</div>"; }); html += "</div>"; } html += "</div>"; return html; }' +
+        'function toggleFileChanges(cardId) { try { var card = document.getElementById(cardId); if (card) { card.classList.toggle("collapsed"); } } catch(e) { console.error("[toggleFileChanges error]", e); } }' +
+        'function openFileAndHighlight(filePath) { try { console.log("[Opening file with highlight]:", filePath); safePostMessage({ type: "openFile", filePath: filePath, highlight: true }); } catch(e) { console.error("[openFileAndHighlight error]", e); } }' +
+        'function keepFileChange(changeId, filePath) { try { console.log("[Keeping change]:", filePath); var changeEl = document.getElementById(changeId); if (changeEl) { changeEl.classList.add("kept"); var keepBtn = changeEl.querySelector(".copilot-keep-btn"); var undoBtn = changeEl.querySelector(".copilot-undo-btn"); if (keepBtn) { keepBtn.textContent = "✓ Kept"; keepBtn.disabled = true; } if (undoBtn) { undoBtn.style.display = "none"; } setTimeout(function() { changeEl.style.opacity = "0.6"; changeEl.style.pointerEvents = "none"; }, 300); } safePostMessage({ type: "keepFileChange", filePath: filePath }); } catch(e) { console.error("[keepFileChange error]", e); } }' +
+        'function undoFileChange(changeId, filePath, changeType) { try { console.log("[Undoing change]:", filePath, changeType); var changeEl = document.getElementById(changeId); if (changeEl) { changeEl.classList.add("undoing"); setTimeout(function() { changeEl.style.transform = "translateX(-100%)"; changeEl.style.opacity = "0"; setTimeout(function() { changeEl.remove(); }, 300); }, 100); } safePostMessage({ type: "undoFileChange", filePath: filePath, changeType: changeType }); } catch(e) { console.error("[undoFileChange error]", e); } }' +
+        'function copyCodeBlock(codeId) { try { var codeBlock = document.getElementById(codeId); if (codeBlock) { var text = codeBlock.textContent; navigator.clipboard.writeText(text).then(function() { console.log("Code copied to clipboard"); var btn = event.target; var originalText = btn.textContent; btn.textContent = "✅ Copied!"; setTimeout(function() { btn.textContent = originalText; }, 2000); }); } } catch(e) { console.error("[copyCodeBlock error]", e); } }' +
+        'function openFileLink(filePath) { try { console.log("[Opening file]:", filePath); safePostMessage({ type: "openFile", filePath: filePath }); } catch(e) { console.error("[openFileLink error]", e); } }' +
         'function renderTodos(todos, stats, context) { try { if (!todoPanel || !todoList || !todoStats) return; if (!todos || todos.length === 0) { todoPanel.classList.remove("visible"); todoList.innerHTML = "<div class=\\"todo-empty\\">No tasks yet. Ask AI to create something!</div>"; return; } todoPanel.classList.add("visible"); const completedCount = stats ? stats.completed : 0; const totalCount = stats ? stats.total : todos.length; todoStats.textContent = "(" + completedCount + "/" + totalCount + ")"; if (context && todoContext && todoContextText) { todoContextText.textContent = context; todoContext.style.display = "block"; } if (todoCreatedMessage && todoCreatedText && totalCount > 0) { todoCreatedText.textContent = "Created " + totalCount + " todo" + (totalCount !== 1 ? "s" : ""); todoCreatedMessage.style.display = "flex"; setTimeout(function() { todoCreatedMessage.style.display = "none"; }, 5000); } todoList.innerHTML = todos.map(function(todo, index) { const num = (index + 1); const itemClass = "todo-item" + (todo.completed ? " completed" : ""); const checkboxClass = "todo-checkbox" + (todo.completed ? " checked" : ""); const todoIdEscaped = todo.id.replace(/["]/g, "&quot;"); return "<div class=\\"" + itemClass + "\\" data-todo-id=\\"" + todoIdEscaped + "\\" onclick=\\"toggleTodoItem(this.dataset.todoId)\\"><div class=\\"" + checkboxClass + "\\"></div><span class=\\"todo-number\\">" + num + ".</span><span class=\\"todo-text\\">" + escapeHtml(todo.text) + "</span></div>"; }).join(""); } catch(e) { console.error("[renderTodos error]", e); } }' +
         'function toggleTodoItem(todoId) { try { safePostMessage({ type: "toggleTodo", todoId: todoId }); } catch(e) { console.error("[toggleTodo error]", e); } }' +
         'function escapeHtml(text) { const div = document.createElement("div"); div.textContent = text; return div.innerHTML; }' +
