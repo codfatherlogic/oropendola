@@ -9,6 +9,19 @@ const OropendolaSidebarProvider = require('./src/sidebar/sidebar-provider');
 const OropendolaAutocompleteProvider = require('./src/autocomplete/autocomplete-provider');
 const EditMode = require('./src/edit/edit-mode');
 
+// Enterprise Features
+const { EnhancedAuthManager } = require('./src/auth/AuthManager');
+const { WorkspaceIndexer } = require('./src/workspace/WorkspaceIndexer');
+const { OropendolaInlineCompletionProvider } = require('./src/providers/InlineCompletionProvider');
+const { OropendolaDiagnosticsProvider } = require('./src/providers/DiagnosticsProvider');
+const { OropendolaCodeActionProvider } = require('./src/providers/CodeActionProvider');
+const { TelemetryService } = require('./src/telemetry/TelemetryService');
+const { SettingsProvider } = require('./src/settings/SettingsProvider');
+const { CopilotChatPanel } = require('./src/views/CopilotChatPanel');
+
+// Backend Integration v2.0 - New Panels
+const TodoPanel = require('./src/panels/TodoPanel');
+
 let gitHubManager;
 let chatManager;
 let repositoryAnalyzer;
@@ -21,6 +34,19 @@ let lastResponseTime = 0;
 let autocompleteProvider;
 let editMode;
 let extensionContext; // Store context for later use
+
+// Enterprise services
+let enhancedAuthManager;
+let workspaceIndexer;
+let inlineCompletionProvider;
+let diagnosticsProvider;
+let codeActionProvider;
+let telemetryService;
+let settingsProvider;
+let inlineCompletionStatusBar;
+
+// Backend Integration v2.0 - UI Panels
+let todoPanel;
 
 /**
  * Extension activation
@@ -167,6 +193,9 @@ function activate(context) {
     //         }
     //     });
     // }, 1000);
+
+    // Initialize enterprise features
+    initializeEnterpriseFeatures(context);
 
     console.log('✅ Oropendola AI Assistant fully activated!');
 }
@@ -850,6 +879,442 @@ function updateStatusBarForAuthenticated() {
 }
 
 /**
+ * Initialize enterprise-grade features
+ * @param {vscode.ExtensionContext} context
+ */
+function initializeEnterpriseFeatures(context) {
+    console.log('🚀 Initializing enterprise features...');
+
+    try {
+        // Initialize Settings Provider
+        settingsProvider = new SettingsProvider();
+        const serverUrl = settingsProvider.getServerUrl();
+        console.log(`✅ Settings provider initialized (Server: ${serverUrl})`);
+
+        // Initialize Telemetry Service
+        if (settingsProvider.getTelemetryEnabled()) {
+            telemetryService = new TelemetryService(serverUrl);
+            context.subscriptions.push({
+                dispose: () => telemetryService.dispose()
+            });
+            telemetryService.trackEvent('extension_activated');
+            console.log('✅ Telemetry service initialized');
+        }
+
+        // Initialize Enhanced Auth Manager (new enterprise auth)
+        if (EnhancedAuthManager) {
+            enhancedAuthManager = new EnhancedAuthManager(context, serverUrl);
+            context.subscriptions.push(enhancedAuthManager);
+            console.log('✅ Enhanced auth manager initialized');
+        }
+
+        // Initialize Workspace Indexer
+        if (WorkspaceIndexer && settingsProvider.getIndexingEnabled()) {
+            workspaceIndexer = new WorkspaceIndexer(serverUrl);
+            context.subscriptions.push({
+                dispose: () => workspaceIndexer.dispose()
+            });
+
+            // Setup file watcher for active workspace
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                workspaceIndexer.setupFileWatcher(workspaceFolders[0]);
+
+                // Index on startup if enabled
+                if (settingsProvider.getIndexingOnStartup()) {
+                    setTimeout(() => {
+                        workspaceIndexer.indexWorkspace(workspaceFolders[0]);
+                    }, 5000); // Wait 5 seconds after activation
+                }
+            }
+            console.log('✅ Workspace indexer initialized');
+        }
+
+        // Create status bar for inline completions
+        inlineCompletionStatusBar = vscode.window.createStatusBarItem(
+            vscode.StatusBarAlignment.Right,
+            99
+        );
+        inlineCompletionStatusBar.text = '$(check) Oropendola AI';
+        context.subscriptions.push(inlineCompletionStatusBar);
+
+        // Initialize Inline Completion Provider
+        if (OropendolaInlineCompletionProvider && settingsProvider.getInlineCompletionsEnabled()) {
+            inlineCompletionProvider = new OropendolaInlineCompletionProvider(
+                serverUrl,
+                inlineCompletionStatusBar
+            );
+            
+            const inlineDisposable = vscode.languages.registerInlineCompletionItemProvider(
+                { pattern: '**' },
+                inlineCompletionProvider
+            );
+            context.subscriptions.push(inlineDisposable);
+            context.subscriptions.push({
+                dispose: () => inlineCompletionProvider.dispose()
+            });
+            console.log('✅ Inline completion provider registered');
+        }
+
+        // Initialize Diagnostics Provider
+        if (OropendolaDiagnosticsProvider && settingsProvider.getDiagnosticsEnabled()) {
+            diagnosticsProvider = new OropendolaDiagnosticsProvider(serverUrl);
+            context.subscriptions.push({
+                dispose: () => diagnosticsProvider.dispose()
+            });
+
+            // Run diagnostics on save if enabled
+            if (settingsProvider.getDiagnosticsOnSave()) {
+                context.subscriptions.push(
+                    vscode.workspace.onDidSaveTextDocument(doc => {
+                        if (doc.languageId !== 'plaintext') {
+                            diagnosticsProvider.analyzeDiagnostics(doc);
+                        }
+                    })
+                );
+            }
+            console.log('✅ Diagnostics provider initialized');
+        }
+
+        // Initialize Code Action Provider
+        if (OropendolaCodeActionProvider && settingsProvider.getCodeActionsEnabled()) {
+            codeActionProvider = new OropendolaCodeActionProvider(serverUrl);
+            
+            const codeActionDisposable = vscode.languages.registerCodeActionsProvider(
+                { pattern: '**' },
+                codeActionProvider,
+                {
+                    providedCodeActionKinds: [
+                        vscode.CodeActionKind.QuickFix,
+                        vscode.CodeActionKind.Refactor,
+                        vscode.CodeActionKind.RefactorRewrite,
+                        vscode.CodeActionKind.Source
+                    ]
+                }
+            );
+            context.subscriptions.push(codeActionDisposable);
+            context.subscriptions.push({
+                dispose: () => codeActionProvider.dispose()
+            });
+            console.log('✅ Code action provider registered');
+        }
+
+        // Register enterprise commands
+        registerEnterpriseCommands(context);
+
+        console.log('✅ All enterprise features initialized successfully');
+    } catch (error) {
+        console.error('❌ Error initializing enterprise features:', error);
+        if (telemetryService) {
+            telemetryService.trackError(error, 'enterprise_initialization');
+        }
+    }
+}
+
+/**
+ * Register enterprise feature commands
+ * @param {vscode.ExtensionContext} context
+ */
+function registerEnterpriseCommands(context) {
+    // Enhanced Auth Commands
+    if (enhancedAuthManager) {
+        context.subscriptions.push(
+            vscode.commands.registerCommand('oropendola.enhancedLogin', async () => {
+                await enhancedAuthManager.authenticate();
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('oropendola.enhancedLogout', async () => {
+                await enhancedAuthManager.logout();
+            })
+        );
+    }
+
+    // Workspace Indexing Commands
+    if (workspaceIndexer) {
+        context.subscriptions.push(
+            vscode.commands.registerCommand('oropendola.indexWorkspace', async () => {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    await workspaceIndexer.indexWorkspace(workspaceFolders[0]);
+                    if (telemetryService) {
+                        telemetryService.trackEvent('workspace_indexed');
+                    }
+                } else {
+                    vscode.window.showWarningMessage('No workspace folder open');
+                }
+            })
+        );
+    }
+
+    // AI Chat Panel Command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.openAIChat', () => {
+            const serverUrl = settingsProvider?.getServerUrl() || 'http://localhost:8000';
+            CopilotChatPanel.createOrShow(context.extensionUri, serverUrl);
+            if (telemetryService) {
+                telemetryService.trackEvent('ai_chat_opened');
+            }
+        })
+    );
+
+    // Code Action Commands
+    if (codeActionProvider) {
+        context.subscriptions.push(
+            vscode.commands.registerCommand('oropendola.applyAIFix', async (document, diagnostic) => {
+                await codeActionProvider.applyAIFix(document, diagnostic);
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('oropendola.refactorCode', async (document, range) => {
+                await codeActionProvider.refactorCode(document, range);
+            })
+        );
+    }
+
+    // Diagnostics Commands
+    if (diagnosticsProvider) {
+        context.subscriptions.push(
+            vscode.commands.registerCommand('oropendola.runDiagnostics', async () => {
+                const editor = vscode.window.activeTextEditor;
+                if (editor) {
+                    await diagnosticsProvider.analyzeDiagnostics(editor.document);
+                    if (telemetryService) {
+                        telemetryService.trackEvent('diagnostics_run');
+                    }
+                }
+            })
+        );
+
+        context.subscriptions.push(
+            vscode.commands.registerCommand('oropendola.clearDiagnostics', () => {
+                const editor = vscode.window.activeTextEditor;
+                if (editor && diagnosticsProvider) {
+                    diagnosticsProvider.clear(editor.document);
+                }
+            })
+        );
+    }
+
+    // Settings Commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.openSettings', () => {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'oropendola');
+        })
+    );
+
+    console.log('✅ Enterprise commands registered');
+
+    // ========================================
+    // Backend Integration v2.0 Commands
+    // ========================================
+    registerBackendIntegrationCommands(context);
+}
+
+/**
+ * Register Backend Integration v2.0 Commands
+ * Todo management, analytics, conversation history
+ */
+function registerBackendIntegrationCommands(context) {
+    console.log('🔧 Registering Backend Integration v2.0 commands...');
+
+    // Initialize panels
+    todoPanel = new TodoPanel(context);
+
+    // Show Todos Panel
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showTodos', async () => {
+            try {
+                await todoPanel.show();
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to show todos: ${error.message}`);
+            }
+        })
+    );
+
+    // Show Usage Analytics
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showAnalytics', async () => {
+            try {
+                const { apiClient } = require('./src/api/client');
+                const stats = await apiClient.getUsageStats(30, 'all');
+
+                // Format message
+                const message = `
+📊 **Usage Analytics (Last 30 Days)**
+
+**Total Requests**: ${stats.total_requests}
+**Total Tokens**: ${stats.total_tokens.toLocaleString()}
+**Total Cost**: $${stats.total_cost.toFixed(2)}
+
+**By Provider**:
+${Object.entries(stats.by_provider || {}).map(([provider, data]) =>
+    `• ${provider}: ${data.requests} requests, $${data.cost.toFixed(2)}`
+).join('\n')}
+
+**Average Response Time**: ${stats.avg_response_time || 'N/A'}s
+                `.trim();
+
+                vscode.window.showInformationMessage(message, { modal: true });
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to get analytics: ${error.message}`);
+            }
+        })
+    );
+
+    // Show Conversation History
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showConversations', async () => {
+            try {
+                const { conversationHistoryService } = require('./src/services/conversationHistoryService');
+                const conversations = await conversationHistoryService.getRecentConversations(20);
+
+                if (conversations.length === 0) {
+                    vscode.window.showInformationMessage('No conversations found');
+                    return;
+                }
+
+                // Show quick pick
+                const items = conversations.map(conv => ({
+                    label: conv.title || 'Untitled Conversation',
+                    description: `${conv.message_count} messages`,
+                    detail: `Last updated: ${new Date(conv.last_message).toLocaleString()}`,
+                    conversation: conv
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: 'Select a conversation to view',
+                    matchOnDescription: true,
+                    matchOnDetail: true
+                });
+
+                if (selected) {
+                    // Get full conversation
+                    const conv = await conversationHistoryService.getConversation(
+                        selected.conversation.conversation_id
+                    );
+
+                    // Export to markdown and show
+                    const markdown = await conversationHistoryService.exportToMarkdown(
+                        selected.conversation.conversation_id
+                    );
+
+                    const doc = await vscode.workspace.openTextDocument({
+                        content: markdown,
+                        language: 'markdown'
+                    });
+
+                    await vscode.window.showTextDocument(doc);
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to show conversations: ${error.message}`);
+            }
+        })
+    );
+
+    // Test Backend Connection
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.testBackend', async () => {
+            try {
+                vscode.window.showInformationMessage('🧪 Testing backend connection...');
+
+                const { apiClient } = require('./src/api/client');
+
+                // Test chat completion
+                const result = await apiClient.chatCompletion({
+                    messages: [{ role: 'user', content: 'Hello! Please respond with "Backend is working!"' }],
+                    mode: 'chat',
+                    model: 'auto',
+                    max_tokens: 50
+                });
+
+                const message = `
+✅ **Backend Connection Successful!**
+
+**Response**: ${result.response}
+**Model**: ${result.model}
+**Provider**: ${result.provider}
+**Tokens**: ${result.usage.total_tokens}
+**Cost**: $${result.cost.toFixed(6)}
+                `.trim();
+
+                vscode.window.showInformationMessage(message, { modal: true });
+            } catch (error) {
+                vscode.window.showErrorMessage(`❌ Backend test failed: ${error.message}`, { modal: true });
+                console.error('Backend test error:', error);
+            }
+        })
+    );
+
+    // Extract Todos from Selection
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.extractTodos', async () => {
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor || editor.selection.isEmpty) {
+                    vscode.window.showWarningMessage('Please select text to extract todos from');
+                    return;
+                }
+
+                const text = editor.document.getText(editor.selection);
+                const { backendTodoService } = require('./src/services/backendTodoService');
+
+                vscode.window.showInformationMessage('🔍 Extracting todos...');
+
+                const todos = await backendTodoService.extractTodos(text, 'Manual extraction', true);
+
+                vscode.window.showInformationMessage(
+                    `✅ Extracted ${todos.length} todo(s)! View them with "Show Todos" command.`
+                );
+
+                // Optionally open todo panel
+                if (todos.length > 0) {
+                    const response = await vscode.window.showInformationMessage(
+                        'Would you like to view the todos now?',
+                        'Yes', 'No'
+                    );
+
+                    if (response === 'Yes') {
+                        await todoPanel.show();
+                    }
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to extract todos: ${error.message}`);
+            }
+        })
+    );
+
+    // Show Model Selection
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.selectModel', async () => {
+            const models = [
+                { label: '🤖 Auto (Recommended)', description: 'Backend selects best model', value: 'auto' },
+                { label: '🧠 Claude Sonnet 4.5', description: 'Best for complex tasks', value: 'claude' },
+                { label: '⚡ DeepSeek', description: 'Fast and cost-effective', value: 'deepseek' },
+                { label: '🌟 Gemini 2.0 Flash', description: 'FREE, fast responses', value: 'gemini' },
+                { label: '💬 GPT-4o', description: 'General purpose', value: 'gpt' },
+                { label: '🏠 Local (Qwen)', description: 'Privacy-first, offline', value: 'local' }
+            ];
+
+            const selected = await vscode.window.showQuickPick(models, {
+                placeHolder: 'Select AI model',
+                matchOnDescription: true
+            });
+
+            if (selected) {
+                const config = vscode.workspace.getConfiguration('oropendola');
+                await config.update('chat.model', selected.value, vscode.ConfigurationTarget.Global);
+                vscode.window.showInformationMessage(`✅ Model set to: ${selected.label}`);
+            }
+        })
+    );
+
+    console.log('✅ Backend Integration v2.0 commands registered');
+}
+
+/**
  * Update response time in status bar
  */
 function updateResponseTime(milliseconds) {
@@ -868,6 +1333,10 @@ function deactivate() {
     }
     if (statusBarItem) {
         statusBarItem.dispose();
+    }
+    if (telemetryService) {
+        telemetryService.trackEvent('extension_deactivated');
+        telemetryService.dispose();
     }
 }
 

@@ -30,6 +30,9 @@ class OropendolaSidebarProvider {
 
         // TODO List Management
         this._todoManager = new TodoManager();
+
+        // CSRF Token for Frappe authentication
+        this._csrfToken = null;
     }
 
     /**
@@ -61,6 +64,13 @@ class OropendolaSidebarProvider {
         if (savedCookies) {
             this._sessionCookies = savedCookies;
             console.log('🔄 Restored session cookies from storage');
+        }
+
+        // Restore CSRF token if available
+        const savedCsrfToken = config.get('session.csrfToken');
+        if (savedCsrfToken) {
+            this._csrfToken = savedCsrfToken;
+            console.log('🔄 Restored CSRF token from storage');
         }
 
         // Check if we have a session or user is logged in
@@ -260,6 +270,30 @@ class OropendolaSidebarProvider {
                     console.warn('⚠️ No set-cookie headers found in response');
                 }
 
+                // Extract CSRF token from response
+                try {
+                    const csrfResponse = await axios.get(`${apiUrl}/api/method/frappe.auth.get_logged_user`, {
+                        headers: { 'Cookie': this._sessionCookies }
+                    });
+                    
+                    // Extract from headers or response data
+                    if (csrfResponse.headers && csrfResponse.headers['x-frappe-csrf-token']) {
+                        this._csrfToken = csrfResponse.headers['x-frappe-csrf-token'];
+                        console.log('✅ Extracted CSRF token from headers');
+                    } else if (csrfResponse.data && csrfResponse.data.csrf_token) {
+                        this._csrfToken = csrfResponse.data.csrf_token;
+                        console.log('✅ Extracted CSRF token from response data');
+                    }
+                    
+                    // Persist CSRF token to VS Code settings
+                    if (this._csrfToken) {
+                        await config.update('session.csrfToken', this._csrfToken, vscode.ConfigurationTarget.Global);
+                        console.log('💾 CSRF token persisted to settings');
+                    }
+                } catch (csrfError) {
+                    console.warn('⚠️ Could not extract CSRF token:', csrfError.message);
+                }
+
                 // Store user info (extract from response or use email)
                 this._userInfo = {
                     email: email,
@@ -372,6 +406,10 @@ class OropendolaSidebarProvider {
         await config.update('session.cookies', undefined, vscode.ConfigurationTarget.Global);
         console.log('🗑️ Cleared session cookies from storage');
 
+        // Clear CSRF token from persistent storage
+        await config.update('session.csrfToken', undefined, vscode.ConfigurationTarget.Global);
+        console.log('🗑️ Cleared CSRF token from storage');
+
         // Clear session data
         this._isLoggedIn = false;
         this._messages = [];
@@ -379,6 +417,7 @@ class OropendolaSidebarProvider {
         this._sessionCookies = null;
         this._userInfo = null;
         this._conversationId = null;  // Clear conversation ID
+        this._csrfToken = null;  // Clear CSRF token
 
         console.log('✅ Logged out - cleared all session data');
 
@@ -1073,14 +1112,22 @@ class OropendolaSidebarProvider {
             const axios = require('axios');
 
             // Toggle on backend using DocType API
+            const headers = {
+                'Content-Type': 'application/json',
+                'Cookie': this._sessionCookies
+            };
+
+            // Include CSRF token if available
+            if (this._csrfToken) {
+                headers['X-Frappe-CSRF-Token'] = this._csrfToken;
+                console.log('✅ Including CSRF token in toggle TODO request');
+            }
+
             const response = await axios.post(
                 `${apiUrl}/api/method/ai_assistant.api.todos.toggle_todo_doctype`,
                 { todo_id: todoId },
                 {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Cookie': this._sessionCookies
-                    },
+                    headers: headers,
                     timeout: 10000
                 }
             );
@@ -1132,14 +1179,22 @@ class OropendolaSidebarProvider {
             const axios = require('axios');
 
             // Clear on backend using DocType API
+            const headers = {
+                'Content-Type': 'application/json',
+                'Cookie': this._sessionCookies
+            };
+
+            // Include CSRF token if available
+            if (this._csrfToken) {
+                headers['X-Frappe-CSRF-Token'] = this._csrfToken;
+                console.log('✅ Including CSRF token in clear TODOs request');
+            }
+
             const response = await axios.post(
                 `${apiUrl}/api/method/ai_assistant.api.todos.clear_todos_doctype`,
                 { conversation_id: this._conversationId },
                 {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Cookie': this._sessionCookies
-                    },
+                    headers: headers,
                     timeout: 10000
                 }
             );
@@ -1195,14 +1250,21 @@ class OropendolaSidebarProvider {
             const axios = require('axios');
 
             // Fetch TODOs from backend using DocType API
+            const headers = {
+                'Content-Type': 'application/json',
+                'Cookie': this._sessionCookies
+            };
+
+            // Include CSRF token if available
+            if (this._csrfToken) {
+                headers['X-Frappe-CSRF-Token'] = this._csrfToken;
+            }
+
             const response = await axios.get(
                 `${apiUrl}/api/method/ai_assistant.api.todos.get_todos_doctype`,
                 {
                     params: { conversation_id: this._conversationId },
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Cookie': this._sessionCookies
-                    },
+                    headers: headers,
                     timeout: 10000
                 }
             );
@@ -1730,28 +1792,48 @@ class OropendolaSidebarProvider {
         task.on('assistantMessage', (taskId, message, extraData) => {
             console.log('🤖 Assistant response received');
 
-            // Parse TODOs from the AI response (legacy support)
-            this._parseTodosFromResponse(message);
+            // Parse TODOs from the AI response for UI display only (not for control flow)
+            const parsedTodos = this._todoManager.parseFromAIResponse(message);
+            if (parsedTodos.length > 0) {
+                console.log(`📝 Parsed ${parsedTodos.length} TODO items from AI response (UI display only)`);
+                this._todoManager.addTodos(parsedTodos);
+            }
 
             if (this._view) {
+                // Don't use TODOs to control execution flow - just display them
+                const backendTodos = extraData?.todos && Array.isArray(extraData.todos) && extraData.todos.length > 0;
+                const todosForDisplay = backendTodos ? extraData.todos : parsedTodos;
+                
+                // IMPORTANT: Don't set has_todos flag - this prevents "Confirm/Dismiss" buttons
+                // and allows natural conversation flow
+                
                 // Send message with file_changes if available
                 this._view.webview.postMessage({
                     type: 'addMessage',
                     message: {
                         role: 'assistant',
                         content: message,
-                        file_changes: extraData?.file_changes
+                        file_changes: extraData?.file_changes,
+                        has_todos: false,  // Always false to prevent plan interruption
+                        auto_execute: true  // Always true for continuous flow
                     }
                 });
 
-                // Update TODOs if provided by backend
-                if (extraData?.todos && Array.isArray(extraData.todos)) {
-                    console.log(`📋 Updating UI with ${extraData.todos.length} TODOs from backend`);
+                // Update TODO UI if any TODOs were found (for user visibility)
+                if (todosForDisplay.length > 0) {
+                    console.log(`📋 Updating UI with ${todosForDisplay.length} TODOs (display only)`);
+                    const todoStats = extraData?.todo_stats || {
+                        total: todosForDisplay.length,
+                        completed: 0,
+                        pending: todosForDisplay.length,
+                        in_progress: 0
+                    };
+                    
                     this._view.webview.postMessage({
                         type: 'updateTodos',
-                        todos: extraData.todos,
-                        stats: extraData.todo_stats || { total: 0, completed: 0, pending: 0 },
-                        context: 'From AI response'
+                        todos: todosForDisplay,
+                        stats: todoStats,
+                        context: 'Tracking progress'
                     });
                 }
             }
@@ -1820,6 +1902,50 @@ class OropendolaSidebarProvider {
             console.log('🧹 Task cleanup event received');
             if (this._view) {
                 this._view.webview.postMessage({ type: 'hideTyping' });
+            }
+        });
+
+        // Tool execution events for TODO tracking
+        task.on('toolExecutionStart', (taskId, tool, index, total) => {
+            console.log(`🔧 [Sidebar] Tool execution started [${index + 1}/${total}]: ${tool.action}`);
+            
+            // Extract todo_id from tool parameters if available
+            const todoId = this._extractTodoId(tool);
+            
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'aiProgress',
+                    taskId: taskId,
+                    data: {
+                        type: 'toolExecutionStart',
+                        tool_name: tool.action,
+                        todo_id: todoId,
+                        step: index + 1,
+                        total: total
+                    }
+                });
+            }
+        });
+
+        task.on('toolExecutionComplete', (taskId, tool, result, index, total) => {
+            console.log(`✅ [Sidebar] Tool execution completed [${index + 1}/${total}]: ${tool.action}`);
+            
+            // Extract todo_id from tool parameters if available
+            const todoId = this._extractTodoId(tool);
+            
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'aiProgress',
+                    taskId: taskId,
+                    data: {
+                        type: 'toolExecutionComplete',
+                        tool_name: tool.action,
+                        todo_id: todoId,
+                        success: result.success !== false,
+                        step: index + 1,
+                        total: total
+                    }
+                });
             }
         });
 
@@ -2005,7 +2131,7 @@ class OropendolaSidebarProvider {
                     mode: this._mode,
                     // eslint-disable-next-line no-undef
                     providerRef: new WeakRef(this),
-                    consecutiveMistakeLimit: 3
+                    consecutiveMistakeLimit: 10  // Increased for progressive mode (was 3)
                 });
 
                 // Set up all event listeners
@@ -3028,6 +3154,28 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
     }
 
     /**
+     * Extract todo_id from tool parameters for tracking
+     * According to API docs, tools should include todo_id matching sequential IDs (todo_0, todo_1, etc.)
+     */
+    _extractTodoId(tool) {
+        if (!tool || !tool.parameters) {
+            return null;
+        }
+
+        // Check if tool parameters have a todo_id field
+        if (tool.parameters.todo_id) {
+            return tool.parameters.todo_id;
+        }
+
+        // Check if tool parameters have an id field that looks like a todo_id
+        if (tool.parameters.id && typeof tool.parameters.id === 'string' && tool.parameters.id.startsWith('todo_')) {
+            return tool.parameters.id;
+        }
+
+        return null;
+    }
+
+    /**
      * Get chat interface HTML - shown after successful authentication
      */
     // eslint-disable-next-line complexity, max-lines-per-function
@@ -3058,9 +3206,25 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         '.header-actions { display: flex; gap: 4px; }' +
         '.icon-button { background: transparent; border: none; color: var(--vscode-descriptionForeground); cursor: pointer; padding: 6px; border-radius: 4px; font-size: 14px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; }' +
         '.icon-button:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }' +
-        '.messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }' +
-        '.message { padding: 12px; border-radius: 8px; max-width: 90%; word-wrap: break-word; font-size: 13px; line-height: 1.5; display: flex; gap: 12px; align-items: flex-start; width: fit-content; position: relative; }' +
-        '.message-content { flex: 1; min-width: 0; overflow-wrap: break-word; }' +
+        '.messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }' +
+        '.message { padding: 12px; border-radius: 8px; word-wrap: break-word; font-size: 13px; line-height: 1.6; position: relative; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; min-height: 60px; }' +
+        '.message-user { border: 1px solid rgba(64, 165, 255, 0.2); border-radius: 8px; position: relative; overflow: hidden; padding-left: 16px; }' +
+        '.message-user::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, #40a5ff 0%, #0078d4 100%); }' +
+        '.message-assistant { border: 1px solid rgba(46, 204, 113, 0.1); border-radius: 8px; position: relative; overflow: hidden; padding-left: 16px; }' +
+        '.message-assistant::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, #2ecc71 0%, #27ae60 100%); }' +
+        '.message-error { border: 1px solid rgba(231, 76, 60, 0.3); border-radius: 8px; position: relative; overflow: hidden; padding-left: 16px; }' +
+        '.message-error::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%); }' +
+        '.message-system { background-color: var(--vscode-panel-background); color: var(--vscode-descriptionForeground); font-style: italic; padding: 8px 12px; }' +
+        '.message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }' +
+        '.message-icon { width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }' +
+        '.message-icon.user { background: linear-gradient(135deg, #40a5ff 0%, #0078d4 100%); }' +
+        '.message-icon.assistant { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); }' +
+        '.message-icon.error { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }' +
+        '.message-label { font-weight: 500; font-size: 12px; opacity: 0.8; flex: 1; }' +
+        '.copy-btn { background: transparent; border: none; color: var(--vscode-descriptionForeground); cursor: pointer; padding: 4px 8px; border-radius: 3px; opacity: 0; transition: all 0.2s; font-size: 11px; margin-left: auto; }' +
+        '.message:hover .copy-btn { opacity: 0.7; }' +
+        '.copy-btn:hover { opacity: 1 !important; background-color: var(--vscode-list-hoverBackground); }' +
+        '.message-content { padding-left: 0; min-width: 0; overflow-wrap: break-word; color: var(--vscode-editor-foreground); display: block !important; min-height: 20px; line-height: 1.7; }' +
         '.message pre { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; overflow-x: auto; margin: 8px 0; }' +
         '.message code { font-family: var(--vscode-editor-font-family); font-size: 12px; background: var(--vscode-textCodeBlock-background); padding: 2px 4px; border-radius: 3px; }' +
         '.message pre code { background: none; padding: 0; }' +
@@ -3083,10 +3247,6 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         '.code-block-enhanced code { font-family: var(--vscode-editor-font-family), monospace; font-size: 12px; line-height: 1.5; }' +
         '.file-link { color: #4FC3F7; text-decoration: none; border-bottom: 1px dotted rgba(79, 195, 247, 0.5); cursor: pointer; transition: all 0.2s; font-weight: 500; }' +
         '.file-link:hover { color: #81D4FA; border-bottom-color: #81D4FA; background: rgba(79, 195, 247, 0.1); padding: 0 2px; border-radius: 2px; }' +
-        '.message-user { align-self: flex-end; background: #2D2D2D; color: #FFFFFF; border-radius: 12px 12px 4px 12px; }' +
-        '.message-assistant { align-self: flex-start; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); }' +
-        '.message-error { align-self: center; background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); color: var(--vscode-errorForeground); font-size: 12px; }' +
-        '.message-system { align-self: center; background: var(--vscode-editor-inactiveSelectionBackground); border: 1px solid var(--vscode-panel-border); color: var(--vscode-descriptionForeground); font-size: 12px; max-width: 85%; text-align: center; }' +
         '.typing-indicator { align-self: flex-start; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); padding: 12px 16px; border-radius: 8px; max-width: 90%; font-size: 13px; color: var(--vscode-descriptionForeground); display: flex; align-items: center; gap: 10px; }' +
         '.typing-dots { display: flex; gap: 4px; }' +
         '.typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--vscode-descriptionForeground); opacity: 0.4; animation: typing-bounce 1.4s infinite ease-in-out both; }' +
@@ -3177,12 +3337,18 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         '.todo-item:hover { background: rgba(255, 255, 255, 0.04); }' +
         '.todo-item.completed { opacity: 0.6; }' +
         '.todo-item.completed .todo-text { text-decoration: line-through; }' +
+        '.todo-item.in-progress { border-left: 3px solid #007ACC; background: rgba(0, 122, 204, 0.1); animation: pulse 2s ease-in-out infinite; }' +
+        '.todo-item.pending { opacity: 0.7; border-left: 3px solid var(--vscode-descriptionForeground); }' +
+        '@keyframes pulse { 0%, 100% { background: rgba(0, 122, 204, 0.1); } 50% { background: rgba(0, 122, 204, 0.2); } }' +
         '.todo-checkbox { width: 16px; height: 16px; min-width: 16px; border-radius: 50%; border: 2px solid var(--vscode-descriptionForeground); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }' +
         '.todo-checkbox:hover { border-color: var(--vscode-button-background); }' +
         '.todo-checkbox.checked { background: var(--vscode-button-background); border-color: var(--vscode-button-background); }' +
         '.todo-checkbox.checked::before { content: "✓"; color: white; font-size: 11px; font-weight: bold; }' +
-        '.todo-number { font-weight: 600; color: var(--vscode-descriptionForeground); min-width: 20px; font-size: 11px; }' +
+        '.todo-order-badge { font-weight: 700; color: var(--vscode-button-background); min-width: 24px; font-size: 11px; background: rgba(0, 122, 204, 0.15); padding: 2px 6px; border-radius: 10px; }' +
         '.todo-text { color: var(--vscode-foreground); flex: 1; line-height: 1.4; }' +
+        '.todo-status-label { font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }' +
+        '.todo-status-label.in-progress { background: rgba(0, 122, 204, 0.2); color: #007ACC; border: 1px solid #007ACC; }' +
+        '.todo-status-label.pending { background: rgba(255, 165, 0, 0.15); color: rgba(255, 165, 0, 1); border: 1px solid rgba(255, 165, 0, 0.5); }' +
         '.todo-status { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 6px; border-radius: 3px; }' +
         '.todo-status.done { background: rgba(0, 200, 83, 0.15); color: #00C853; }' +
         '.todo-status.pending { background: rgba(255, 165, 0, 0.15); color: rgba(255, 165, 0, 1); }' +
@@ -3407,22 +3573,23 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         'let progressContainer = null;' +
         'function showTypingIndicator() { if (emptyState) emptyState.style.display = "none"; hideTypingIndicator(); typingElement = document.createElement("div"); typingElement.className = "typing-indicator"; const textSpan = document.createElement("span"); textSpan.textContent = "Oropendola AI thinking"; typingElement.appendChild(textSpan); const dotsContainer = document.createElement("div"); dotsContainer.className = "typing-dots"; for (let i = 0; i < 3; i++) { const dot = document.createElement("div"); dot.className = "typing-dot"; dotsContainer.appendChild(dot); } typingElement.appendChild(dotsContainer); messagesContainer.appendChild(typingElement); messagesContainer.scrollTop = messagesContainer.scrollHeight; }' +
         'function hideTypingIndicator() { if (typingElement) { typingElement.remove(); typingElement = null; } }' +
-        'function handleAIProgress(data) { try { console.log("[AI Progress]", data.type, data); switch (data.type) { case "thinking": showProgressMessage(data.message, "thinking", "🔍"); break; case "plan": showProgressMessage(data.message, "plan", "📝"); break; case "working": updateProgressBar(data.step, data.total, data.message); break; case "step_complete": showStepComplete(data); break; case "complete": clearProgressIndicators(); break; case "error": showProgressMessage(data.message, "error", "❌"); break; } } catch(e) { console.error("[handleAIProgress error]", e); } }' +
+        'function handleAIProgress(data) { try { console.log("[AI Progress]", data.type, data); switch (data.type) { case "thinking": showProgressMessage(data.message, "thinking", "🔍"); break; case "plan": showProgressMessage(data.message, "plan", "📝"); break; case "working": updateProgressBar(data.step, data.total, data.message); break; case "step_complete": showStepComplete(data); break; case "complete": clearProgressIndicators(); break; case "error": showProgressMessage(data.message, "error", "❌"); break; case "toolExecutionStart": if (data.todo_id) { updateTodoStatus(data.todo_id, "in_progress"); } break; case "toolExecutionComplete": if (data.todo_id) { var newStatus = data.success ? "completed" : "pending"; updateTodoStatus(data.todo_id, newStatus); } break; } } catch(e) { console.error("[handleAIProgress error]", e); } }' +
         'function showProgressMessage(message, className, icon) { try { if (emptyState) emptyState.style.display = "none"; const messageDiv = document.createElement("div"); messageDiv.className = "ai-progress-message " + className; const iconSpan = document.createElement("div"); iconSpan.className = "progress-icon"; iconSpan.textContent = icon; const textDiv = document.createElement("div"); textDiv.className = "progress-text"; if (className === "plan") { const lines = message.split("\\n"); textDiv.innerHTML = lines.map(function(line) { return escapeHtml(line); }).join("<br>"); } else { textDiv.textContent = message; } messageDiv.appendChild(iconSpan); messageDiv.appendChild(textDiv); if (!progressContainer) { progressContainer = document.createElement("div"); progressContainer.className = "progress-container"; messagesContainer.appendChild(progressContainer); } progressContainer.appendChild(messageDiv); if (className === "plan") { const separator = document.createElement("div"); separator.className = "ai-separator"; separator.textContent = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; progressContainer.appendChild(separator); } messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[showProgressMessage error]", e); } }' +
         'function updateProgressBar(step, total, message) { try { if (!currentProgressBar) { const barContainer = document.createElement("div"); barContainer.className = "ai-progress-bar-container"; barContainer.innerHTML = "<div class=\\"ai-progress-bar\\"><div class=\\"ai-progress-fill\\"></div></div><div class=\\"ai-progress-text\\"></div>"; if (!progressContainer) { progressContainer = document.createElement("div"); progressContainer.className = "progress-container"; messagesContainer.appendChild(progressContainer); } progressContainer.appendChild(barContainer); currentProgressBar = barContainer; } const percentage = (step / total) * 100; const fill = currentProgressBar.querySelector(".ai-progress-fill"); const text = currentProgressBar.querySelector(".ai-progress-text"); if (fill) fill.style.width = percentage + "%"; if (text) text.textContent = message; if (step === total) { setTimeout(function() { if (currentProgressBar) { currentProgressBar.remove(); currentProgressBar = null; } }, 1000); } messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[updateProgressBar error]", e); } }' +
         'function showStepComplete(data) { try { const messageDiv = document.createElement("div"); messageDiv.className = "ai-progress-message step-complete" + (data.error ? " error" : ""); const icon = data.error ? "❌" : "✅"; const iconSpan = document.createElement("div"); iconSpan.className = "progress-icon"; iconSpan.textContent = icon; const textDiv = document.createElement("div"); textDiv.className = "progress-text"; const stepMsg = document.createElement("div"); stepMsg.className = "step-message"; const lines = (data.message || "").split("\\n"); stepMsg.innerHTML = lines.map(function(line) { return escapeHtml(line); }).join("<br>"); textDiv.appendChild(stepMsg); if (data.details && data.details.length > 0) { const detailsList = document.createElement("ul"); detailsList.className = "step-details"; data.details.forEach(function(detail) { const li = document.createElement("li"); li.textContent = detail; detailsList.appendChild(li); }); textDiv.appendChild(detailsList); } if (data.file_path && data.line_count) { const badge = document.createElement("span"); badge.className = "file-change-badge"; badge.textContent = data.line_count + " lines"; textDiv.appendChild(badge); } messageDiv.appendChild(iconSpan); messageDiv.appendChild(textDiv); if (!progressContainer) { progressContainer = document.createElement("div"); progressContainer.className = "progress-container"; messagesContainer.appendChild(progressContainer); } progressContainer.appendChild(messageDiv); messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[showStepComplete error]", e); } }' +
         'function clearProgressIndicators() { try { if (currentProgressBar) { currentProgressBar.remove(); currentProgressBar = null; } if (progressContainer) { const separator = document.createElement("div"); separator.className = "ai-separator"; separator.textContent = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; progressContainer.appendChild(separator); setTimeout(function() { if (progressContainer) { progressContainer.remove(); progressContainer = null; } }, 100); } } catch(e) { console.error("[clearProgressIndicators error]", e); } }' +
-        'function addMessageToUI(message) { try { const hadTypingIndicator = !!typingElement; if (hadTypingIndicator) hideTypingIndicator(); const messageDiv = document.createElement("div"); messageDiv.className = "message"; const role = (message && message.role) ? String(message.role).toLowerCase() : "assistant"; if (role === "user" || role === "human") { messageDiv.classList.add("message-user"); } else if (role === "assistant" || role === "ai") { messageDiv.classList.add("message-assistant"); } else if (role === "error") { messageDiv.classList.add("message-error"); } else if (role === "system") { messageDiv.classList.add("message-system"); } else { messageDiv.classList.add("message-assistant"); } const contentDiv = document.createElement("div"); contentDiv.className = "message-content"; contentDiv.innerHTML = formatMessageContent(message.content, message.file_changes); messageDiv.appendChild(contentDiv); if (role === "assistant") { const numberedPlanPattern = new RegExp("(^|\\n)[ \\t]*[0-9]+[.)][ \\t]"); const hasNumberedPlan = numberedPlanPattern.test(message.content || ""); console.log("[DEBUG] Checking numbered plan:", hasNumberedPlan, (message.content || "").substring(0, 100)); const actionsDiv = document.createElement("div"); actionsDiv.className = "message-actions"; if (hasNumberedPlan && !message.accepted) { console.log("[DEBUG] Showing Confirm/Dismiss buttons"); const dismissBtn = document.createElement("button"); dismissBtn.className = "message-action-btn message-action-reject"; dismissBtn.textContent = "✗ Dismiss"; dismissBtn.onclick = function() { console.log("Plan dismissed by user"); dismissBtn.style.display = "none"; const confirmBtn = actionsDiv.querySelector(".message-action-accept"); if (confirmBtn) confirmBtn.style.display = "none"; safePostMessage({ type: "rejectPlan", messageContent: message.content }); }; const confirmBtn = document.createElement("button"); confirmBtn.className = "message-action-btn message-action-accept"; confirmBtn.textContent = "✓ Confirm & Execute"; confirmBtn.onclick = function() { console.log("Plan confirmed by user"); confirmBtn.textContent = "⏳ Executing..."; confirmBtn.disabled = true; dismissBtn.style.display = "none"; message.accepted = true; safePostMessage({ type: "acceptPlan", messageContent: message.content }); }; actionsDiv.appendChild(dismissBtn); actionsDiv.appendChild(confirmBtn); } else { console.log("[DEBUG] Showing Copy button, hasNumberedPlan=", hasNumberedPlan, "accepted=", message.accepted); const copyBtn = document.createElement("button"); copyBtn.className = "message-action-btn"; copyBtn.textContent = "Copy"; copyBtn.onclick = function() { try { navigator.clipboard.writeText(message.content || ""); } catch(e) { console.warn("Copy failed", e); } copyBtn.textContent = "Copied!"; setTimeout(function() { copyBtn.textContent = "Copy"; }, 2000); }; actionsDiv.appendChild(copyBtn); } messageDiv.appendChild(actionsDiv); } messagesContainer.appendChild(messageDiv); if (hadTypingIndicator) showTypingIndicator(); messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[addMessageToUI error]", e); } }' +
-        'function formatMessageContent(text, fileChanges) { if (!text) return ""; var formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); var codeBlockParts = formatted.split("```"); for (var i = 1; i < codeBlockParts.length; i += 2) { var block = codeBlockParts[i]; var newlineIdx = block.indexOf("\\\\n"); var lang = "text"; var code = block; if (newlineIdx > 0) { lang = block.substring(0, newlineIdx).trim() || "text"; code = block.substring(newlineIdx + 1); } var codeId = "code_" + Date.now() + "_" + i; codeBlockParts[i] = "<div class=\\"code-block-enhanced\\"><div class=\\"code-header\\"><span class=\\"code-language\\">" + lang.toUpperCase() + "</span><div class=\\"code-actions\\"><button class=\\"code-btn\\" onclick=\\"copyCodeBlock(" + String.fromCharCode(39) + codeId + String.fromCharCode(39) + ")\\">📋 Copy</button></div></div><pre id=\\"" + codeId + "\\"><code>" + code + "</code></pre></div>"; } formatted = codeBlockParts.join(""); formatted = formatted.replace(/([a-zA-Z0-9_\\-\\/]+\\.(js|ts|tsx|jsx|py|java|cpp|c|h|hpp|html|css|scss|json|md|txt|xml|yaml|yml|sh|bash))/g, "<a class=\\"file-link\\" onclick=\\"openFileLink(" + String.fromCharCode(39) + "$1" + String.fromCharCode(39) + ")\\" title=\\"Open $1\\">$1</a>"); var inlineCodeParts = formatted.split("`"); for (var j = 1; j < inlineCodeParts.length; j += 2) { inlineCodeParts[j] = "<code>" + inlineCodeParts[j] + "</code>"; } formatted = inlineCodeParts.join(""); var boldParts = formatted.split("**"); for (var k = 1; k < boldParts.length; k += 2) { boldParts[k] = "<strong>" + boldParts[k] + "</strong>"; } formatted = boldParts.join(""); formatted = formatted.replace(/\\\\n/g, "<br>"); if (fileChanges) { var fileChangesHtml = displayFileChanges(fileChanges); if (fileChangesHtml) { formatted = fileChangesHtml + formatted; } } return formatted; }' +
+        'function addMessageToUI(message) { try { const hadTypingIndicator = !!typingElement; if (hadTypingIndicator) hideTypingIndicator(); const messageDiv = document.createElement("div"); messageDiv.className = "message"; const role = (message && message.role) ? String(message.role).toLowerCase() : "assistant"; if (role === "user" || role === "human") { messageDiv.classList.add("message-user"); } else if (role === "assistant" || role === "ai") { messageDiv.classList.add("message-assistant"); } else if (role === "error") { messageDiv.classList.add("message-error"); } else if (role === "system") { messageDiv.classList.add("message-system"); } else { messageDiv.classList.add("message-assistant"); } if (role === "user" || role === "assistant" || role === "error") { const headerDiv = document.createElement("div"); headerDiv.className = "message-header"; const iconDiv = document.createElement("div"); iconDiv.className = "message-icon " + role; if (role === "user") { iconDiv.textContent = "👤"; } else if (role === "assistant") { iconDiv.textContent = "🤖"; } else if (role === "error") { iconDiv.textContent = "⚠️"; } const labelDiv = document.createElement("div"); labelDiv.className = "message-label"; if (role === "user") { labelDiv.textContent = "You"; } else if (role === "assistant") { labelDiv.textContent = "Oropendola"; } else if (role === "error") { labelDiv.textContent = "Error"; } const copyBtn = document.createElement("button"); copyBtn.className = "copy-btn"; copyBtn.textContent = "Copy"; copyBtn.onclick = function() { try { navigator.clipboard.writeText(message.content || ""); copyBtn.textContent = "Copied!"; setTimeout(function() { copyBtn.textContent = "Copy"; }, 2000); } catch(e) { console.warn("Copy failed", e); } }; headerDiv.appendChild(iconDiv); headerDiv.appendChild(labelDiv); headerDiv.appendChild(copyBtn); messageDiv.appendChild(headerDiv); } const contentDiv = document.createElement("div"); contentDiv.className = "message-content"; contentDiv.innerHTML = formatMessageContent(message.content, message.file_changes); messageDiv.appendChild(contentDiv); if (role === "assistant") { const numberedPlanPattern = new RegExp("(^|\\n)[ \\t]*[0-9]+[.)][ \\t]"); const hasNumberedPlan = numberedPlanPattern.test(message.content || ""); const hasTodos = message.has_todos || message.auto_execute; console.log("[DEBUG] Checking numbered plan:", hasNumberedPlan, "has_todos:", hasTodos); const actionsDiv = document.createElement("div"); actionsDiv.className = "message-actions"; if (hasNumberedPlan && !message.accepted && !hasTodos) { console.log("[DEBUG] Showing Confirm/Dismiss buttons"); const dismissBtn = document.createElement("button"); dismissBtn.className = "message-action-btn message-action-reject"; dismissBtn.textContent = "✗ Dismiss"; dismissBtn.onclick = function() { console.log("Plan dismissed by user"); dismissBtn.style.display = "none"; const confirmBtn = actionsDiv.querySelector(".message-action-accept"); if (confirmBtn) confirmBtn.style.display = "none"; safePostMessage({ type: "rejectPlan", messageContent: message.content }); }; const confirmBtn = document.createElement("button"); confirmBtn.className = "message-action-btn message-action-accept"; confirmBtn.textContent = "✓ Confirm & Execute"; confirmBtn.onclick = function() { console.log("Plan confirmed by user"); confirmBtn.textContent = "⏳ Executing..."; confirmBtn.disabled = true; dismissBtn.style.display = "none"; message.accepted = true; safePostMessage({ type: "acceptPlan", messageContent: message.content }); }; actionsDiv.appendChild(dismissBtn); actionsDiv.appendChild(confirmBtn); messageDiv.appendChild(actionsDiv); } else if (hasTodos) { console.log("[DEBUG] TODOs present - auto-executing, no confirmation needed"); } } messagesContainer.appendChild(messageDiv); if (hadTypingIndicator) showTypingIndicator(); messagesContainer.scrollTop = messagesContainer.scrollHeight; } catch(e) { console.error("[addMessageToUI error]", e); } }' +
+        'function formatMessageContent(text, fileChanges) { if (!text) return ""; var formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); var codeBlockParts = formatted.split("```"); for (var i = 1; i < codeBlockParts.length; i += 2) { var block = codeBlockParts[i]; var newlineIdx = block.indexOf("\\\\n"); var lang = "text"; var code = block; if (newlineIdx > 0) { lang = block.substring(0, newlineIdx).trim() || "text"; code = block.substring(newlineIdx + 1); } var codeId = "code_" + Date.now() + "_" + i; codeBlockParts[i] = "<div class=\\"code-block-enhanced\\"><div class=\\"code-header\\"><span class=\\"code-language\\">" + lang.toUpperCase() + "</span><div class=\\"code-actions\\"><button class=\\"code-btn\\" onclick=\\"copyCodeBlock(" + String.fromCharCode(39) + codeId + String.fromCharCode(39) + ", this)\\">📋 Copy</button></div></div><pre id=\\"" + codeId + "\\"><code>" + code + "</code></pre></div>"; } formatted = codeBlockParts.join(""); formatted = formatted.replace(/([a-zA-Z0-9_\\-\\/]+\\.(js|ts|tsx|jsx|py|java|cpp|c|h|hpp|html|css|scss|json|md|txt|xml|yaml|yml|sh|bash))/g, "<a class=\\"file-link\\" onclick=\\"openFileLink(" + String.fromCharCode(39) + "$1" + String.fromCharCode(39) + ")\\" title=\\"Open $1\\">$1</a>"); var inlineCodeParts = formatted.split("`"); for (var j = 1; j < inlineCodeParts.length; j += 2) { inlineCodeParts[j] = "<code>" + inlineCodeParts[j] + "</code>"; } formatted = inlineCodeParts.join(""); var boldParts = formatted.split("**"); for (var k = 1; k < boldParts.length; k += 2) { boldParts[k] = "<strong>" + boldParts[k] + "</strong>"; } formatted = boldParts.join(""); formatted = formatted.replace(/\\\\n/g, "<br>"); if (fileChanges) { var fileChangesHtml = displayFileChanges(fileChanges); if (fileChangesHtml) { formatted = fileChangesHtml + formatted; } } return formatted; }' +
         'function displayFileChanges(fileChanges) { if (!fileChanges) return null; var created = fileChanges.created || []; var modified = fileChanges.modified || []; var deleted = fileChanges.deleted || []; var commands = fileChanges.commands || []; var allChanges = []; if (created.length > 0) { created.forEach(function(file, idx) { var filePath = typeof file === "string" ? file : file.path; var lineCount = file.line_count || 0; allChanges.push({ type: "created", path: filePath, lineCount: lineCount, details: file.details || [], index: idx }); }); } if (modified.length > 0) { modified.forEach(function(file, idx) { var filePath = typeof file === "string" ? file : file.path; var linesAdded = file.lines_added || 0; var linesRemoved = file.lines_removed || 0; allChanges.push({ type: "modified", path: filePath, linesAdded: linesAdded, linesRemoved: linesRemoved, details: file.details || [], index: idx }); }); } if (deleted.length > 0) { deleted.forEach(function(file, idx) { var filePath = typeof file === "string" ? file : file.path; allChanges.push({ type: "deleted", path: filePath, index: idx }); }); } if (allChanges.length === 0) return null; var cardId = "file-changes-" + Date.now(); var html = "<div class=\\"copilot-changes-container\\" id=\\"" + cardId + "\\">"; html += "<div class=\\"copilot-changes-header\\">"; html += "<span class=\\"copilot-changes-count\\">" + allChanges.length + " file" + (allChanges.length !== 1 ? "s" : "") + " changed</span>"; html += "</div>"; html += "<div class=\\"copilot-changes-list\\">"; allChanges.forEach(function(change, idx) { var changeId = cardId + "-change-" + idx; var icon = change.type === "created" ? "+" : (change.type === "modified" ? "~" : "-"); var iconClass = "copilot-change-icon " + change.type; html += "<div class=\\"copilot-change-item\\" id=\\"" + changeId + "\\">"; html += "<div class=\\"copilot-change-row\\">"; html += "<div class=\\"copilot-change-checkbox\\"><input type=\\"checkbox\\" class=\\"copilot-checkbox\\" id=\\"check-" + changeId + "\\" checked /></div>"; html += "<span class=\\"" + iconClass + "\\">" + icon + "</span>"; html += "<span class=\\"copilot-file-path\\" onclick=\\"openFileAndHighlight(" + String.fromCharCode(39) + change.path + String.fromCharCode(39) + ")\\" title=\\"Click to open\\">" + change.path + "</span>"; if (change.lineCount > 0) { html += "<span class=\\"copilot-line-count\\">" + change.lineCount + " lines</span>"; } else if (change.linesAdded > 0 || change.linesRemoved > 0) { html += "<span class=\\"copilot-diff-badge\\">"; if (change.linesAdded > 0) html += "<span class=\\"copilot-added\\">+" + change.linesAdded + "</span>"; if (change.linesRemoved > 0) html += "<span class=\\"copilot-removed\\">-" + change.linesRemoved + "</span>"; html += "</span>"; } html += "<div class=\\"copilot-change-actions\\">"; html += "<button class=\\"copilot-action-btn copilot-keep-btn\\" onclick=\\"keepFileChange(" + String.fromCharCode(39) + changeId + String.fromCharCode(39) + ", " + String.fromCharCode(39) + change.path + String.fromCharCode(39) + ")\\">✓ Keep</button>"; html += "<button class=\\"copilot-action-btn copilot-undo-btn\\" onclick=\\"undoFileChange(" + String.fromCharCode(39) + changeId + String.fromCharCode(39) + ", " + String.fromCharCode(39) + change.path + String.fromCharCode(39) + ", " + String.fromCharCode(39) + change.type + String.fromCharCode(39) + ")\\">✗ Undo</button>"; html += "</div>"; html += "</div>"; if (change.details && change.details.length > 0) { html += "<div class=\\"copilot-change-details\\">"; change.details.forEach(function(detail) { html += "<div class=\\"copilot-detail-line\\">• " + escapeHtml(detail) + "</div>"; }); html += "</div>"; } html += "</div>"; }); html += "</div>"; if (commands && commands.length > 0) { html += "<div class=\\"copilot-commands-section\\">"; html += "<div class=\\"copilot-section-title\\">⚡ Commands executed</div>"; commands.forEach(function(cmd) { var cmdText = typeof cmd === "string" ? cmd : cmd.command; html += "<div class=\\"copilot-command-item\\">"; html += "<code class=\\"copilot-command-text\\">$ " + escapeHtml(cmdText) + "</code>"; if (cmd.output) { html += "<div class=\\"copilot-command-output\\">" + escapeHtml(cmd.output.substring(0, 200)) + (cmd.output.length > 200 ? "..." : "") + "</div>"; } if (cmd.exit_code !== undefined && cmd.exit_code !== 0) { html += "<div class=\\"copilot-command-error\\">Exit code: " + cmd.exit_code + "</div>"; } html += "</div>"; }); html += "</div>"; } html += "</div>"; return html; }' +
         'function toggleFileChanges(cardId) { try { var card = document.getElementById(cardId); if (card) { card.classList.toggle("collapsed"); } } catch(e) { console.error("[toggleFileChanges error]", e); } }' +
         'function openFileAndHighlight(filePath) { try { console.log("[Opening file with highlight]:", filePath); safePostMessage({ type: "openFile", filePath: filePath, highlight: true }); } catch(e) { console.error("[openFileAndHighlight error]", e); } }' +
         'function keepFileChange(changeId, filePath) { try { console.log("[Keeping change]:", filePath); var changeEl = document.getElementById(changeId); if (changeEl) { changeEl.classList.add("kept"); var keepBtn = changeEl.querySelector(".copilot-keep-btn"); var undoBtn = changeEl.querySelector(".copilot-undo-btn"); if (keepBtn) { keepBtn.textContent = "✓ Kept"; keepBtn.disabled = true; } if (undoBtn) { undoBtn.style.display = "none"; } setTimeout(function() { changeEl.style.opacity = "0.6"; changeEl.style.pointerEvents = "none"; }, 300); } safePostMessage({ type: "keepFileChange", filePath: filePath }); } catch(e) { console.error("[keepFileChange error]", e); } }' +
         'function undoFileChange(changeId, filePath, changeType) { try { console.log("[Undoing change]:", filePath, changeType); var changeEl = document.getElementById(changeId); if (changeEl) { changeEl.classList.add("undoing"); setTimeout(function() { changeEl.style.transform = "translateX(-100%)"; changeEl.style.opacity = "0"; setTimeout(function() { changeEl.remove(); }, 300); }, 100); } safePostMessage({ type: "undoFileChange", filePath: filePath, changeType: changeType }); } catch(e) { console.error("[undoFileChange error]", e); } }' +
-        'function copyCodeBlock(codeId) { try { var codeBlock = document.getElementById(codeId); if (codeBlock) { var text = codeBlock.textContent; navigator.clipboard.writeText(text).then(function() { console.log("Code copied to clipboard"); var btn = event.target; var originalText = btn.textContent; btn.textContent = "✅ Copied!"; setTimeout(function() { btn.textContent = originalText; }, 2000); }); } } catch(e) { console.error("[copyCodeBlock error]", e); } }' +
+        'function copyCodeBlock(codeId, btnElement) { try { var codeBlock = document.getElementById(codeId); if (codeBlock) { var text = codeBlock.textContent; navigator.clipboard.writeText(text).then(function() { console.log("Code copied to clipboard"); if (btnElement) { var originalText = btnElement.textContent; btnElement.textContent = "✅ Copied!"; setTimeout(function() { btnElement.textContent = originalText; }, 2000); } }); } } catch(e) { console.error("[copyCodeBlock error]", e); } }' +
         'function openFileLink(filePath) { try { console.log("[Opening file]:", filePath); safePostMessage({ type: "openFile", filePath: filePath }); } catch(e) { console.error("[openFileLink error]", e); } }' +
-        'function renderTodos(todos, stats, context) { try { if (!todoPanel || !todoList || !todoStats) return; if (!todos || todos.length === 0) { todoPanel.classList.remove("visible"); todoList.innerHTML = "<div class=\\"todo-empty\\">No tasks yet. Ask AI to create something!</div>"; return; } todoPanel.classList.add("visible"); const completedCount = stats ? stats.completed : 0; const totalCount = stats ? stats.total : todos.length; todoStats.textContent = "(" + completedCount + "/" + totalCount + ")"; if (context && todoContext && todoContextText) { todoContextText.textContent = context; todoContext.style.display = "block"; } if (todoCreatedMessage && todoCreatedText && totalCount > 0) { todoCreatedText.textContent = "Created " + totalCount + " todo" + (totalCount !== 1 ? "s" : ""); todoCreatedMessage.style.display = "flex"; setTimeout(function() { todoCreatedMessage.style.display = "none"; }, 5000); } todoList.innerHTML = todos.map(function(todo, index) { const num = (index + 1); const itemClass = "todo-item" + (todo.completed ? " completed" : ""); const checkboxClass = "todo-checkbox" + (todo.completed ? " checked" : ""); const todoIdEscaped = todo.id.replace(/["]/g, "&quot;"); return "<div class=\\"" + itemClass + "\\" data-todo-id=\\"" + todoIdEscaped + "\\" onclick=\\"toggleTodoItem(this.dataset.todoId)\\"><div class=\\"" + checkboxClass + "\\"></div><span class=\\"todo-number\\">" + num + ".</span><span class=\\"todo-text\\">" + escapeHtml(todo.text) + "</span></div>"; }).join(""); } catch(e) { console.error("[renderTodos error]", e); } }' +
+        'function renderTodos(todos, stats, context) { try { if (!todoPanel || !todoList || !todoStats) return; if (!todos || todos.length === 0) { todoPanel.classList.remove("visible"); todoList.innerHTML = "<div class=\\"todo-empty\\">No tasks yet. Ask AI to create something!</div>"; return; } todoPanel.classList.add("visible"); const completedCount = stats ? stats.completed : 0; const totalCount = stats ? stats.total : todos.length; todoStats.textContent = "(" + completedCount + "/" + totalCount + ")"; if (context && todoContext && todoContextText) { todoContextText.textContent = context; todoContext.style.display = "block"; } if (todoCreatedMessage && todoCreatedText && totalCount > 0) { todoCreatedText.textContent = "Created " + totalCount + " todo" + (totalCount !== 1 ? "s" : ""); todoCreatedMessage.style.display = "flex"; setTimeout(function() { todoCreatedMessage.style.display = "none"; }, 5000); } var sortedTodos = todos.slice().sort(function(a, b) { var orderA = typeof a.order === "number" ? a.order : 999; var orderB = typeof b.order === "number" ? b.order : 999; return orderA - orderB; }); var activeIndex = -1; for (var i = 0; i < sortedTodos.length; i++) { if (!sortedTodos[i].completed) { activeIndex = i; break; } } todoList.innerHTML = sortedTodos.map(function(todo, index) { var orderNum = typeof todo.order === "number" ? todo.order + 1 : index + 1; var status = todo.status ? todo.status.toLowerCase() : "pending"; var isActive = (index === activeIndex); var isPending = !todo.completed && !isActive; var itemClass = "todo-item"; if (todo.completed) { itemClass += " completed"; } else if (isActive || status === "in_progress") { itemClass += " in-progress"; } else if (isPending) { itemClass += " pending"; } var checkboxClass = "todo-checkbox" + (todo.completed ? " checked" : ""); var todoIdEscaped = todo.id.replace(/["]/g, "&quot;"); var statusLabel = ""; if (isActive || status === "in_progress") { statusLabel = "<span class=\\"todo-status-label in-progress\\">IN PROGRESS</span>"; } else if (isPending) { statusLabel = "<span class=\\"todo-status-label pending\\">PENDING</span>"; } return "<div class=\\"" + itemClass + "\\" data-todo-id=\\"" + todoIdEscaped + "\\" onclick=\\"toggleTodoItem(this.dataset.todoId)\\"><div class=\\"" + checkboxClass + "\\"></div><span class=\\"todo-order-badge\\">#" + orderNum + "</span><span class=\\"todo-text\\">" + escapeHtml(todo.text) + "</span>" + statusLabel + "</div>"; }).join(""); } catch(e) { console.error("[renderTodos error]", e); } }' +
         'function toggleTodoItem(todoId) { try { safePostMessage({ type: "toggleTodo", todoId: todoId }); } catch(e) { console.error("[toggleTodo error]", e); } }' +
+        'function updateTodoStatus(todoId, newStatus) { try { console.log("[updateTodoStatus]", todoId, newStatus); var todoEl = document.querySelector("[data-todo-id=\\"" + todoId.replace(/["]/g, "&quot;") + "\\"]"); if (!todoEl) { console.warn("[updateTodoStatus] Todo element not found:", todoId); return; } todoEl.classList.remove("pending", "in-progress", "completed"); if (newStatus === "completed") { todoEl.classList.add("completed"); var checkbox = todoEl.querySelector(".todo-checkbox"); if (checkbox) checkbox.classList.add("checked"); } else if (newStatus === "in_progress") { todoEl.classList.add("in-progress"); } else { todoEl.classList.add("pending"); } var existingLabel = todoEl.querySelector(".todo-status-label"); if (existingLabel) existingLabel.remove(); if (newStatus === "in_progress") { var label = document.createElement("span"); label.className = "todo-status-label in-progress"; label.textContent = "IN PROGRESS"; todoEl.appendChild(label); } else if (newStatus === "pending") { var labelPending = document.createElement("span"); labelPending.className = "todo-status-label pending"; labelPending.textContent = "PENDING"; todoEl.appendChild(labelPending); } } catch(e) { console.error("[updateTodoStatus error]", e); } }' +
         'function escapeHtml(text) { const div = document.createElement("div"); div.textContent = text; return div.innerHTML; }' +
         '</script>' +
         '</body>' +

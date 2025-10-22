@@ -1,56 +1,108 @@
 /**
  * TODO List Manager
  * Manages TODO items extracted from AI responses
+ * Enhanced with GitHub Copilot-style features:
+ * - Context/reasoning boxes
+ * - File associations
+ * - Hierarchical sub-tasks
+ * - File previews
  */
 
 class TodoManager {
     constructor() {
         this.todos = [];
         this.idCounter = 0;
+        this.context = null; // AI's reasoning/context for the TODO list
+        this.relatedFiles = []; // Files associated with these TODOs
     }
 
     /**
      * Parse AI response to extract TODO items
      * @param {string} aiResponse - AI assistant response text
+     * @param {Object} options - Parsing options
      * @returns {Array} Extracted TODO items
      */
-    parseFromAIResponse(aiResponse) {
+    parseFromAIResponse(aiResponse, options = {}) {
+        console.log('🔍 [TodoManager] parseFromAIResponse called');
+        console.log('🔍 [TodoManager] Response length:', aiResponse?.length);
+        console.log('🔍 [TodoManager] Response type:', typeof aiResponse);
+
         if (!aiResponse || typeof aiResponse !== 'string') {
+            console.warn('⚠️ [TodoManager] Invalid response:', aiResponse);
             return [];
         }
 
         const newTodos = [];
         const lines = aiResponse.split('\n');
+        let currentParent = null; // Track parent for sub-tasks
+        let lastIndentLevel = 0;
+
+        console.log('🔍 [TodoManager] Analyzing', lines.length, 'lines');
+
+        // Extract context/reasoning (first 1-3 sentences or paragraph before numbered list)
+        this._extractContext(aiResponse);
+
+        // Extract related files from the response
+        this._extractRelatedFiles(aiResponse);
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const line = lines[i];
+            const trimmedLine = line.trim();
 
             // Skip empty lines
-            if (!line) continue;
+            if (!trimmedLine) continue;
+
+            // Calculate indent level for hierarchical tasks
+            const indentLevel = line.length - line.trimStart().length;
+            const isIndented = indentLevel > lastIndentLevel;
 
             // Pattern 1: Numbered lists (1. Create file, 2. Edit config, etc.)
-            const numberedMatch = line.match(/^(\d+)[.)\s]+(.+)$/);
+            const numberedMatch = trimmedLine.match(/^(\d+)[.)\s]+(.+)$/);
             if (numberedMatch) {
-                newTodos.push(this._createTodo(numberedMatch[2], 'numbered', numberedMatch[1]));
+                console.log('🔍 [TodoManager] Found numbered todo:', numberedMatch[2]);
+                const todo = this._createTodo(numberedMatch[2], 'numbered', numberedMatch[1]);
+                
+                // If indented, mark as sub-task
+                if (isIndented && currentParent) {
+                    todo.parentId = currentParent.id;
+                    todo.level = 1;
+                } else {
+                    currentParent = todo;
+                    todo.level = 0;
+                }
+                
+                newTodos.push(todo);
+                lastIndentLevel = indentLevel;
                 continue;
             }
 
             // Pattern 2: Bullet points (- Create file, * Edit config, etc.)
-            const bulletMatch = line.match(/^[-*+]\s+(.+)$/);
+            const bulletMatch = trimmedLine.match(/^[-*+]\s+(.+)$/);
             if (bulletMatch) {
-                newTodos.push(this._createTodo(bulletMatch[1], 'bullet'));
+                const todo = this._createTodo(bulletMatch[1], 'bullet');
+                
+                if (isIndented && currentParent) {
+                    todo.parentId = currentParent.id;
+                    todo.level = 1;
+                } else {
+                    currentParent = todo;
+                    todo.level = 0;
+                }
+                
+                newTodos.push(todo);
+                lastIndentLevel = indentLevel;
                 continue;
             }
 
             // Pattern 3: Explicit TODO markers (TODO: Fix bug, TO-DO: Add feature, etc.)
-            const todoMatch = line.match(/^(?:TODO|TO-DO|To Do|To-Do):\s*(.+)$/i);
+            const todoMatch = trimmedLine.match(/^(?:TODO|TO-DO|To Do|To-Do):\s*(.+)$/i);
             if (todoMatch) {
                 newTodos.push(this._createTodo(todoMatch[1], 'explicit'));
                 continue;
             }
 
             // Pattern 4: Checkbox format ([ ] Task, [x] Completed task)
-            const checkboxMatch = line.match(/^\[(\s|x|X)\]\s+(.+)$/);
+            const checkboxMatch = trimmedLine.match(/^\[(\s|x|X)\]\s+(.+)$/);
             if (checkboxMatch) {
                 const completed = checkboxMatch[1].toLowerCase() === 'x';
                 newTodos.push(this._createTodo(checkboxMatch[2], 'checkbox', null, completed));
@@ -72,13 +124,18 @@ class TodoManager {
             ];
 
             const actionPattern = new RegExp(`^(${actionVerbs.join('|')})\\s+(.+)$`, 'i');
-            const actionMatch = line.match(actionPattern);
+            const actionMatch = trimmedLine.match(actionPattern);
 
             // Only add as TODO if it's short enough (likely a task, not a paragraph)
-            if (actionMatch && line.length < 150) {
-                newTodos.push(this._createTodo(line, 'action'));
+            if (actionMatch && trimmedLine.length < 150) {
+                newTodos.push(this._createTodo(trimmedLine, 'action'));
                 continue;
             }
+        }
+
+        console.log('🔍 [TodoManager] Parsing complete:', newTodos.length, 'todos found');
+        if (newTodos.length > 0) {
+            console.log('🔍 [TodoManager] First 3 todos:', newTodos.slice(0, 3).map(t => ({ text: t.text, type: t.type })));
         }
 
         return newTodos;
@@ -99,8 +156,63 @@ class TodoManager {
             completed: completed,
             createdAt: new Date().toISOString(),
             completedAt: null,
-            startedAt: null
+            startedAt: null,
+            parentId: null, // For sub-tasks
+            level: 0, // Hierarchy level (0 = top-level, 1 = sub-task)
+            relatedFile: null // File associated with this task
         };
+    }
+
+    /**
+     * Extract context/reasoning from AI response (GitHub Copilot-style)
+     * @private
+     */
+    _extractContext(aiResponse) {
+        // Look for a paragraph before the numbered list or bullet points
+        const contextMatch = aiResponse.match(/^(.+?)(?=\n\s*\d+\.|\n\s*[-*+]\s)/s);
+        
+        if (contextMatch) {
+            // Get first 2-3 sentences
+            const sentences = contextMatch[1].match(/[^.!?]+[.!?]+/g);
+            if (sentences && sentences.length > 0) {
+                this.context = sentences.slice(0, 3).join(' ').trim();
+                return;
+            }
+        }
+
+        // Fallback: Get first 200 chars
+        if (aiResponse.length > 200) {
+            this.context = aiResponse.substring(0, 200) + '...';
+        } else {
+            this.context = aiResponse.substring(0, aiResponse.indexOf('\n') || aiResponse.length);
+        }
+    }
+
+    /**
+     * Extract related files from AI response
+     * @private
+     */
+    _extractRelatedFiles(aiResponse) {
+        const filePatterns = [
+            /(?:create|edit|modify|update)\s+[`"]?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"]?/gi,
+            /[`"]([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"]/gi,
+            /(?:file|path):\s*[`"]?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"]?/gi
+        ];
+
+        const files = new Set();
+
+        filePatterns.forEach(pattern => {
+            let match;
+            while ((match = pattern.exec(aiResponse)) !== null) {
+                const file = match[1];
+                // Filter out common false positives
+                if (!file.includes('http') && !file.includes('.com') && file.length < 100) {
+                    files.add(file);
+                }
+            }
+        });
+
+        this.relatedFiles = Array.from(files).slice(0, 10); // Limit to 10 files
     }
 
     /**
@@ -231,6 +343,43 @@ class TodoManager {
             active,
             completionRate: total > 0 ? Math.round((completed / total) * 100) : 0
         };
+    }
+
+    /**
+     * Get context/reasoning for the TODO list (GitHub Copilot-style)
+     * @returns {string|null} Context text
+     */
+    getContext() {
+        return this.context;
+    }
+
+    /**
+     * Get related files for the TODO list
+     * @returns {Array} Array of file paths
+     */
+    getRelatedFiles() {
+        return this.relatedFiles;
+    }
+
+    /**
+     * Set context manually
+     * @param {string} context - Context text
+     */
+    setContext(context) {
+        this.context = context;
+    }
+
+    /**
+     * Get hierarchical TODO structure (parent-child relationships)
+     * @returns {Array} Root-level todos with nested children
+     */
+    getHierarchicalTodos() {
+        const rootTodos = this.todos.filter(t => !t.parentId);
+        
+        return rootTodos.map(root => ({
+            ...root,
+            children: this.todos.filter(t => t.parentId === root.id)
+        }));
     }
 
     /**

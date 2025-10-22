@@ -1,0 +1,377 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', var(--vscode-font-family), sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--vscode-editor-foreground);
+    background-color: var(--vscode-editor-background);
+    height: 100vh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 12px 16px;
+}
+
+#messages {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    padding: 4px;
+    scroll-behavior: smooth;
+}
+
+.message {
+    margin-bottom: 20px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    max-width: 100%;
+    animation: fadeIn 0.2s ease-out;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    margin-left: auto;
+    text-align: right;
+}
+
+.message.assistant {
+    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    border-left: 3px solid var(--vscode-activityBarBadge-background);
+}
+
+.message.error {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border-left: 3px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-errorForeground);
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.85;
+    letter-spacing: 0.01em;
+}
+
+.message-header .icon {
+    margin-right: 8px;
+    font-size: 14px;
+}
+
+.message-content {
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+}
+
+.message-content code {
+    background-color: var(--vscode-textCodeBlock-background);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: -0.01em;
+}
+
+.message-content pre {
+    background-color: var(--vscode-textCodeBlock-background);
+    padding: 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    position: relative;
+    margin: 10px 0;
+    border: 1px solid var(--vscode-panel-border);
+}
+
+.message-content pre code {
+    padding: 0;
+    background: none;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.code-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 8px;
+    z-index: 1;
+}
+
+.code-action-btn {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.code-action-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+#input-container {
+    display: flex;
+    gap: 8px;
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 8px;
+    padding: 8px;
+}
+
+#message-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    resize: none;
+    outline: none;
+}
+
+#message-input::placeholder {
+    color: var(--vscode-input-placeholderForeground);
+}
+
+#send-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+#send-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+#send-button:active {
+    transform: scale(0.95);
+}
+
+#send-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.loading {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--vscode-editor-foreground);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--vscode-scrollbarSlider-background);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-hoverBackground);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* TODO Panel - GitHub Copilot Style */
+.todo-panel {
+    background: var(--vscode-sideBar-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    margin: 12px 0;
+    overflow: hidden;
+    font-size: 13px;
+}
+
+.todo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--vscode-sideBarSectionHeader-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+}
+
+.todo-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    transition: background-color 0.15s ease;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.todo-item:last-child {
+    border-bottom: none;
+}
+
+.todo-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.todo-item.completed {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+.todo-item.in-progress {
+    background: var(--vscode-list-activeSelectionBackground);
+    font-weight: 500;
+}
+
+.todo-item.pending {
+    opacity: 0.8;
+}
+
+.todo-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--vscode-input-border);
+    border-radius: 3px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.todo-checkbox.checked {
+    background: var(--vscode-activityBarBadge-background);
+    border-color: var(--vscode-activityBarBadge-background);
+    position: relative;
+}
+
+.todo-checkbox.checked::after {
+    content: '✓';
+    color: white;
+    font-size: 12px;
+    position: absolute;
+    top: -2px;
+    left: 2px;
+}
+
+.todo-status-label {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 8px;
+}
+
+.todo-status-label.in-progress {
+    background: var(--vscode-statusBarItem-warningBackground);
+    color: var(--vscode-statusBarItem-warningForeground);
+}
+
+.todo-status-label.pending {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+}
+
+.todo-context {
+    padding: 8px 14px;
+    font-size: 11px;
+    opacity: 0.7;
+    font-style: italic;
+    background: var(--vscode-editor-inactiveSelectionBackground);
+}
+
+.todo-empty {
+    padding: 20px;
+    text-align: center;
+    opacity: 0.6;
+    font-size: 12px;
+}
+
+/* Typing indicator - smooth animation */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--vscode-editor-inactiveSelectionBackground);
+    border-radius: 6px;
+    border-left: 3px solid var(--vscode-activityBarBadge-background);
+    margin-bottom: 16px;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--vscode-activityBarBadge-background);
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.7;
+    }
+    30% {
+        transform: translateY(-8px);
+        opacity: 1;
+    }
+}

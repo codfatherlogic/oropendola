@@ -59,10 +59,18 @@ class ConversationTask extends EventEmitter {
         this.realtimeConnected = false;
 
         // Initialize realtime connection if session cookies provided
+        console.log('🔥 [ConversationTask] Checking realtime connection requirements...');
+        console.log('🔥 [ConversationTask] Has sessionCookies:', !!options.sessionCookies);
+        console.log('🔥 [ConversationTask] Has apiUrl:', !!options.apiUrl);
+        console.log('🔥 [ConversationTask] apiUrl value:', options.apiUrl);
+
         if (options.sessionCookies && options.apiUrl) {
+            console.log('🔥 [ConversationTask] ✅ Prerequisites met, calling _setupRealtimeConnection...');
             this._setupRealtimeConnection(options.apiUrl, options.sessionCookies);
         } else {
             console.warn('⚠️ [ConversationTask] No session cookies - realtime updates disabled');
+            console.warn('⚠️ [ConversationTask] sessionCookies:', options.sessionCookies ? 'EXISTS' : 'MISSING');
+            console.warn('⚠️ [ConversationTask] apiUrl:', options.apiUrl || 'MISSING');
         }
     }
 
@@ -74,17 +82,28 @@ class ConversationTask extends EventEmitter {
      * @param {string} sessionCookies - Session cookies for authentication
      */
     _setupRealtimeConnection(apiUrl, sessionCookies) {
+        console.log('🔥🔥🔥 [ConversationTask] ========== _setupRealtimeConnection() CALLED ==========');
         console.log('🔌 [ConversationTask] Setting up realtime connection for task:', this.taskId);
+        console.log('🔥 [ConversationTask] apiUrl:', apiUrl);
+        console.log('🔥 [ConversationTask] sessionCookies length:', sessionCookies ? sessionCookies.length : 0);
 
         try {
+            console.log('🔥 [ConversationTask] Creating RealtimeManager instance...');
             this.realtimeManager = new RealtimeManager(apiUrl, sessionCookies);
+            console.log('🔥 [ConversationTask] RealtimeManager created:', !!this.realtimeManager);
 
             // Forward ai_progress events to task listeners
+            console.log('🔥 [ConversationTask] Setting up ai_progress listener...');
             this.realtimeManager.on('ai_progress', (data) => {
+                console.log('🔥🔥🔥 [ConversationTask] ========== RECEIVED AI_PROGRESS FROM REALTIME MANAGER ==========');
                 console.log(`📊 [ConversationTask ${this.taskId}] AI Progress [${data.type}]:`, data.message || '');
+                console.log('🔥 [ConversationTask] Full progress data:', JSON.stringify(data, null, 2));
 
                 // Emit to sidebar webview
+                console.log('🔥 [ConversationTask] Emitting aiProgress to sidebar...');
                 this.emit('aiProgress', this.taskId, data);
+                console.log('🔥 [ConversationTask] aiProgress emitted');
+                console.log('🔥🔥🔥 [ConversationTask] ========== AI_PROGRESS FORWARDING COMPLETE ==========');
 
                 // Update task status based on progress type
                 if (data.type === 'thinking') {
@@ -93,34 +112,49 @@ class ConversationTask extends EventEmitter {
                     this.status = 'executing';
                 } else if (data.type === 'complete') {
                     this.status = 'completed';
+                    // Backend signaled completion - safe to disconnect now
+                    console.log('🏁 [ConversationTask] Backend signaled complete, disconnecting WebSocket');
+                    this._cleanupRealtimeConnection();
                 } else if (data.type === 'error') {
                     this.status = 'failed';
                 }
             });
 
             // Handle connection events
+            console.log('🔥 [ConversationTask] Setting up connected listener...');
             this.realtimeManager.on('connected', () => {
+                console.log('🔥🔥🔥 [ConversationTask] ========== WEBSOCKET CONNECTED EVENT RECEIVED ==========');
                 console.log(`✅ [ConversationTask ${this.taskId}] Realtime connection established`);
                 this.realtimeConnected = true;
                 this.emit('realtimeConnected', this.taskId);
+                console.log('🔥🔥🔥 [ConversationTask] ========== WEBSOCKET CONNECTED COMPLETE ==========');
             });
 
+            console.log('🔥 [ConversationTask] Setting up disconnected listener...');
             this.realtimeManager.on('disconnected', (reason) => {
+                console.log('🔥🔥🔥 [ConversationTask] ========== WEBSOCKET DISCONNECTED EVENT RECEIVED ==========');
                 console.log(`❌ [ConversationTask ${this.taskId}] Realtime connection lost:`, reason);
                 this.realtimeConnected = false;
                 this.emit('realtimeDisconnected', this.taskId, reason);
             });
 
+            console.log('🔥 [ConversationTask] Setting up error listener...');
             this.realtimeManager.on('error', (error) => {
+                console.error('🔥🔥🔥 [ConversationTask] ========== WEBSOCKET ERROR EVENT RECEIVED ==========');
                 console.error(`❌ [ConversationTask ${this.taskId}] Realtime error:`, error);
+                console.error('❌ [ConversationTask] Error details:', error.message, error.stack);
                 this.emit('realtimeError', this.taskId, error);
             });
 
             // Connect immediately
+            console.log('🔥 [ConversationTask] Calling realtimeManager.connect()...');
             this.realtimeManager.connect();
+            console.log('🔥 [ConversationTask] realtimeManager.connect() called');
+            console.log('🔥🔥🔥 [ConversationTask] ========== _setupRealtimeConnection() COMPLETE ==========');
 
         } catch (error) {
             console.error(`❌ [ConversationTask ${this.taskId}] Failed to setup realtime:`, error);
+            console.error('❌ [ConversationTask] Error stack:', error.stack);
         }
     }
 
@@ -135,8 +169,179 @@ class ConversationTask extends EventEmitter {
 
             console.log(`🚀 Task ${this.taskId} started`);
 
+            // Add system prompt if not already present
+            // Check if we already have a system message with the "THINK OUT LOUD" prompt
+            const hasSystemPrompt = this.messages.some(msg => 
+                msg.role === 'system' && msg.content.includes('THINK OUT LOUD')
+            );
+
+            if (!hasSystemPrompt) {
+                console.log('📝 Adding progressive implementation system prompt');
+                const systemPrompt = `You are an intelligent AI coding assistant integrated into VS Code that works progressively and iteratively.
+
+**CRITICAL GUIDELINES - PROGRESSIVE IMPLEMENTATION:**
+
+1. **WORK STEP-BY-STEP, NOT ALL AT ONCE:**
+   - Don't create a full plan upfront - work incrementally
+   - Implement one feature/file at a time
+   - After each step, naturally continue to the next
+   - Example: "I'll start by setting up the project structure..."
+     [creates files]
+     "Great! Now I'll implement the database models..."
+     [creates more files]
+     "Perfect! Next, let's add the UI components..."
+
+2. **THINK OUT LOUD AS YOU WORK:**
+   - Explain what you're doing: "Setting up the main.js entry point..."
+   - Show progress: "✓ Created 3 files, now adding dependencies..."
+   - Verbalize decisions: "I'm using SQLite because it's simpler for a POS app"
+   - Use emojis: 🤔 💭 🔍 ✓ ⚠️ 💡 🚀
+
+3. **CONTINUOUS FLOW - NO STOPPING:**
+   - After completing a step, immediately start the next
+   - Don't ask "shall I continue?" - just continue naturally
+   - Only stop when the entire implementation is complete
+   - Example flow:
+     "Creating package.json... ✓ Done
+      Now setting up the main window... ✓ Done
+      Adding the database connection... ✓ Done
+      Implementing the products screen... ✓ Done"
+
+4. **NO UPFRONT PLANNING MODE:**
+   - Don't show a numbered list of "here are the 8 steps"
+   - Don't say "let me outline the approach first"
+   - Just start working and explain as you go
+   - If you need to mention future work, do it briefly:
+     "I'll create the UI components (this will also need some CSS later)"
+
+5. **ANALYZE WORKSPACE CONTEXTUALLY:**
+   - Check workspace as you go: "Let me see what's already here..."
+   - Use context for current step: "I see you have X, so I'll use that..."
+   - Don't do a full analysis upfront - gather info when needed
+
+6. **COMMUNICATE NATURALLY:**
+   - Conversational tone: "Alright, I'll start by..."
+   - Show what you're doing: "Creating src/components/Product.jsx..."
+   - Explain why: "Using React because Electron works well with it"
+   - Celebrate progress: "Nice! The database is set up. Moving on..."
+
+7. **USE TOOLS PROGRESSIVELY:**
+   - Create files one at a time or in small batches
+   - Run commands as needed (npm install, git init, etc.)
+   - Test incrementally, not all at the end
+
+**RESPONSE PATTERN (PROGRESSIVE):**
+
+GOOD ✅:
+"I'll help you build a POS app with Electron.js! Let me start...
+
+🔧 Creating the project structure:
+[creates package.json, main.js, index.html]
+✓ Project foundation is ready
+
+🎨 Now setting up the UI:
+[creates HTML/CSS files]
+✓ UI layout complete
+
+💾 Adding database integration:
+[creates database files]
+✓ SQLite configured
+
+🛒 Implementing product management:
+[creates product components]
+✓ Can now add/edit products
+
+..."
+
+BAD ❌:
+"Here's my plan for building a POS app:
+
+1. **Project Setup**: Create package.json
+2. **UI Design**: Build the interface  
+3. **Database**: Set up SQLite
+4. **Features**: Add product management
+...
+
+Let me know if you'd like me to proceed!"
+
+**REMEMBER:** Work like GitHub Copilot - progressive, continuous, no stopping until done!
+
+**YOUR CAPABILITIES:**
+- Create files: Use <create_file> tool
+- Edit files: Use <edit_file> tool  
+- Run commands: Use <run_command> tool
+- Search code: Use <search_files> tool
+- Read files: Use <read_file> tool
+
+Start working immediately when asked. No permission needed - just do it!
+   → [What I'm doing]
+   → [Progress update]
+
+**CRITICAL: TODO FORMAT**
+When creating todos, ALWAYS use this exact format so the UI can parse it:
+
+📋 Tasks:
+- [ ] First task description
+- [ ] Second task description
+- [ ] Third task description
+
+**WORKFLOW - SYSTEMATIC APPROACH:**
+1. **Search First** → Use Grep/Glob to find ALL relevant code locations
+2. **Create TODO List** → Break down the task into clear steps
+3. **Confirm Plan** → Ask user if approach is good
+4. **Execute Step-by-Step** → Mark each todo as you complete it:
+   - Mark as in-progress: ⏳ [Task]
+   - Mark as completed: ✅ [Task]
+5. **Report Progress** → After each step, say what you did
+6. **Build & Test** → Always include testing/building in your plan
+
+**EXAMPLE OF PERFECT RESPONSE:**
+
+User: "Add a dark mode toggle"
+
+🤔 Let me search for the theme/settings code first...
+
+🔍 Searching for: theme, settings, CSS files
+✓ Found settings UI in src/settings/settings.js
+✓ Found CSS in styles/main.css
+✓ Found theme config in src/config.js
+
+Based on my analysis, I'll need to:
+1. Add a dark mode toggle to settings UI
+2. Create dark mode CSS variables
+3. Add theme switching logic
+4. Persist user preference
+
+📋 **Implementation Plan:**
+
+- [ ] Add dark mode toggle to settings UI (src/settings/settings.js)
+- [ ] Create dark mode CSS variables (styles/main.css)
+- [ ] Add theme switching logic (src/config.js)
+- [ ] Add localStorage persistence
+- [ ] Test dark mode toggle
+
+Does this approach look good? I'll proceed systematically once you confirm.
+
+Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
+- Search BEFORE coding
+- Create TODO lists for multi-step tasks
+- Mark progress as you go (⏳ in-progress, ✅ completed)
+- Report what you did after each step
+- Never execute without a plan`;
+
+                this.addMessage('system', systemPrompt);
+            }
+
             // Add initial user message
             this.addMessage('user', initialMessage, images);
+
+            // Log conversation state before starting
+            console.log('📋 Starting conversation with', this.messages.length, 'messages');
+            const hasSystemPromptNow = this.messages.some(m => m.role === 'system' && m.content.includes('THINK OUT LOUD'));
+            console.log('🔍 System prompt present:', hasSystemPromptNow ? '✓ YES' : '✗ NO');
+            if (!hasSystemPromptNow) {
+                console.error('❌ CRITICAL: System prompt is missing! AI will not think out loud.');
+            }
 
             // Main execution loop
             while (!this.abort && this.status === 'running') {
@@ -151,6 +356,32 @@ class ConversationTask extends EventEmitter {
 
                     // Parse tool calls from response
                     const toolCalls = this._parseToolCalls(response);
+
+                    // ALWAYS emit AI response immediately, even if there are tool calls
+                    // This ensures "thinking out loud" text is visible to users
+                    console.log('🔍 Raw response text:', typeof response, response ? response.substring(0, 200) : 'null');
+
+                    const cleanedResponse = this._cleanToolCallsFromResponse(response);
+                    console.log('🧹 Cleaned response:', cleanedResponse ? cleanedResponse.substring(0, 200) : 'empty');
+
+                    // ALWAYS emit the response - even if it's short or seems empty
+                    // This ensures users see SOMETHING from the AI
+                    const responseToShow = cleanedResponse && cleanedResponse.trim().length > 0
+                        ? cleanedResponse
+                        : '💭 Analyzing your request and planning the implementation...';
+
+                    console.log('💭 Emitting AI response:', responseToShow.substring(0, 100) + '...');
+                    
+                    // Store TODO stats for completion check
+                    this._lastTodoStats = response._todo_stats || null;
+                    
+                    this.emit('assistantMessage', this.taskId, responseToShow, {
+                        todos: response._todos,
+                        todo_stats: response._todo_stats,
+                        file_changes: response._file_changes,
+                        conversation_id: this.conversationId,
+                        hasToolCalls: toolCalls.length > 0  // Indicate if tools will follow
+                    });
 
                     if (toolCalls.length > 0) {
                         console.log(`🔧 Found ${toolCalls.length} tool call(s) to execute`);
@@ -177,34 +408,47 @@ class ConversationTask extends EventEmitter {
                     } else {
                         console.log('ℹ️ No tool calls found, final response');
 
-                        // Clean the response - remove any remaining tool_call blocks
-                        const cleanedResponse = this._cleanToolCallsFromResponse(response);
-
-                        // ONLY emit assistant message when task is truly done (no tool calls)
-                        // Include TODOs and file_changes if available
-                        try {
-                            console.log('🔔 Emitting assistantMessage with extras keys:', response ? Object.keys(response).filter(k=>k.startsWith('_') || k==='todos' || k==='file_changes' || k==='todo_stats') : []);
-                        } catch(e) {
-                            // Log parsing error
-                            console.warn('Failed to log extras keys:', e);
-                        }
-                        this.emit('assistantMessage', this.taskId, cleanedResponse, {
-                            todos: response._todos,
-                            todo_stats: response._todo_stats,
-                            file_changes: response._file_changes
-                        });
-
                         // Check if task is complete or needs continuation
                         const shouldContinue = await this._checkTaskCompletion();
 
                         if (!shouldContinue) {
+                            // Task is done - reset mistake counter
+                            this.consecutiveMistakeCount = 0;
                             break;
                         }
 
-                        this.consecutiveMistakeCount++;
+                        // Check for duplicate responses (AI stuck in a loop)
+                        if (this.messages && this.messages.length >= 2) {
+                            const lastTwoMessages = this.messages.slice(-2);
+                            if (lastTwoMessages.length === 2 && 
+                                lastTwoMessages[0].role === 'assistant' && 
+                                lastTwoMessages[1].role === 'assistant') {
+                                const prev = lastTwoMessages[0].content.trim();
+                                const current = lastTwoMessages[1].content.trim();
+                                
+                                // If responses are very similar (>90% match), it's stuck
+                                const similarity = this._calculateSimilarity(prev, current);
+                                if (similarity > 0.9) {
+                                    console.warn('⚠️ AI returning duplicate responses - incrementing mistake counter');
+                                    this.consecutiveMistakeCount++;
+                                } else {
+                                    // Different responses - reset counter
+                                    this.consecutiveMistakeCount = 0;
+                                    console.log('🔄 Continuing conversation flow (different response, not a mistake)');
+                                }
+                            } else {
+                                // If we're continuing (e.g., prompting AI to implement after a plan),
+                                // don't count it as a mistake - it's just explaining/planning
+                                console.log('🔄 Continuing conversation flow (not counting as mistake)');
+                            }
+                        } else {
+                            // Not enough messages to compare
+                            console.log('🔄 Continuing conversation flow (first response)');
+                        }
                     }
 
-                    // Check consecutive mistakes
+                    // Check consecutive mistakes ONLY if we're in a problematic loop
+                    // (This shouldn't trigger in normal progressive work)
                     if (this.consecutiveMistakeCount >= this.consecutiveMistakeLimit) {
                         console.warn(`⚠️ Consecutive mistake limit reached (${this.consecutiveMistakeCount})`);
 
@@ -270,8 +514,13 @@ class ConversationTask extends EventEmitter {
             console.log('🧹 Task cleanup: ensuring typing indicator is hidden');
             this.emit('taskCleanup', this.taskId);
 
-            // Disconnect realtime connection
-            this._cleanupRealtimeConnection();
+            // DON'T disconnect realtime connection here!
+            // Backend may still send tool execution events after initial response
+            // The connection will be cleaned up when:
+            // 1. Backend sends 'complete' event
+            // 2. User starts a new task
+            // 3. Timeout occurs
+            console.log('🔌 [ConversationTask] Keeping WebSocket alive for backend events...');
         }
     }
 
@@ -315,36 +564,54 @@ class ConversationTask extends EventEmitter {
             const httpAgent = new http.Agent({ keepAlive: true });
             const httpsAgent = new https.Agent({ keepAlive: true });
 
+            // Build context asynchronously (may include workspace analysis)
+            const contextData = await this._buildContext();
+
             const requestData = {
                 messages: apiMessages,  // Send full conversation history
                 conversation_id: this.conversationId,
                 mode: this.mode,  // CRITICAL: This should be 'agent' for tool calls
-                context: this._buildContext()
+                context: contextData
             };
 
             console.log('🔍 DEBUG: Request payload:', JSON.stringify({
                 message_count: apiMessages.length,
                 conversation_id: this.conversationId,
                 mode: this.mode,
-                has_context: !!this._buildContext(),
+                has_context: !!contextData,
+                context_keys: contextData ? Object.keys(contextData) : [],
                 has_images: apiMessages.some(m => Array.isArray(m.content)),
                 payload_size_kb: Math.round(Buffer.byteLength(JSON.stringify(requestData)) / 1024)
             }, null, 2));
 
+            // Get API credentials from configuration
+            const vscode = require('vscode');
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const apiKey = config.get('api.key');
+            const apiSecret = config.get('api.secret');
+
+            // Build headers with authentication
+            const headers = {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(JSON.stringify(requestData))
+            };
+
+            // Prefer API Key/Secret authentication
+            if (apiKey && apiSecret) {
+                headers['Authorization'] = `token ${apiKey}:${apiSecret}`;
+                console.log('🔐 Using API Key/Secret authentication');
+            } else if (this.sessionCookies) {
+                headers['Cookie'] = this.sessionCookies;
+                console.log('🔐 Using session cookie authentication');
+            } else {
+                console.warn('⚠️ No authentication credentials found');
+            }
+
             const response = await axios({
                 method: 'POST',
-                url: `${this.apiUrl}/api/method/ai_assistant.api.chat`,
+                url: `${this.apiUrl}/api/method/ai_assistant.api.chat_completion`,
                 data: requestData,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cookie': this.sessionCookies,
-                    'Content-Length': Buffer.byteLength(JSON.stringify({
-                        messages: apiMessages,
-                        conversation_id: this.conversationId,
-                        mode: this.mode,
-                        context: this._buildContext()
-                    }))
-                },
+                headers: headers,
                 timeout: 120000,
                 signal: this.abortController.signal,
                 maxContentLength: Infinity,
@@ -370,21 +637,42 @@ class ConversationTask extends EventEmitter {
             if (response.status >= 400) {
                 console.error('❌ HTTP Error:', response.status, response.statusText);
                 console.error('❌ Error data:', response.data);
+
+                // Handle Frappe error format
+                if (response.data?.exception || response.data?.exc_type) {
+                    throw new Error(response.data.exception || response.data.exc_type);
+                }
+
                 throw new Error(`HTTP ${response.status}: ${response.data?.message || response.statusText}`);
             }
 
+            // Extract from Frappe response format: { message: { ... } }
+            // Backend returns: { message: { success: true, response: "...", model: "...", usage: {...}, ... } }
+            const messageData = response.data?.message || response.data;
+
             // Save conversation ID
-            if (response.data?.message?.conversation_id) {
-                this.conversationId = response.data.message.conversation_id;
+            if (messageData.conversation_id) {
+                this.conversationId = messageData.conversation_id;
+                console.log('💬 Conversation ID:', this.conversationId);
             }
 
-            // Extract AI response and tool_calls
-            const messageData = response.data?.message || {};
+            // Extract AI response text
             const responseText = messageData.response ||
                                 messageData.content ||
                                 messageData.text;
 
             console.log('🔍 AI Response extracted:', responseText ? `${responseText.substring(0, 200)}...` : 'NONE');
+
+            // Log model and usage information
+            if (messageData.model) {
+                console.log('🤖 Model used:', messageData.model, '(Provider:', messageData.provider || 'unknown', ')');
+            }
+            if (messageData.usage) {
+                console.log('📊 Token usage:', messageData.usage);
+            }
+            if (messageData.cost) {
+                console.log('💰 Cost:', messageData.cost);
+            }
 
             if (!responseText) {
                 console.error('❌ No AI response found in:', response.data);
@@ -662,10 +950,15 @@ class ConversationTask extends EventEmitter {
             const tool = toolCalls[i];
             console.log(`🔧 [${i + 1}/${toolCalls.length}] Executing: ${tool.action}`);
 
+            // Emit tool execution start event
+            this.emit('toolExecutionStart', this.taskId, tool, i, toolCalls.length);
+
             try {
                 const result = await this._executeSingleTool(tool);
                 results.push(result);
 
+                // Emit tool execution complete event
+                this.emit('toolExecutionComplete', this.taskId, tool, result, i, toolCalls.length);
                 this.emit('toolCompleted', this.taskId, tool, result);
 
             } catch (toolError) {
@@ -962,32 +1255,98 @@ Output will appear in the "Oropendola AI" terminal.`,
     }
 
     /**
-     * Estimate token count (rough approximation)
+     * Estimate token count with better accuracy
+     * Uses character-based estimation with multipliers for images
      */
     _estimateTokenCount() {
         let totalChars = 0;
+        let imageTokens = 0;
 
         for (const msg of this.messages) {
-            totalChars += (msg.content || '').length;
+            // Count text content
+            if (typeof msg.content === 'string') {
+                totalChars += msg.content.length;
+            } else if (Array.isArray(msg.content)) {
+                // Multi-part content (with images)
+                for (const part of msg.content) {
+                    if (part.type === 'text') {
+                        totalChars += (part.text || '').length;
+                    } else if (part.type === 'image_url') {
+                        // Images typically use ~765 tokens (for high detail)
+                        imageTokens += 765;
+                    }
+                }
+            }
         }
 
-        // Rough estimate: 1 token ≈ 4 characters
-        return Math.ceil(totalChars / 4);
+        // Better approximation: 1 token ≈ 3.5 characters for English text
+        const textTokens = Math.ceil(totalChars / 3.5);
+
+        return textTokens + imageTokens;
     }
 
     /**
-     * Reduce context by keeping only recent messages
+     * Intelligent context reduction with summarization
+     * Keeps: first message (system prompt), tool results, recent messages
+     * Removes: old conversational messages
      */
     _reduceContext() {
-        const keepCount = 15; // Keep last 15 messages
-
-        if (this.messages.length > keepCount) {
-            const removed = this.messages.length - keepCount;
-            this.messages = this.messages.slice(-keepCount);
-            console.log(`📉 Reduced context: removed ${removed} old messages, kept ${keepCount} recent messages`);
-
-            this.emit('contextReduced', this.taskId, removed, keepCount);
+        if (this.messages.length <= 10) {
+            return; // No need to reduce if conversation is short
         }
+
+        console.log(`📊 Reducing context from ${this.messages.length} messages...`);
+
+        // Separate messages into categories
+        const firstMessage = this.messages[0]; // Usually system prompt or first user message
+        const recentMessages = this.messages.slice(-8); // Keep last 8 messages
+        const middleMessages = this.messages.slice(1, -8); // Everything in between
+
+        // From middle messages, keep important ones
+        const importantMiddle = middleMessages.filter(msg => {
+            // Keep tool results (they contain execution outcomes)
+            if (msg.role === 'tool_result') return true;
+
+            // Keep messages with images (user shared screenshots/diagrams)
+            if (msg.images && msg.images.length > 0) return true;
+
+            // Keep error messages
+            if (msg.role === 'error') return true;
+
+            // Keep messages that mention files (likely important context)
+            if (typeof msg.content === 'string' &&
+                (msg.content.includes('```') || msg.content.includes('file:'))) {
+                return true;
+            }
+
+            return false;
+        });
+
+        // Build new message list
+        const newMessages = [firstMessage];
+
+        // Add summary of removed messages if we removed any conversational messages
+        const removedCount = middleMessages.length - importantMiddle.length;
+        if (removedCount > 0) {
+            newMessages.push({
+                role: 'system',
+                content: `[Context Summary: ${removedCount} previous conversational messages were summarized to save space. Important tool results and file changes have been preserved.]`
+            });
+        }
+
+        // Add important middle messages
+        newMessages.push(...importantMiddle);
+
+        // Add recent messages (most relevant to current context)
+        newMessages.push(...recentMessages);
+
+        const oldLength = this.messages.length;
+        this.messages = newMessages;
+
+        console.log(`📉 Context reduced: ${oldLength} → ${this.messages.length} messages (removed ${oldLength - this.messages.length})`);
+        console.log(`   Preserved: 1 first + ${importantMiddle.length} important + ${recentMessages.length} recent`);
+
+        this.emit('contextReduced', this.taskId, oldLength - this.messages.length, this.messages.length);
     }
 
     /**
@@ -1037,13 +1396,74 @@ Output will appear in the "Oropendola AI" terminal.`,
      * Check if task should continue
      */
     async _checkTaskCompletion() {
-        // If tools were just executed, allow one more AI response to summarize
+        // If tools were just executed, ALWAYS continue to check if more work is needed
         if (this.toolsExecutedInLastIteration) {
-            console.log('ℹ️ Tools were executed, allowing one more response for summary');
+            console.log('ℹ️ Tools were executed, continuing to check for more work...');
             this.toolsExecutedInLastIteration = false;
-            return false; // End task after this summary response
+            
+            // Add a gentle continuation message
+            this.addMessage('user', 'Continue with the next step. What needs to be done next?', []);
+            return true; // CONTINUE - keep the flow going
         }
 
+        // Check if AI explicitly indicated completion
+        const lastMessage = this.messages[this.messages.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant') {
+            const content = lastMessage.content.toLowerCase();
+            
+            // Look for completion indicators
+            const completionPhrases = [
+                'implementation is complete',
+                'setup is complete',
+                'all done',
+                'finished implementing',
+                'successfully completed',
+                'ready to use',
+                'you can now'
+            ];
+            
+            const seemsComplete = completionPhrases.some(phrase => content.includes(phrase));
+            
+            if (seemsComplete) {
+                console.log('✅ AI indicated completion - task done');
+                return false; // Task complete
+            }
+            
+            // If AI just gave an overview/explanation without taking action, continue
+            const hasNumberedList = /\n\s*\d+\.\s+\*\*/.test(lastMessage.content);
+            if (hasNumberedList) {
+                console.log('🔄 AI provided a plan - prompting to start implementation');
+                
+                // Be VERY explicit and forceful
+                const forceImplementation = `STOP PLANNING. You are now REQUIRED to take ACTION.
+
+You MUST use tools in your next response:
+- create_file: Create actual files with code
+- run_in_terminal: Execute commands (npm install, etc.)
+- replace_string_in_file: Modify existing files
+
+DO NOT:
+- Repeat the requirements
+- Show another numbered list
+- Explain what you "would" do
+- Ask for permission
+
+IMMEDIATELY create the first file for this project. Start with package.json or a main entry file. Your response must include tool calls.`;
+
+                this.addMessage('user', forceImplementation, []);
+                return true; // Continue with implementation
+            }
+            
+            // Check if AI mentioned tools or actions but didn't execute them
+            const mentionsTools = /create_file:|run_in_terminal:|package\.json|npm install/i.test(lastMessage.content);
+            if (mentionsTools && !seemsComplete) {
+                console.log('⚠️ AI mentioned tools but did not execute them - prompting for action');
+                this.addMessage('user', 'Please actually create those files now using the available tools. Do not just describe what you would do - execute the actions.', []);
+                return true; // Continue
+            }
+        }
+
+        console.log('✅ Task completion check passed - ready for next user input');
         // Task is complete - conversation will continue with next user message
         return false;  // Task completes, waiting for next user input
     }
@@ -1096,9 +1516,9 @@ Output will appear in the "Oropendola AI" terminal.`,
     }
 
     /**
-     * Build context object
+     * Build context object with deep workspace analysis
      */
-    _buildContext() {
+    async _buildContext() {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         const activeEditor = vscode.window.activeTextEditor;
 
@@ -1106,9 +1526,72 @@ Output will appear in the "Oropendola AI" terminal.`,
             workspace: workspaceFolders ? workspaceFolders[0].name : null,
             activeFile: activeEditor ? {
                 path: activeEditor.document.fileName,
-                language: activeEditor.document.languageId
+                relativePath: workspaceFolders ? vscode.workspace.asRelativePath(activeEditor.document.uri) : activeEditor.document.fileName,
+                language: activeEditor.document.languageId,
+                lineCount: activeEditor.document.lineCount
             } : null
         };
+
+        // Add active file content if file is open and not too large
+        if (activeEditor && activeEditor.document.lineCount < 1000) {
+            context.activeFile.content = activeEditor.document.getText();
+            context.activeFile.cursorPosition = {
+                line: activeEditor.selection.active.line,
+                character: activeEditor.selection.active.character
+            };
+            context.activeFile.selectedText = activeEditor.document.getText(activeEditor.selection);
+        }
+
+        // Add workspace structure context
+        if (workspaceFolders) {
+            // Get project structure (files, dependencies, etc.)
+            try {
+                const { contextService } = require('../services/contextService');
+                const enrichedContext = await contextService.getEnrichedContext(true, true);
+
+                if (enrichedContext) {
+                    context.workspacePath = enrichedContext.workspacePath;
+                    context.cursorLine = enrichedContext.cursorLine;
+
+                    // Add git context
+                    const gitContext = contextService.getGitContext();
+                    if (gitContext) {
+                        context.git = gitContext;
+                    }
+
+                    // Add workspace metadata
+                    const workspaceContext = contextService.getWorkspaceContext();
+                    if (workspaceContext) {
+                        context.workspaceMetadata = {
+                            name: workspaceContext.name,
+                            fileCount: workspaceContext.file_count,
+                            languages: workspaceContext.languages,
+                            dependencies: workspaceContext.dependencies
+                        };
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to get enriched context:', error.message);
+            }
+
+            // Add related files from workspace indexer
+            try {
+                const { workspaceIndexer } = require('../workspace/WorkspaceIndexer');
+                if (workspaceIndexer && activeEditor) {
+                    const relativePath = vscode.workspace.asRelativePath(activeEditor.document.uri);
+                    const relatedFiles = await workspaceIndexer.findRelatedFiles(relativePath);
+                    if (relatedFiles && relatedFiles.length > 0) {
+                        context.relatedFiles = relatedFiles.slice(0, 10).map(f => ({
+                            path: f.path,
+                            score: f.score,
+                            type: f.type
+                        }));
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to get related files:', error.message);
+            }
+        }
 
         // Include attachments from the most recent user message if any
         const lastUserMessage = [...this.messages].reverse().find(m => m.role === 'user');
@@ -1117,7 +1600,8 @@ Output will appear in the "Oropendola AI" terminal.`,
                 type: img.type || 'image/png',
                 content: img.content || img.url,
                 isImage: img.isImage !== undefined ? img.isImage : true,
-                name: img.name || 'attachment'
+                name: img.name || 'attachment',
+                size: img.size
             }));
         }
 
@@ -1128,19 +1612,13 @@ Output will appear in the "Oropendola AI" terminal.`,
      * Add message to conversation
      */
     addMessage(role, content, images = [], toolName = null) {
-        // Truncate very long messages to prevent backend errors
-        const MAX_MESSAGE_LENGTH = 1500; // Conservative limit
-        let truncatedContent = content;
-
-        if (content && content.length > MAX_MESSAGE_LENGTH) {
-            truncatedContent = content.substring(0, MAX_MESSAGE_LENGTH) +
-                '\n\n... [Message truncated due to length]';
-            console.log(`⚠️ Truncated ${role} message from ${content.length} to ${truncatedContent.length} chars`);
-        }
+        // No truncation - Claude API supports 200K tokens (~800K characters)
+        // Backend handles any necessary limits
+        // System prompts need full length for autonomous execution mode
 
         this.messages.push({
             role: role,
-            content: truncatedContent,
+            content: content, // Send full content without truncation
             images: images,
             toolName: toolName,
             timestamp: new Date()
@@ -1175,6 +1653,39 @@ Output will appear in the "Oropendola AI" terminal.`,
             createdAt: this.createdAt,
             duration: Date.now() - this.createdAt.getTime()
         };
+    }
+
+    /**
+     * Calculate similarity between two strings (0 = completely different, 1 = identical)
+     * @param {string} str1 - First string
+     * @param {string} str2 - Second string
+     * @returns {number} Similarity ratio between 0 and 1
+     * @private
+     */
+    _calculateSimilarity(str1, str2) {
+        if (str1 === str2) return 1.0;
+        if (!str1 || !str2) return 0.0;
+        
+        // Normalize strings: remove extra whitespace, lowercase
+        const normalize = (s) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+        const a = normalize(str1);
+        const b = normalize(str2);
+        
+        if (a === b) return 1.0;
+        
+        // Calculate Levenshtein distance-based similarity
+        const longer = a.length > b.length ? a : b;
+        const shorter = a.length > b.length ? b : a;
+        
+        if (longer.length === 0) return 1.0;
+        
+        // Simple character-by-character comparison for efficiency
+        let matches = 0;
+        for (let i = 0; i < shorter.length; i++) {
+            if (shorter[i] === longer[i]) matches++;
+        }
+        
+        return matches / longer.length;
     }
 
     /**

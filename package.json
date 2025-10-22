@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered coding assistant with conversation UI",
-  "version": "2.0.5",
+  "description": "AI-powered assistant - v2.5.3: CSRF token fix + Sequential TODO execution",
+  "version": "2.5.3",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -150,6 +150,108 @@
         "title": "Debug Autocomplete Status",
         "category": "Oropendola",
         "icon": "$(bug)"
+      },
+      {
+        "command": "oropendola.enhancedLogin",
+        "title": "Sign In (Enhanced)",
+        "category": "Oropendola",
+        "icon": "$(key)"
+      },
+      {
+        "command": "oropendola.enhancedLogout",
+        "title": "Sign Out (Enhanced)",
+        "category": "Oropendola",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "oropendola.indexWorkspace",
+        "title": "Index Workspace",
+        "category": "Oropendola",
+        "icon": "$(database)"
+      },
+      {
+        "command": "oropendola.openAIChat",
+        "title": "Open AI Chat Panel",
+        "category": "Oropendola",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "oropendola.runDiagnostics",
+        "title": "Run AI Diagnostics",
+        "category": "Oropendola",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "oropendola.clearDiagnostics",
+        "title": "Clear Diagnostics",
+        "category": "Oropendola",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "oropendola.applyAIFix",
+        "title": "Apply AI Fix",
+        "category": "Oropendola",
+        "icon": "$(lightbulb-autofix)"
+      },
+      {
+        "command": "oropendola.refactorCode",
+        "title": "Refactor with AI",
+        "category": "Oropendola",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "oropendola.optimizeCode",
+        "title": "Optimize Code with AI",
+        "category": "Oropendola",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "oropendola.generateDocs",
+        "title": "Generate Documentation",
+        "category": "Oropendola",
+        "icon": "$(book)"
+      },
+      {
+        "command": "oropendola.openSettings",
+        "title": "Open Settings",
+        "category": "Oropendola",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "oropendola.showTodos",
+        "title": "Show Todos",
+        "category": "Oropendola",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "oropendola.showAnalytics",
+        "title": "Show Usage Analytics",
+        "category": "Oropendola",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "oropendola.showConversations",
+        "title": "Show Conversation History",
+        "category": "Oropendola",
+        "icon": "$(history)"
+      },
+      {
+        "command": "oropendola.testBackend",
+        "title": "Test Backend Connection",
+        "category": "Oropendola",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "oropendola.extractTodos",
+        "title": "Extract Todos from Selection",
+        "category": "Oropendola",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "oropendola.selectModel",
+        "title": "Select AI Model",
+        "category": "Oropendola",
+        "icon": "$(server-process)"
       }
     ],
     "views": {
@@ -281,6 +383,171 @@
           "type": "boolean",
           "default": true,
           "description": "Show diff view when editing code with AI"
+        },
+        "oropendola.serverUrl": {
+          "type": "string",
+          "default": "https://oropendola.ai",
+          "description": "Oropendola backend server URL",
+          "scope": "application"
+        },
+        "oropendola.auth.autoLogin": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically login on extension activation"
+        },
+        "oropendola.auth.rememberCredentials": {
+          "type": "boolean",
+          "default": true,
+          "description": "Remember credentials in system keychain"
+        },
+        "oropendola.inlineCompletions.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Copilot-style inline code completions"
+        },
+        "oropendola.inlineCompletions.delay": {
+          "type": "number",
+          "default": 75,
+          "minimum": 50,
+          "maximum": 1000,
+          "description": "Debounce delay for inline completions (milliseconds)"
+        },
+        "oropendola.inlineCompletions.maxSuggestions": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of inline completion suggestions"
+        },
+        "oropendola.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered code diagnostics"
+        },
+        "oropendola.diagnostics.runOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run diagnostics automatically when files are saved"
+        },
+        "oropendola.telemetry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable telemetry and usage analytics"
+        },
+        "oropendola.indexing.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable workspace indexing for better AI context"
+        },
+        "oropendola.indexing.onStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Index workspace automatically on extension startup"
+        },
+        "oropendola.indexing.excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/__pycache__/**",
+            "**/dist/**",
+            "**/build/**"
+          ],
+          "description": "Glob patterns to exclude from workspace indexing"
+        },
+        "oropendola.chat.model": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "claude",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022",
+            "deepseek",
+            "deepseek-chat",
+            "deepseek-reasoner",
+            "gemini",
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-pro",
+            "gpt",
+            "gpt-4o",
+            "gpt-4-turbo",
+            "local",
+            "qwen2.5-coder:32b"
+          ],
+          "markdownDescription": "AI model selection:\n- **auto**: Backend auto-selects best model\n- **claude**: Claude Sonnet 4.5 (best for complex tasks)\n- **deepseek**: DeepSeek (fast, cost-effective)\n- **gemini**: Gemini 2.0 Flash (free, fast)\n- **gpt**: GPT-4o (general purpose)\n- **local**: Qwen 2.5 Coder (offline, privacy-first)"
+        },
+        "oropendola.chat.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Temperature for chat responses (higher = more creative)"
+        },
+        "oropendola.chat.maxTokens": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 100,
+          "maximum": 8000,
+          "description": "Maximum tokens for chat responses"
+        },
+        "oropendola.codeActions.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered code actions and quick fixes"
+        },
+        "oropendola.codeActions.autoFixOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically apply AI fixes when saving files"
+        },
+        "oropendola.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug logging"
+        },
+        "oropendola.chat.mode": {
+          "type": "string",
+          "default": "agent",
+          "enum": [
+            "chat",
+            "agent",
+            "code"
+          ],
+          "markdownDescription": "Interaction mode:\n- **chat**: Simple Q&A, no tool execution\n- **agent**: Full autonomy with tools (recommended)\n- **code**: Optimized for code generation"
+        },
+        "oropendola.chat.enableTodoExtraction": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically extract and create todos from AI responses"
+        },
+        "oropendola.chat.streamResponses": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable streaming for real-time responses (WebSocket)"
+        },
+        "oropendola.analytics.showCost": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show API cost information in responses"
+        },
+        "oropendola.analytics.showTokenUsage": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show token usage statistics"
+        },
+        "oropendola.history.maxConversations": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum conversation history to keep"
+        },
+        "oropendola.history.autoSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically save conversations to backend"
         }
       }
     },
@@ -439,6 +706,7 @@
   "dependencies": {
     "@octokit/rest": "^20.0.2",
     "axios": "^1.6.2",
+    "minimatch": "^9.0.5",
     "simple-git": "^3.21.0",
     "socket.io-client": "^4.8.1"
   },

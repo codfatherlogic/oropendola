@@ -1,0 +1,58 @@
+{
+  // ================================
+  // Recommended VS Code Extensions for Oropendola AI Extension Development
+  // ================================
+  "recommendations": [
+    // JavaScript/Node.js Development
+    "dbaeumer.vscode-eslint",                    // ESLint - Code quality and style checking
+    "esbenp.prettier-vscode",                    // Prettier - Code formatting
+    "ms-vscode.vscode-node-debug2",              // Node.js Debugger
+    "christian-kohler.path-intellisense",        // Path autocompletion
+    "christian-kohler.npm-intellisense",         // npm module import autocompletion
+
+    // Testing
+    "hbenl.vscode-mocha-test-adapter",           // Mocha Test Explorer
+    "ms-vscode.test-adapter-converter",          // Test Explorer UI integration
+
+    // Git Integration
+    "eamodio.gitlens",                           // GitLens - Enhanced Git features
+    "mhutchie.git-graph",                        // Git Graph - Visual commit history
+
+    // API Development & Testing
+    "rangav.vscode-thunder-client",              // Thunder Client - API testing
+    "humao.rest-client",                         // REST Client - HTTP request tester
+
+    // Code Quality & Productivity
+    "streetsidesoftware.code-spell-checker",     // Code Spell Checker
+    "usernamehw.errorlens",                      // Error Lens - Inline error display
+    "oderwat.indent-rainbow",                    // Indent Rainbow - Better indentation
+    "aaron-bond.better-comments",                // Better Comments - Enhanced comment styling
+    "wayou.vscode-todo-highlight",               // TODO Highlight - Highlight TODO comments
+
+    // VS Code Extension Development
+    "connor4312.esbuild-problem-matchers",       // esbuild problem matcher
+    "amodio.tsl-problem-matcher",                // TypeScript/JavaScript problem matcher
+
+    // Markdown & Documentation
+    "yzhang.markdown-all-in-one",                // Markdown All in One
+    "davidanson.vscode-markdownlint",            // Markdown linting
+
+    // Utilities
+    "gruntfuggly.todo-tree",                     // Todo Tree - Organize TODOs
+    "alefragnani.bookmarks",                     // Bookmarks - Code navigation
+    "formulahendry.code-runner",                 // Code Runner - Quick code execution
+    "ms-vsliveshare.vsliveshare",                // Live Share - Collaborative editing
+
+    // JSON/Configuration Files
+    "zainchen.json",                             // JSON Tools
+    "tamasfe.even-better-toml"                   // Better TOML support
+  ],
+
+  // Extensions that should not be recommended (conflicts or unnecessary)
+  "unwantedRecommendations": [
+    "hookyqr.beautify",                          // Conflicts with Prettier
+    "ms-vscode.vscode-typescript-tslint-plugin", // Deprecated, use ESLint
+    "formulahendry.auto-close-tag",              // Built into VS Code now
+    "formulahendry.auto-rename-tag"              // Built into VS Code now
+  ]
+}

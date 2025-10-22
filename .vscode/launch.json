@@ -1,4 +1,7 @@
 {
+  // ================================
+  // Debug Configurations for Oropendola AI Extension
+  // ================================
   "version": "0.2.0",
   "configurations": [
     {
@@ -9,9 +12,14 @@
         "--extensionDevelopmentPath=${workspaceFolder}"
       ],
       "outFiles": [
-        "${workspaceFolder}/**/*.js"
+        "${workspaceFolder}/out/**/*.js"
       ],
-      "preLaunchTask": "${defaultBuildTask}"
+      "preLaunchTask": "${defaultBuildTask}",
+      "sourceMaps": true,
+      "smartStep": true,
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
     },
     {
       "name": "Extension Tests",
@@ -19,11 +27,101 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "--extensionTestsPath=${workspaceFolder}/test/suite/index"
+        "--extensionTestsPath=${workspaceFolder}/test"
       ],
       "outFiles": [
+        "${workspaceFolder}/out/**/*.js",
         "${workspaceFolder}/test/**/*.js"
+      ],
+      "preLaunchTask": "${defaultBuildTask}",
+      "sourceMaps": true
+    },
+    {
+      "name": "Integration Tests",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionTestsPath=${workspaceFolder}/test/integration"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/test/integration/**/*.js"
+      ],
+      "env": {
+        "NODE_ENV": "test"
+      },
+      "sourceMaps": true
+    },
+    {
+      "name": "Run Current File (Node)",
+      "type": "node",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": [
+        "<node_internals>/**"
       ]
+    },
+    {
+      "name": "Attach to Node Process",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "sourceMaps": true
+    },
+    {
+      "name": "Debug Mocha Tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+      "args": [
+        "--timeout",
+        "999999",
+        "--colors",
+        "${workspaceFolder}/test/**/*.test.js"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
+    },
+    {
+      "name": "Debug Backend Integration Tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+      "args": [
+        "--timeout",
+        "60000",
+        "--colors",
+        "${workspaceFolder}/test/integration/**/*.test.js"
+      ],
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "test"
+      },
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Extension + Tests",
+      "configurations": [
+        "Run Extension",
+        "Extension Tests"
+      ],
+      "presentation": {
+        "hidden": false,
+        "group": "development",
+        "order": 1
+      }
     }
   ]
 }

@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const { WorkspaceAPI } = require('../api/workspace');
 const { GitAPI } = require('../api/git');
+const LocalWorkspaceAnalyzer = require('../workspace/LocalWorkspaceAnalyzer');
 
 /**
  * Context Service - Aggregates workspace, git, and editor context
@@ -12,19 +13,22 @@ class ContextService {
     constructor() {
         /** @type {WorkspaceContext|null} */
         this.workspaceContext = null;
-        
+
         /** @type {any} */
         this.gitContext = null;
-        
+
         /** @type {number} */
         this.lastUpdate = 0;
-        
+
         /** @type {number} */
         this.cacheTimeout = 30000; // 30 seconds
+
+        // Local workspace analyzer (replaces backend APIs)
+        this.localAnalyzer = new LocalWorkspaceAnalyzer();
     }
 
     /**
-     * Get enriched context for chat
+     * Get enriched context for chat with deep project analysis
      * @param {boolean} [includeWorkspace=true] - Include workspace context
      * @param {boolean} [includeGit=true] - Include git context
      * @returns {Promise<ChatContext>}
@@ -39,7 +43,7 @@ class ContextService {
 
         const workspacePath = workspaceFolders[0].uri.fsPath;
         const currentFile = vscode.workspace.asRelativePath(editor.document.uri);
-        
+
         /** @type {ChatContext} */
         const context = {
             currentFile,
@@ -50,39 +54,144 @@ class ContextService {
             includeGitContext: includeGit
         };
 
+        // Add visible range context (what code is currently visible to user)
+        if (editor.visibleRanges && editor.visibleRanges.length > 0) {
+            const visibleRange = editor.visibleRanges[0];
+            context.visibleLines = {
+                start: visibleRange.start.line,
+                end: visibleRange.end.line,
+                content: editor.document.getText(visibleRange)
+            };
+        }
+
+        // Add open editors (other files user is working with)
+        const openEditors = vscode.window.visibleTextEditors
+            .filter(e => e !== editor)
+            .map(e => ({
+                file: vscode.workspace.asRelativePath(e.document.uri),
+                language: e.document.languageId
+            }));
+        if (openEditors.length > 0) {
+            context.openEditors = openEditors.slice(0, 5); // Limit to 5
+        }
+
         // Add workspace context if requested and cache is stale
         if (includeWorkspace && this.shouldRefreshCache()) {
             try {
-                const wsResponse = await WorkspaceAPI.getWorkspaceContext(
-                    workspacePath,
-                    false
-                );
-                if (wsResponse.success && wsResponse.data) {
-                    this.workspaceContext = wsResponse.data.workspace;
+                // Use LOCAL workspace analyzer instead of backend API
+                console.log('🔍 Analyzing workspace locally (no backend needed)...');
+                const analysis = await this.localAnalyzer.analyzeWorkspace(workspacePath, true);
+
+                // Store in cache
+                this.workspaceContext = analysis;
+
+                // Extract key project information for AI context
+                context.projectInfo = {
+                    name: analysis.projectName,
+                    type: analysis.projectType,
+                    mainLanguages: analysis.languages.slice(0, 3),
+                    dependencies: analysis.dependencies.slice(0, 10), // Top 10 deps
+                    dependencyCount: analysis.dependencies.length,
+                    fileCount: analysis.fileCount,
+                    hasTests: analysis.hasTests,
+                    hasDocs: analysis.hasDocsFolder,
+                    configFiles: analysis.configFiles
+                };
+
+                // Add git info from local analysis
+                if (analysis.git) {
+                    context.git = {
+                        branch: analysis.git.branch,
+                        uncommittedChanges: analysis.git.uncommittedChanges,
+                        isDirty: analysis.git.isDirty,
+                        modifiedFiles: analysis.git.modifiedFiles || [],
+                        lastCommit: analysis.git.lastCommit
+                    };
+                    this.gitContext = context.git;
                 }
+
+                console.log('✅ Local workspace analysis complete:', {
+                    type: analysis.projectType,
+                    languages: analysis.languages,
+                    deps: analysis.dependencies.length,
+                    git: analysis.git?.branch
+                });
+
             } catch (error) {
-                console.error('Failed to get workspace context:', error);
+                console.warn('⚠️ Local workspace analysis failed, using minimal context');
+                console.error(error);
+                // Continue with basic context
             }
         }
 
-        // Add git context if requested
-        if (includeGit) {
-            try {
-                const gitResponse = await GitAPI.getGitStatus(workspacePath);
-                if (gitResponse.success && gitResponse.data) {
-                    this.gitContext = {
-                        branch: gitResponse.data.branch,
-                        uncommitted_changes: gitResponse.data.uncommitted_changes?.length || 0,
-                        is_dirty: gitResponse.data.diff_stats?.is_dirty || false
-                    };
-                }
-            } catch (error) {
-                console.error('Failed to get git context:', error);
-            }
+        // Add recent terminal commands (if available)
+        const recentCommands = this._getRecentTerminalCommands();
+        if (recentCommands.length > 0) {
+            context.recentCommands = recentCommands;
         }
 
         this.lastUpdate = Date.now();
         return context;
+    }
+
+    /**
+     * Detect project type from workspace context
+     * @private
+     */
+    _detectProjectType(workspace) {
+        const deps = workspace.dependencies || [];
+        const files = workspace.root_files || [];
+
+        if (files.includes('package.json')) {
+            if (deps.some(d => d.name === 'react' || d.name === 'next')) {
+                return 'React/Next.js';
+            } else if (deps.some(d => d.name === 'vue')) {
+                return 'Vue.js';
+            } else if (deps.some(d => d.name === 'express')) {
+                return 'Node.js/Express';
+            }
+            return 'Node.js';
+        }
+
+        if (files.includes('requirements.txt') || files.includes('setup.py') || files.includes('pyproject.toml')) {
+            if (deps.some(d => d.name === 'django')) {
+                return 'Django';
+            } else if (deps.some(d => d.name === 'flask')) {
+                return 'Flask';
+            } else if (deps.some(d => d.name === 'fastapi')) {
+                return 'FastAPI';
+            }
+            return 'Python';
+        }
+
+        if (files.includes('go.mod')) return 'Go';
+        if (files.includes('Cargo.toml')) return 'Rust';
+        if (files.includes('pom.xml') || files.includes('build.gradle')) return 'Java';
+        if (files.includes('Gemfile')) return 'Ruby';
+
+        return 'Unknown';
+    }
+
+    /**
+     * Get primary language from language distribution
+     * @private
+     */
+    _getPrimaryLanguage(languages = []) {
+        if (!languages || languages.length === 0) return 'Unknown';
+
+        // Languages is typically [{name: 'JavaScript', percentage: 45}, ...]
+        const sorted = [...languages].sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
+        return sorted[0]?.name || 'Unknown';
+    }
+
+    /**
+     * Get recent terminal commands (if terminals are accessible)
+     * @private
+     */
+    _getRecentTerminalCommands() {
+        // VSCode doesn't provide direct access to terminal history
+        // This is a placeholder for future implementation
+        return [];
     }
 
     /**

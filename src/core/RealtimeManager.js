@@ -26,61 +26,93 @@ class RealtimeManager extends EventEmitter {
      * Uses session cookies for authentication
      */
     connect() {
+        console.log('🔥 [RealtimeManager] connect() called');
+        console.log('🔥 [RealtimeManager] Current socket:', this.socket ? 'EXISTS' : 'NULL');
+        console.log('🔥 [RealtimeManager] Current connected:', this.connected);
+
         if (this.socket && this.connected) {
             console.log('🔌 [RealtimeManager] Already connected to server');
             return;
         }
 
         console.log('🔌 [RealtimeManager] Connecting to:', this.apiUrl);
+        console.log('🔌 [RealtimeManager] Session cookies length:', this.sessionCookies ? this.sessionCookies.length : 0);
 
         // Parse cookies for authentication
         const cookies = this._parseCookies(this.sessionCookies);
+        console.log('🔥 [RealtimeManager] Parsed cookies:', Object.keys(cookies).join(', '));
         const sid = cookies.sid;
 
         if (!sid) {
             const error = new Error('No session ID found in cookies - authentication required');
             console.error('❌ [RealtimeManager]', error.message);
+            console.error('❌ [RealtimeManager] Available cookie keys:', Object.keys(cookies).join(', '));
             this.emit('error', error);
             return;
         }
 
         console.log('🔐 [RealtimeManager] Authenticating with session ID:', sid.substring(0, 10) + '...');
+        console.log('🔥 [RealtimeManager] Socket.IO config:', {
+            path: '/socket.io',
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            timeout: 20000
+        });
 
         // Connect to Frappe's Socket.IO server
         // Path: /socket.io/ (Frappe's default)
         // Transport: WebSocket preferred, polling fallback
-        this.socket = io(this.apiUrl, {
-            path: '/socket.io',
-            transports: ['websocket', 'polling'],
-            auth: {
-                sid: sid
-            },
-            extraHeaders: {
-                'Cookie': this.sessionCookies
-            },
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            reconnectionAttempts: this.maxReconnectAttempts,
-            timeout: 20000,
-            autoConnect: true
-        });
+        console.log('🔥 [RealtimeManager] Creating Socket.IO client...');
+        try {
+            this.socket = io(this.apiUrl, {
+                path: '/socket.io',
+                transports: ['websocket', 'polling'],
+                auth: {
+                    sid: sid
+                },
+                extraHeaders: {
+                    'Cookie': this.sessionCookies
+                },
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                reconnectionAttempts: this.maxReconnectAttempts,
+                timeout: 20000,
+                autoConnect: true
+            });
+            console.log('🔥 [RealtimeManager] Socket.IO client created successfully');
+            console.log('🔥 [RealtimeManager] Socket instance:', this.socket ? 'EXISTS' : 'NULL');
+        } catch (error) {
+            console.error('❌ [RealtimeManager] Failed to create Socket.IO client:', error);
+            console.error('❌ [RealtimeManager] Error stack:', error.stack);
+            this.emit('error', error);
+            return;
+        }
 
         // Set up event handlers
+        console.log('🔥 [RealtimeManager] Setting up event handlers...');
         this._setupEventHandlers();
+        console.log('🔥 [RealtimeManager] Event handlers setup complete');
     }
 
     /**
      * Set up Socket.IO event handlers
      */
     _setupEventHandlers() {
+        console.log('🔥 [RealtimeManager] _setupEventHandlers() called');
+
         // Connection established
         this.socket.on('connect', () => {
+            console.log('🔥🔥🔥 [RealtimeManager] ========== CONNECT EVENT FIRED ==========');
             console.log('✅ [RealtimeManager] Connected to realtime server');
             console.log('🆔 [RealtimeManager] Socket ID:', this.socket.id);
+            console.log('🔥 [RealtimeManager] Socket connected:', this.socket.connected);
+            console.log('🔥 [RealtimeManager] Socket active:', this.socket.active);
             this.connected = true;
             this.reconnectAttempts = 0;
+            console.log('🔥 [RealtimeManager] Emitting "connected" event to listeners');
             this.emit('connected');
+            console.log('🔥🔥🔥 [RealtimeManager] ========== CONNECT EVENT COMPLETE ==========');
         });
 
         // Connection lost
@@ -99,12 +131,17 @@ class RealtimeManager extends EventEmitter {
         // Connection error
         this.socket.on('connect_error', (error) => {
             this.reconnectAttempts++;
+            console.error('🔥🔥🔥 [RealtimeManager] ========== CONNECT_ERROR EVENT FIRED ==========');
             console.error(`❌ [RealtimeManager] Connection error (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}):`, error.message);
+            console.error('❌ [RealtimeManager] Error type:', error.type);
+            console.error('❌ [RealtimeManager] Error description:', error.description);
+            console.error('❌ [RealtimeManager] Full error:', error);
 
             if (this.reconnectAttempts >= this.maxReconnectAttempts) {
                 console.error('❌ [RealtimeManager] Max reconnection attempts reached');
                 this.emit('error', new Error('Failed to connect after ' + this.maxReconnectAttempts + ' attempts'));
             }
+            console.error('🔥🔥🔥 [RealtimeManager] ========== CONNECT_ERROR EVENT COMPLETE ==========');
         });
 
         // Reconnection attempt
@@ -122,8 +159,12 @@ class RealtimeManager extends EventEmitter {
 
         // AI Progress events (our main use case)
         this.socket.on('ai_progress', (data) => {
-            console.log('📊 [RealtimeManager] Received ai_progress:', data.type);
+            console.log('🔥🔥🔥 [RealtimeManager] ========== AI_PROGRESS EVENT RECEIVED ==========');
+            console.log('📊 [RealtimeManager] Event type:', data.type);
+            console.log('📊 [RealtimeManager] Full data:', JSON.stringify(data, null, 2));
+            console.log('🔥 [RealtimeManager] Emitting ai_progress to listeners');
             this.emit('ai_progress', data);
+            console.log('🔥🔥🔥 [RealtimeManager] ========== AI_PROGRESS EVENT COMPLETE ==========');
         });
 
         // Frappe msgprint (notifications)
