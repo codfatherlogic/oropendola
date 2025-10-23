@@ -798,7 +798,7 @@ ${dynamicContext}`;
 
             console.log(`📤 Making AI request (attempt ${retryCount + 1}/${this.maxRetries + 1})`);
             console.log(`🔍 DEBUG: Sending mode = '${this.mode}'`);
-            console.log(`🔍 DEBUG: API URL = ${this.apiUrl}/api/method/ai_assistant.api.chat`);
+            console.log(`🔍 DEBUG: API URL = ${this.apiUrl}/api/method/ai_assistant.api.chat_completion`);
 
             // Create custom HTTP/HTTPS agents to bypass Expect header
             const httpAgent = new http.Agent({ keepAlive: true });
