@@ -46,6 +46,7 @@ class ConversationTask extends EventEmitter {
 
         // Abort control
         this.abort = false;
+        this.abandoned = false;  // Task forcefully stopped
         this.abortController = null;
 
         // File change tracking (Qoder-style)
@@ -352,12 +353,24 @@ ${dynamicContext}`;
             // Main execution loop
             while (!this.abort && this.status === 'running') {
                 try {
+                    // Check abort flag before making request
+                    if (this.abort) {
+                        console.log(`🛑 [ConversationTask] Task ${this.taskId} aborted before AI request`);
+                        throw new Error(`Task ${this.taskId}.${this.instanceId} aborted`);
+                    }
+
                     // Make AI request with retry logic
                     const response = await this._makeAIRequestWithRetry();
 
                     if (!response) {
                         console.log('ℹ️ No response from AI (user canceled or error), ending task');
                         break;
+                    }
+
+                    // Check abort flag after AI response
+                    if (this.abort) {
+                        console.log(`🛑 [ConversationTask] Task ${this.taskId} aborted after AI response`);
+                        throw new Error(`Task ${this.taskId}.${this.instanceId} aborted`);
                     }
 
                     // Parse tool calls from response
@@ -397,6 +410,12 @@ ${dynamicContext}`;
 
                         // Execute all tool calls
                         const toolResults = await this._executeToolCalls(toolCalls);
+
+                        // Check abort flag after tool execution
+                        if (this.abort) {
+                            console.log(`🛑 [ConversationTask] Task ${this.taskId} aborted after tool execution`);
+                            throw new Error(`Task ${this.taskId}.${this.instanceId} aborted`);
+                        }
 
                         // Add tool results to conversation
                         for (const result of toolResults) {
@@ -549,6 +568,114 @@ ${dynamicContext}`;
             this.realtimeManager = null;
             this.realtimeConnected = false;
         }
+    }
+
+    /**
+     * Abort task execution
+     * Inspired by Kilos Task.abortTask() pattern
+     *
+     * @param {boolean} isAbandoned - Whether task was forcefully stopped
+     */
+    async abortTask(isAbandoned = false) {
+        console.log(`🛑 [ConversationTask ${this.taskId}.${this.instanceId}] Aborting task (abandoned: ${isAbandoned})`);
+
+        // Set flags to stop any running promises
+        if (isAbandoned) {
+            this.abandoned = true;
+        }
+        this.abort = true;
+        this.status = 'aborted';
+
+        // Emit abort event for listeners
+        this.emit('taskAborted', this.taskId);
+
+        // Call centralized disposal
+        try {
+            this.dispose();
+        } catch (error) {
+            console.error(`[ConversationTask ${this.taskId}] Error during disposal:`, error);
+            // Don't rethrow - abort must always succeed
+        }
+
+        // Save final conversation state
+        try {
+            await this._saveConversationToFile();
+        } catch (error) {
+            console.error(`[ConversationTask ${this.taskId}] Error saving conversation during abort:`, error);
+        }
+    }
+
+    /**
+     * Centralized resource disposal
+     * Inspired by Kilos Task.dispose() pattern
+     *
+     * Cleans up all resources to prevent memory leaks:
+     * 1. WebSocket connections
+     * 2. Event listeners
+     * 3. Abort controllers
+     * 4. File watchers
+     * 5. WeakRefs
+     */
+    dispose() {
+        console.log(`🧹 [ConversationTask ${this.taskId}.${this.instanceId}] Disposing task resources`);
+
+        // 1. Clean up WebSocket connection
+        try {
+            this._cleanupRealtimeConnection();
+        } catch (error) {
+            console.error('[ConversationTask] Error cleaning up WebSocket:', error);
+        }
+
+        // 2. Remove all event listeners (prevent memory leaks)
+        try {
+            this.removeAllListeners();
+            console.log('✅ [ConversationTask] Removed all event listeners');
+        } catch (error) {
+            console.error('[ConversationTask] Error removing event listeners:', error);
+        }
+
+        // 3. Abort any pending HTTP requests
+        try {
+            if (this.abortController) {
+                this.abortController.abort();
+                this.abortController = null;
+                console.log('✅ [ConversationTask] Aborted HTTP requests');
+            }
+        } catch (error) {
+            console.error('[ConversationTask] Error aborting HTTP requests:', error);
+        }
+
+        // 4. Dispose file change tracker
+        try {
+            if (this.fileChangeTracker) {
+                // FileChangeTracker doesn't have dispose, but clear references
+                this.fileChangeTracker = null;
+                console.log('✅ [ConversationTask] Cleared file change tracker');
+            }
+        } catch (error) {
+            console.error('[ConversationTask] Error disposing file tracker:', error);
+        }
+
+        // 5. Clear provider reference (WeakRef cleanup)
+        try {
+            if (this.providerRef) {
+                this.providerRef = null;
+                console.log('✅ [ConversationTask] Cleared provider reference');
+            }
+        } catch (error) {
+            console.error('[ConversationTask] Error clearing provider reference:', error);
+        }
+
+        // 6. Clear message arrays to free memory
+        try {
+            this.messages = [];
+            this.toolResults = [];
+            console.log('✅ [ConversationTask] Cleared message arrays');
+        } catch (error) {
+            console.error('[ConversationTask] Error clearing messages:', error);
+        }
+
+        console.log(`✅ [ConversationTask ${this.taskId}.${this.instanceId}] Disposal complete`);
     }
 
     /**
