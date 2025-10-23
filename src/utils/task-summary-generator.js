@@ -288,63 +288,136 @@ class TaskSummaryGenerator {
     /**
      * Generate markdown report
      */
-    static generateMarkdown(summary) {
-        let md = '# Task Summary Report\n\n';
-        md += `**Task ID:** ${summary.taskId}\n`;
-        md += `**Duration:** ${summary.duration.formatted}\n`;
-        md += `**Status:** ${summary.overview.status}\n\n`;
+    static generateMarkdown(summary, context = {}) {
+        const { workspaceName, version, reportId, taskDescription } = context;
+        let md = '';
 
-        md += '## Overview\n\n';
+        // Header with emoji and metadata
+        const statusIcon = summary.overview.status === 'completed_successfully' ? '✅' : '⚠️';
+        md += `# ${statusIcon} Task Completion Report\n\n`;
+        md += `**Workspace:** ${workspaceName || 'Unknown'}\n`;
+        md += `**Date:** ${new Date().toLocaleString()}\n`;
+        md += `**Status:** ${summary.overview.status === 'completed_successfully' ? '✅ Success' : '⚠️ Completed with issues'}\n`;
+        md += `**Duration:** ${summary.duration.formatted}\n\n`;
+
+        if (taskDescription) {
+            md += `## 📋 Task Description\n\n`;
+            md += `${taskDescription}\n\n`;
+        }
+
+        // Executive Summary
+        md += `## 📊 Executive Summary\n\n`;
         md += `${summary.overview.summary}\n\n`;
 
-        md += '### Statistics\n';
-        md += `- Files Created: ${summary.overview.filesCreated}\n`;
-        md += `- Files Modified: ${summary.overview.filesModified}\n`;
-        md += `- Tasks Completed: ${summary.overview.todosCompleted}/${summary.overview.todosTotal}\n`;
-        md += `- Errors: ${summary.overview.errorCount}\n\n`;
+        // Statistics Table
+        md += `### Statistics\n\n`;
+        md += `| Metric | Count |\n`;
+        md += `|--------|-------|\n`;
+        md += `| Files Created | ${summary.overview.filesCreated} |\n`;
+        md += `| Files Modified | ${summary.overview.filesModified} |\n`;
+        md += `| Files Deleted | ${summary.fileChanges.deleted?.length || 0} |\n`;
+        md += `| TODOs Completed | ${summary.overview.todosCompleted}/${summary.overview.todosTotal} |\n`;
+        if (summary.overview.todosTotal > 0) {
+            const completionRate = Math.round((summary.overview.todosCompleted / summary.overview.todosTotal) * 100);
+            md += `| TODO Completion Rate | ${completionRate}% |\n`;
+        }
+        md += `| Errors | ${summary.overview.errorCount} |\n\n`;
 
+        // File Changes - Detailed
         if (summary.fileChanges.created.length > 0) {
-            md += '## Files Created\n\n';
-            for (const file of summary.fileChanges.created) {
-                md += `- \`${file.filePath}\``;
+            md += `## 📄 Files Created\n\n`;
+            summary.fileChanges.created.forEach(file => {
+                md += `### ${file.filePath}\n\n`;
+                md += `**Status:** ✅ ${file.status || 'Created'}\n`;
                 if (file.description) {
-                    md += ` - ${file.description}`;
+                    md += `**Description:** ${file.description}\n`;
                 }
-                md += '\n';
-            }
-            md += '\n';
+                md += `\n`;
+            });
         }
 
         if (summary.fileChanges.modified.length > 0) {
-            md += '## Files Modified\n\n';
-            for (const file of summary.fileChanges.modified) {
-                md += `- \`${file.filePath}\``;
+            md += `## ✏️ Files Modified\n\n`;
+            summary.fileChanges.modified.forEach(file => {
+                md += `### ${file.filePath}\n\n`;
+                md += `**Status:** ✅ ${file.status || 'Modified'}\n`;
                 if (file.description) {
-                    md += ` - ${file.description}`;
+                    md += `**Description:** ${file.description}\n`;
                 }
-                md += '\n';
-            }
-            md += '\n';
+                md += `\n`;
+            });
         }
 
-        if (summary.validation.issues.length > 0) {
-            md += '## Issues\n\n';
-            for (const issue of summary.validation.issues) {
-                md += `- **[${issue.severity.toUpperCase()}]** ${issue.message}\n`;
-            }
-            md += '\n';
+        if (summary.fileChanges.deleted && summary.fileChanges.deleted.length > 0) {
+            md += `## 🗑️ Files Deleted\n\n`;
+            summary.fileChanges.deleted.forEach(file => {
+                md += `- ${file.filePath}\n`;
+            });
+            md += `\n`;
         }
 
+        // TODO Execution
+        if (summary.overview.todosTotal > 0) {
+            md += `## ✅ TODO Execution\n\n`;
+            const completionRate = Math.round((summary.overview.todosCompleted / summary.overview.todosTotal) * 100);
+            md += `**Completion Rate:** ${completionRate}% (${summary.overview.todosCompleted}/${summary.overview.todosTotal})\n\n`;
+
+            const completedTodos = summary.todos.completed || [];
+            const pendingTodos = summary.todos.pending || [];
+
+            if (completedTodos.length > 0) {
+                md += `### Completed Tasks\n\n`;
+                completedTodos.forEach((todo, i) => {
+                    md += `${i + 1}. ✅ ${todo.title || todo}\n`;
+                });
+                md += `\n`;
+            }
+
+            if (pendingTodos.length > 0) {
+                md += `### Pending Tasks\n\n`;
+                pendingTodos.forEach((todo, i) => {
+                    md += `${i + 1}. ⏳ ${todo.title || todo}\n`;
+                });
+                md += `\n`;
+            }
+        }
+
+        // Errors and Warnings
+        if (summary.overview.errorCount > 0 || summary.validation.issues.length > 0) {
+            md += `## ⚠️ Issues Encountered\n\n`;
+
+            if (summary.fileChanges.failed && summary.fileChanges.failed.length > 0) {
+                md += `### Failed Operations\n\n`;
+                summary.fileChanges.failed.forEach(file => {
+                    md += `- ❌ ${file.filePath}: ${file.error || 'Unknown error'}\n`;
+                });
+                md += `\n`;
+            }
+
+            if (summary.validation.issues.length > 0) {
+                md += `### Validation Issues\n\n`;
+                summary.validation.issues.forEach(issue => {
+                    const icon = issue.severity === 'error' ? '🔴' : issue.severity === 'warning' ? '🟡' : 'ℹ️';
+                    md += `- ${icon} **${issue.severity.toUpperCase()}**: ${issue.message}\n`;
+                });
+                md += `\n`;
+            }
+        }
+
+        // Recommendations
         if (summary.recommendations.length > 0) {
-            md += '## Recommendations\n\n';
-            for (const rec of summary.recommendations) {
-                md += `- ${rec.message}\n`;
-            }
-            md += '\n';
+            md += `## 💡 Recommendations\n\n`;
+            summary.recommendations.forEach(rec => {
+                const icon = rec.type === 'warning' ? '⚠️' : rec.type === 'info' ? 'ℹ️' : '💡';
+                md += `${icon} ${rec.message}\n\n`;
+            });
         }
 
-        md += '\n---\n';
-        md += `*Generated at ${new Date(summary.timestamp.generatedAt).toLocaleString()}*\n`;
+        // Footer
+        md += `---\n\n`;
+        md += `**Generated by:** Oropendola AI v${version || '2.6.0'}\n`;
+        md += `**Report ID:** ${reportId || summary.taskId}\n`;
+        md += `**Generated at:** ${new Date(summary.timestamp.generatedAt).toLocaleString()}\n`;
 
         return md;
     }

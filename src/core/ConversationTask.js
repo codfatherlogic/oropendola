@@ -493,6 +493,9 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
             this.emit('taskCompleted', this.taskId);
             console.log(`✅ Task ${this.taskId} completed`);
 
+            // Save conversation to file
+            await this._saveConversationToFile();
+
             // Generate and emit task summary
             this._emitTaskSummary();
 
@@ -982,7 +985,7 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
      * Execute a single tool call
      */
     async _executeSingleTool(toolCall) {
-        const { action, path, content, description, command } = toolCall;
+        const { action, path, content, description, command, old_string, new_string } = toolCall;
 
         switch (action) {
             case 'create_file':
@@ -992,10 +995,14 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
             case 'edit_file':
                 return await this._executeModifyFile(path, content, description);
 
+            case 'replace_string_in_file':
+                return await this._executeReplaceStringInFile(path, old_string, new_string, description);
+
             case 'read_file':
                 return await this._executeReadFile(path);
 
             case 'run_terminal':
+            case 'run_terminal_command':
             case 'execute_command':
                 return await this._executeTerminalCommand(command || content, description);
 
@@ -1112,6 +1119,94 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
     }
 
     /**
+     * Execute replace_string_in_file tool
+     * Replaces a specific string in a file with surgical precision
+     */
+    async _executeReplaceStringInFile(filePath, oldString, newString, description) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            // Read current file content
+            const content = await fs.readFile(fullPath, 'utf8');
+
+            // Safety: Check if old_string exists
+            if (!content.includes(oldString)) {
+                throw new Error(
+                    `String not found in ${filePath}:\n"${oldString.substring(0, 100)}${oldString.length > 100 ? '...' : ''}"`
+                );
+            }
+
+            // Safety: Check uniqueness
+            const occurrences = content.split(oldString).length - 1;
+            if (occurrences > 1) {
+                throw new Error(
+                    `String appears ${occurrences} times in ${filePath}. ` +
+                    `Please provide more context to make it unique, or use modify_file to replace the entire content.`
+                );
+            }
+
+            // Perform replacement
+            const newContent = content.replace(oldString, newString);
+
+            // Track change
+            this.fileChangeTracker.addChange(filePath, 'modify', {
+                description: description || `Replace string in ${filePath}`,
+                oldContent: content,
+                newContent: newContent,
+                operation: 'replace_string'
+            });
+
+            // Update status
+            this.fileChangeTracker.updateStatus(filePath, 'applying');
+
+            // Write file
+            await fs.writeFile(fullPath, newContent, 'utf8');
+
+            // Update status
+            this.fileChangeTracker.updateStatus(filePath, 'applied', {
+                newContent: newContent
+            });
+
+            console.log(`✅ Replaced string in file: ${filePath}`);
+
+            // Open file in editor to show changes
+            const document = await vscode.workspace.openTextDocument(fullPath);
+            await vscode.window.showTextDocument(document);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'replace_string_in_file',
+                content: `Successfully replaced string in ${filePath}`,
+                success: true,
+                changes: {
+                    occurrences: 1,
+                    oldLength: oldString.length,
+                    newLength: newString.length,
+                    diff: `${newString.length - oldString.length > 0 ? '+' : ''}${newString.length - oldString.length} characters`
+                }
+            };
+
+        } catch (error) {
+            // Track error
+            this.fileChangeTracker.updateStatus(filePath, 'failed', {
+                error: error.message
+            });
+            this.errors.push(error);
+
+            throw new Error(`Failed to replace string in ${filePath}: ${error.message}`);
+        }
+    }
+
+    /**
      * Execute read_file tool
      */
     async _executeReadFile(filePath) {
@@ -1142,11 +1237,80 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
     }
 
     /**
+     * Determine risk level of command
+     * Returns: 'safe', 'moderate', 'high'
+     */
+    _getCommandRiskLevel(command) {
+        const lowerCommand = command.toLowerCase();
+
+        // High risk: Destructive operations
+        const HIGH_RISK_KEYWORDS = [
+            'rm ', 'rmdir', 'del ', 'format', 'drop', 'truncate',
+            'dd ', 'mkfs', 'fdisk', 'parted', '> /dev/',
+            'chmod 777', 'chmod -r 777', 'chown -r',
+            'kill -9', 'killall', 'pkill',
+            'sudo rm', 'sudo del', 'curl | sh', 'wget | sh',
+            'eval', 'exec'
+        ];
+
+        // Moderate risk: System changes, installations
+        const MODERATE_RISK_KEYWORDS = [
+            'install', 'uninstall', 'remove', 'purge',
+            'apt-get', 'yum', 'dnf', 'pacman',
+            'brew', 'choco', 'winget',
+            'sudo', 'su ',
+            'git push', 'git reset --hard', 'git clean',
+            'docker rm', 'docker rmi', 'docker system prune'
+        ];
+
+        // Check high risk
+        if (HIGH_RISK_KEYWORDS.some(keyword => lowerCommand.includes(keyword))) {
+            return 'high';
+        }
+
+        // Check moderate risk
+        if (MODERATE_RISK_KEYWORDS.some(keyword => lowerCommand.includes(keyword))) {
+            return 'moderate';
+        }
+
+        // Default: safe
+        return 'safe';
+    }
+
+    /**
      * Execute terminal command in VS Code's integrated terminal
      * Shows command execution in the terminal panel at bottom of VS Code
      */
-    async _executeTerminalCommand(command, _description) {
+    async _executeTerminalCommand(command, description) {
         try {
+            // 🔒 Smart risk-based confirmation
+            const riskLevel = this._getCommandRiskLevel(command);
+
+            if (riskLevel === 'high') {
+                const confirm = await vscode.window.showWarningMessage(
+                    `🚨 HIGH RISK: This command may be destructive!\n\nCommand: ${command}\n\nAre you absolutely sure?`,
+                    { modal: true },
+                    'Yes, I understand the risk',
+                    'No, cancel'
+                );
+
+                if (confirm !== 'Yes, I understand the risk') {
+                    throw new Error('High-risk command cancelled by user');
+                }
+            } else if (riskLevel === 'moderate') {
+                const confirm = await vscode.window.showInformationMessage(
+                    `⚠️ This command will make system changes:\n\n${command}\n\nContinue?`,
+                    { modal: true },
+                    'Yes',
+                    'No'
+                );
+
+                if (confirm !== 'Yes') {
+                    throw new Error('Moderate-risk command cancelled by user');
+                }
+            }
+            // 'safe' commands run without confirmation
+
             // Get workspace path
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
@@ -1178,8 +1342,14 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
             // Show the terminal panel (but don't steal focus from editor)
             terminal.show(false);
 
-            // Show notification
-            vscode.window.showInformationMessage(`⚙️ Running: ${command}`);
+            // Show notification based on risk level
+            if (riskLevel === 'safe') {
+                // Silent execution for safe commands (output visible in terminal)
+                console.log(`✅ Executing safe command: ${command}`);
+            } else if (riskLevel === 'moderate') {
+                vscode.window.showInformationMessage(`⚙️ Running: ${description || command}`);
+            }
+            // High risk commands already showed confirmation dialog
 
             // Send command to terminal (will be visible to user)
             terminal.sendText(command);
@@ -1191,7 +1361,7 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
 
             return {
                 tool_use_id: this.taskId,
-                tool_name: 'run_terminal',
+                tool_name: 'run_terminal_command',
                 content: `Command executed successfully: $ ${command}
 
 Output will appear in the "Oropendola AI" terminal.`,
@@ -1454,6 +1624,18 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
                 return true; // Continue with implementation
             }
             
+            
+            // Check if todos were just created and need to be executed
+            if (this._lastTodoStats && this._lastTodoStats.total > 0 && this._lastTodoStats.completed === 0) {
+                console.log(`📋 TODOs created (${this._lastTodoStats.total} items) - beginning execution`);
+
+                // Gentle prompt to start execution (backend should handle this automatically)
+                this.addMessage('user', 'Great! Now start implementing TODO #1.', []);
+                // Reset todo stats so we don't loop
+                this._lastTodoStats = null;
+                return true; // Continue with execution
+            }
+            
             // Check if AI mentioned tools or actions but didn't execute them
             const mentionsTools = /create_file:|run_in_terminal:|package\.json|npm install/i.test(lastMessage.content);
             if (mentionsTools && !seemsComplete) {
@@ -1461,6 +1643,10 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
                 this.addMessage('user', 'Please actually create those files now using the available tools. Do not just describe what you would do - execute the actions.', []);
                 return true; // Continue
             }
+            
+            // Don't auto-continue indefinitely - let the user drive the conversation
+            // Only continue if there's clear indication more work is needed
+            console.log('ℹ️ AI response received, no clear continuation signal - task pausing');
         }
 
         console.log('✅ Task completion check passed - ready for next user input');
@@ -1689,16 +1875,82 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
     }
 
     /**
+     * Save conversation to a file in the workspace
+     * @private
+     */
+    async _saveConversationToFile() {
+        try {
+            const vscode = require('vscode');
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Get workspace folder
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                console.log('⚠️ No workspace folder open - cannot save conversation');
+                return;
+            }
+            
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const conversationsDir = path.join(workspacePath, '.oropendola', 'conversations');
+
+            // Create directory if it doesn't exist
+            if (!fs.existsSync(conversationsDir)) {
+                fs.mkdirSync(conversationsDir, { recursive: true });
+                // Add .oropendola to .gitignore
+                this._ensureGitignore(workspacePath);
+            }
+            
+            // Create filename with timestamp
+            const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+            const filename = `conversation_${timestamp}.md`;
+            const filepath = path.join(conversationsDir, filename);
+            
+            // Format conversation as markdown
+            let content = `# Oropendola AI Conversation\n\n`;
+            content += `**Task ID:** ${this.taskId}\n`;
+            content += `**Started:** ${this.taskStartTime}\n`;
+            content += `**Ended:** ${this.taskEndTime || new Date().toISOString()}\n`;
+            content += `**Status:** ${this.status}\n\n`;
+            content += `---\n\n`;
+            
+            // Add messages
+            for (const msg of this.messages) {
+                if (msg.role === 'system') continue; // Skip system prompts
+                
+                const role = msg.role === 'user' ? '**You:**' : '**Oropendola:**';
+                content += `### ${role}\n\n`;
+                content += `${msg.content}\n\n`;
+                content += `---\n\n`;
+            }
+            
+            // Write file
+            fs.writeFileSync(filepath, content, 'utf8');
+            console.log(`💾 Conversation saved to: ${filepath}`);
+            
+            // Emit event so UI can show notification
+            this.emit('conversationSaved', this.taskId, filepath);
+            
+        } catch (error) {
+            console.error('❌ Error saving conversation:', error);
+        }
+    }
+
+    /**
      * Generate and emit task summary (Qoder-style)
      * @private
      */
-    _emitTaskSummary() {
+    async _emitTaskSummary() {
         const TaskSummaryGenerator = require('../utils/task-summary-generator');
+        const ReportNameGenerator = require('../utils/report-name-generator');
+        const fs = require('fs').promises;
+        const path = require('path');
 
         // Get provider reference to access TODOs
         const provider = this.providerRef?.deref?.();
         const todos = provider?._todoManager?.getAllTodos() || [];
 
+        // Generate summary
         const summary = TaskSummaryGenerator.generate({
             taskId: this.taskId,
             startTime: this.taskStartTime,
@@ -1711,7 +1963,90 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
         });
 
         console.log('📊 Task Summary Generated:', summary.overview.summary);
-        this.emit('taskSummaryGenerated', this.taskId, summary);
+
+        // Try to save report to file
+        try {
+            // Get workspace info
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                console.warn('⚠️ No workspace folder - cannot save report');
+                this.emit('taskSummaryGenerated', this.taskId, summary);
+                return;
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const workspaceName = workspaceFolders[0].name;
+
+            // Generate report filename
+            const reportFileName = ReportNameGenerator.generate({
+                workspaceName,
+                fileChanges: summary.fileChanges,
+                todos: summary.todos,
+                errors: summary.overview.errorCount
+            });
+
+            // Create reports directory
+            const reportsDir = path.join(workspacePath, '.oropendola', 'reports');
+            await fs.mkdir(reportsDir, { recursive: true });
+
+            // Add .oropendola to .gitignore
+            this._ensureGitignore(workspacePath);
+
+            // Generate Markdown content
+            const markdownContent = TaskSummaryGenerator.generateMarkdown(summary, {
+                workspaceName,
+                version: '2.6.0',
+                reportId: this.taskId,
+                taskDescription: this._getTaskDescription()
+            });
+
+            // Save report
+            const reportPath = path.join(reportsDir, reportFileName);
+            await fs.writeFile(reportPath, markdownContent, 'utf8');
+
+            console.log(`📄 Report saved: ${reportPath}`);
+
+            // Open report in editor
+            const doc = await vscode.workspace.openTextDocument(reportPath);
+            await vscode.window.showTextDocument(doc, {
+                viewColumn: vscode.ViewColumn.Beside,
+                preview: false
+            });
+
+            // Emit with report path
+            this.emit('taskSummaryGenerated', this.taskId, summary, reportPath);
+
+            // Post message to webview if available
+            if (provider && provider._webview) {
+                provider._webview.postMessage({
+                    command: 'taskCompleted',
+                    summary: {
+                        status: summary.overview.status,
+                        filesCreated: summary.fileChanges.created.length,
+                        filesModified: summary.fileChanges.modified.length,
+                        todosCompleted: summary.overview.todosCompleted,
+                        todosTotal: summary.overview.todosTotal,
+                        reportPath: reportPath,
+                        reportName: reportFileName
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error('❌ Failed to save report:', error);
+            // Still emit summary even if save failed
+            this.emit('taskSummaryGenerated', this.taskId, summary);
+        }
+    }
+
+    /**
+     * Extract task description from conversation
+     * @private
+     */
+    _getTaskDescription() {
+        // Find first user message (usually the task request)
+        const firstUserMessage = this.messages.find(m => m.role === 'user');
+        return firstUserMessage ? firstUserMessage.content : null;
     }
 
     /**
@@ -1726,6 +2061,42 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
      */
     getFileChangeStats() {
         return this.fileChangeTracker.getStats();
+    }
+
+    /**
+     * Ensure .oropendola is added to .gitignore
+     * @private
+     */
+    _ensureGitignore(workspacePath) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const gitignorePath = path.join(workspacePath, '.gitignore');
+
+            let gitignoreContent = '';
+
+            // Read existing .gitignore if it exists
+            if (fs.existsSync(gitignorePath)) {
+                gitignoreContent = fs.readFileSync(gitignorePath, 'utf8');
+
+                // Check if .oropendola is already in .gitignore
+                if (gitignoreContent.includes('.oropendola')) {
+                    console.log('✅ .oropendola already in .gitignore');
+                    return;
+                }
+            }
+
+            // Add .oropendola to .gitignore
+            const newEntry = '\n# Oropendola AI - local workspace data\n.oropendola/\n';
+            gitignoreContent += newEntry;
+
+            fs.writeFileSync(gitignorePath, gitignoreContent, 'utf8');
+            console.log('✅ Added .oropendola/ to .gitignore');
+
+        } catch (error) {
+            console.error('⚠️ Failed to update .gitignore:', error.message);
+            // Non-critical error - don't throw
+        }
     }
 }
 

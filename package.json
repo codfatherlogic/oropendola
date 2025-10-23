@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v2.5.3: CSRF token fix + Sequential TODO execution",
-  "version": "2.5.3",
+  "description": "AI-powered assistant - v3.0.0: Phase 1-5 complete - Inline editing + Smart reports + Auto permissions",
+  "version": "3.0.0",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -383,6 +383,50 @@
           "type": "boolean",
           "default": true,
           "description": "Show diff view when editing code with AI"
+        },
+        "oropendola.approval.mode": {
+          "type": "string",
+          "enum": ["manual", "auto-safe", "auto-all"],
+          "default": "manual",
+          "description": "Approval mode for AI code changes",
+          "enumDescriptions": [
+            "Manual approval required for all changes",
+            "Auto-accept safe changes (tests, docs, new files)",
+            "Auto-accept all changes (use with caution!)"
+          ]
+        },
+        "oropendola.approval.autoAcceptPatterns": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [
+            "*.test.js",
+            "*.test.ts",
+            "*.spec.js",
+            "*.spec.ts",
+            "*.md",
+            "docs/**/*",
+            "test/**/*",
+            "tests/**/*"
+          ],
+          "description": "File patterns to auto-accept (glob patterns)"
+        },
+        "oropendola.approval.requireManualPatterns": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [
+            "package.json",
+            "package-lock.json",
+            "yarn.lock",
+            "*.config.js",
+            "*.config.ts",
+            ".env*",
+            "*.key",
+            "*.pem",
+            "*.crt",
+            "Dockerfile",
+            "docker-compose.yml"
+          ],
+          "description": "File patterns that always require manual approval (security-sensitive files)"
         },
         "oropendola.serverUrl": {
           "type": "string",

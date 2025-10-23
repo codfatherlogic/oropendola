@@ -46,21 +46,12 @@
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${message.role}`;
 
-        const headerDiv = document.createElement('div');
-        headerDiv.className = 'message-header';
-        
-        const icon = message.role === 'user' ? '👤' : 
-                     message.role === 'error' ? '❌' : '🤖';
-        
-        headerDiv.innerHTML = `<span class="icon">${icon}</span> ${formatTime(message.timestamp)}`;
-
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        
+
         // Process content for code blocks
         contentDiv.innerHTML = formatMessageContent(message.content);
 
-        messageDiv.appendChild(headerDiv);
         messageDiv.appendChild(contentDiv);
         messagesContainer.appendChild(messageDiv);
 
@@ -131,9 +122,6 @@
             loadingDiv.className = 'message assistant';
             loadingDiv.id = 'loading-indicator';
             loadingDiv.innerHTML = `
-                <div class="message-header">
-                    <span class="icon">🤖</span> Thinking...
-                </div>
                 <div class="message-content">
                     <span class="loading"></span>
                 </div>
