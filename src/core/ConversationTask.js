@@ -496,8 +496,13 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
             // Save conversation to file
             await this._saveConversationToFile();
 
-            // Generate and emit task summary
-            this._emitTaskSummary();
+            // Generate and emit task summary (only for complex tasks)
+            if (this._shouldGenerateReport()) {
+                console.log('📊 Generating report for complex task');
+                this._emitTaskSummary();
+            } else {
+                console.log('ℹ️ Skipping report generation for simple task');
+            }
 
         } catch (error) {
             // Don't emit error event for user cancellations
@@ -1934,6 +1939,56 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
         } catch (error) {
             console.error('❌ Error saving conversation:', error);
         }
+    }
+
+    /**
+     * Determine if a report should be generated for this task
+     * Only generate reports for complex tasks with significant work
+     * @private
+     * @returns {boolean} True if report should be generated
+     */
+    _shouldGenerateReport() {
+        // Get task metrics
+        const fileChanges = this.fileChangeTracker.getAllChanges();
+        const fileCount = fileChanges.length;
+        const errorCount = this.errors.length;
+        const messageCount = this.messages.length;
+
+        // Get TODOs if available
+        const provider = this.providerRef?.deref?.();
+        const todos = provider?._todoManager?.getAllTodos() || [];
+        const todoCount = todos.length;
+
+        // Criteria for complex task (generate report):
+        // 1. Multiple files created/modified (3+)
+        // 2. Many TODOs (5+)
+        // 3. Long conversation (10+ messages)
+        // 4. Errors encountered (2+)
+        // 5. User explicitly requested report
+
+        const hasMultipleFiles = fileCount >= 3;
+        const hasManyTodos = todoCount >= 5;
+        const isLongConversation = messageCount >= 10;
+        const hasSignificantErrors = errorCount >= 2;
+
+        // Check if user explicitly asked for a report
+        const userRequestedReport = this.messages.some(msg =>
+            msg.role === 'user' &&
+            typeof msg.content === 'string' &&
+            /\b(create|generate|make|write)\s+(a\s+)?(report|summary|documentation)\b/i.test(msg.content)
+        );
+
+        // Generate report if any of these conditions are met
+        const shouldGenerate = hasMultipleFiles || hasManyTodos || isLongConversation ||
+                              hasSignificantErrors || userRequestedReport;
+
+        if (shouldGenerate) {
+            console.log(`📊 Report criteria met: files=${fileCount}, todos=${todoCount}, messages=${messageCount}, errors=${errorCount}, requested=${userRequestedReport}`);
+        } else {
+            console.log(`ℹ️ Simple task - no report needed: files=${fileCount}, todos=${todoCount}, messages=${messageCount}`);
+        }
+
+        return shouldGenerate;
     }
 
     /**
