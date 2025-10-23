@@ -1,4 +1,5 @@
 const axios = require('axios');
+const vscode = require('vscode');
 
 /**
  * URLAnalyzer - Intelligently detects and processes URLs from chat input
@@ -13,6 +14,65 @@ class URLAnalyzer {
             gitUrl: /(?:git@|https?:\/\/)[\w.-]+[:/][\w.-]+\/[\w.-]+\.git/gi,
             webUrl: /https?:\/\/[^\s]+/gi
         };
+
+        // Get GitHub token from VS Code configuration
+        this.githubToken = this._getGitHubToken();
+
+        // Domains to skip from URL analysis (not repositories)
+        this.skipDomains = [
+            'claude.com',
+            'anthropic.com',
+            'openai.com',
+            'microsoft.com',
+            'google.com',
+            'npmjs.com',
+            'pypi.org',
+            'stackoverflow.com',
+            'youtube.com',
+            'twitter.com',
+            'linkedin.com'
+        ];
+    }
+
+    /**
+     * Get GitHub token from VS Code settings
+     * @private
+     */
+    _getGitHubToken() {
+        try {
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const token = config.get('github.token');
+
+            if (token) {
+                console.log('✅ GitHub token configured for URL analysis');
+                return token;
+            } else {
+                console.log('ℹ️ No GitHub token - using unauthenticated requests (60/hour limit)');
+                return null;
+            }
+        } catch (error) {
+            console.error('Error reading GitHub token:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Check if a URL should be skipped from analysis
+     * @param {string} url - URL to check
+     * @returns {boolean} True if URL should be skipped
+     * @private
+     */
+    _shouldSkipURL(url) {
+        try {
+            const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+            const hostname = urlObj.hostname.toLowerCase();
+
+            // Check if hostname matches any skip domain
+            return this.skipDomains.some(domain => hostname.includes(domain));
+        } catch (error) {
+            // Invalid URL format - skip it
+            return true;
+        }
     }
 
     /**
@@ -89,7 +149,16 @@ class URLAnalyzer {
             }
         }
 
-        return detectedUrls;
+        // Filter out URLs from skip domains
+        const filteredUrls = detectedUrls.filter(urlInfo => {
+            const shouldSkip = this._shouldSkipURL(urlInfo.url);
+            if (shouldSkip) {
+                console.log(`ℹ️ Skipping URL analysis for: ${urlInfo.url} (non-repo domain)`);
+            }
+            return !shouldSkip;
+        });
+
+        return filteredUrls;
     }
 
     /**
@@ -101,46 +170,38 @@ class URLAnalyzer {
         try {
             const apiUrl = `https://api.github.com/repos/${urlInfo.owner}/${urlInfo.repo}`;
 
+            // Build headers with optional authentication
+            const headers = {
+                Accept: 'application/vnd.github.v3+json',
+                'User-Agent': 'Oropendola-AI-Assistant'
+            };
+
+            // Add authentication if token is available
+            if (this.githubToken) {
+                headers['Authorization'] = `Bearer ${this.githubToken}`;
+            }
+
             // Get repository metadata
-            const repoResponse = await axios.get(apiUrl, {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'Oropendola-AI-Assistant'
-                }
-            });
+            const repoResponse = await axios.get(apiUrl, { headers });
 
             const repoData = repoResponse.data;
 
             // Get repository contents
             const contentsUrl = `${apiUrl}/contents/${urlInfo.path || ''}${urlInfo.branch ? `?ref=${urlInfo.branch}` : ''}`;
-            const contentsResponse = await axios.get(contentsUrl, {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'Oropendola-AI-Assistant'
-                }
-            });
+            const contentsResponse = await axios.get(contentsUrl, { headers });
 
             // Get README if exists
             let readme = null;
             try {
-                const readmeResponse = await axios.get(`${apiUrl}/readme`, {
-                    headers: {
-                        Accept: 'application/vnd.github.v3.raw',
-                        'User-Agent': 'Oropendola-AI-Assistant'
-                    }
-                });
+                const readmeHeaders = { ...headers, Accept: 'application/vnd.github.v3.raw' };
+                const readmeResponse = await axios.get(`${apiUrl}/readme`, { headers: readmeHeaders });
                 readme = readmeResponse.data;
             } catch (error) {
                 // README doesn't exist
             }
 
             // Get languages
-            const languagesResponse = await axios.get(`${apiUrl}/languages`, {
-                headers: {
-                    Accept: 'application/vnd.github.v3+json',
-                    'User-Agent': 'Oropendola-AI-Assistant'
-                }
-            });
+            const languagesResponse = await axios.get(`${apiUrl}/languages`, { headers });
 
             // Analyze file structure
             const fileStructure = this._analyzeFileStructure(contentsResponse.data);
