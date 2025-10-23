@@ -327,7 +327,9 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
 - Create TODO lists for multi-step tasks
 - Mark progress as you go (⏳ in-progress, ✅ completed)
 - Report what you did after each step
-- Never execute without a plan`;
+- Never execute without a plan
+
+${this._getFrameworkSpecificContext()}`;
 
                 this.addMessage('system', systemPrompt);
             }
@@ -1989,6 +1991,251 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
         }
 
         return shouldGenerate;
+    }
+
+    /**
+     * Get framework-specific context for system prompt
+     * @private
+     * @returns {string} Framework-specific instructions
+     */
+    _getFrameworkSpecificContext() {
+        // Check if workspace metadata contains framework info
+        if (!this.workspaceMetadata) {
+            return '';
+        }
+
+        const projectType = this.workspaceMetadata.type || '';
+        const projectTypeLower = projectType.toLowerCase();
+
+        // Frappe/ERPNext specific context
+        if (projectTypeLower.includes('frappe') || projectTypeLower.includes('erpnext')) {
+            return `
+
+**🔧 FRAPPE/ERPNEXT PROJECT DETECTED**
+
+You are working in a Frappe/ERPNext project. Follow these Frappe-specific guidelines:
+
+**FRAPPE TERMINOLOGY:**
+- **DocType** = Database table + Form + API (like Django models)
+- **App** = Frappe application module (collection of doctypes, pages, reports)
+- **Bench** = Frappe development environment (manages apps and sites)
+- **Site** = Instance of Frappe with specific apps installed
+
+**COMMON FRAPPE COMMANDS:**
+
+1. **Create New App:**
+   \`\`\`bash
+   bench new-app [app_name]
+   \`\`\`
+
+2. **Create DocType:**
+   - Use Frappe UI: Desk > DocType List > New
+   - OR via code: Create \`[app]/[app]/doctype/[doctype_name]/[doctype_name].json\`
+
+3. **Install App to Site:**
+   \`\`\`bash
+   bench --site [site_name] install-app [app_name]
+   \`\`\`
+
+4. **Migrate Database:**
+   \`\`\`bash
+   bench --site [site_name] migrate
+   \`\`\`
+
+5. **Create Controller (Python Logic):**
+   \`\`\`python
+   # [app]/[app]/doctype/[doctype]/[doctype].py
+   import frappe
+   from frappe.model.document import Document
+
+   class MyDocType(Document):
+       def validate(self):
+           # Validation logic
+           pass
+
+       def on_submit(self):
+           # Logic when document is submitted
+           pass
+   \`\`\`
+
+**FRAPPE PROJECT STRUCTURE:**
+\`\`\`
+frappe-bench/
+├── apps/
+│   ├── frappe/          # Core Frappe framework
+│   ├── erpnext/         # ERPNext (if installed)
+│   └── my_custom_app/   # Your custom app
+│       ├── my_custom_app/
+│       │   ├── hooks.py
+│       │   ├── doctype/
+│       │   │   └── my_doctype/
+│       │   │       ├── my_doctype.json
+│       │   │       ├── my_doctype.py
+│       │   │       └── my_doctype.js
+│       │   ├── www/     # Web pages
+│       │   └── api/     # REST API endpoints
+│       └── setup.py
+└── sites/
+    └── site1.local/
+        ├── site_config.json
+        └── private/
+\`\`\`
+
+**WHEN USER SAYS "CREATE DOCTYPE":**
+
+1. **Ask for details:**
+   - DocType name
+   - App name (which app to add it to)
+   - Fields needed
+   - Is it submittable? Is it a child table?
+
+2. **Create the DocType structure:**
+   \`\`\`python
+   # Create directory: apps/[app]/[app]/doctype/[doctype_name]/
+   # Create files:
+   # - [doctype_name].json (DocType definition)
+   # - [doctype_name].py (Controller)
+   # - [doctype_name].js (Client-side logic)
+   \`\`\`
+
+3. **Example DocType JSON:**
+   \`\`\`json
+   {
+       "name": "Customer Order",
+       "module": "My App",
+       "doctype": "DocType",
+       "is_submittable": 1,
+       "fields": [
+           {
+               "fieldname": "customer",
+               "label": "Customer",
+               "fieldtype": "Link",
+               "options": "Customer",
+               "reqd": 1
+           },
+           {
+               "fieldname": "order_date",
+               "label": "Order Date",
+               "fieldtype": "Date",
+               "default": "Today"
+           }
+       ]
+   }
+   \`\`\`
+
+**FRAPPE API PATTERNS:**
+\`\`\`python
+# Get document
+doc = frappe.get_doc("DocType Name", "document_name")
+
+# Create new document
+doc = frappe.new_doc("DocType Name")
+doc.field_name = "value"
+doc.insert()
+
+# Save changes
+doc.save()
+
+# Submit document
+doc.submit()
+
+# Database query
+customers = frappe.get_all("Customer",
+    filters={"status": "Active"},
+    fields=["name", "customer_name", "email"]
+)
+
+# Single value query
+count = frappe.db.count("Customer")
+
+# SQL query
+data = frappe.db.sql("""
+    SELECT name, creation
+    FROM \`tabCustomer\`
+    WHERE status = %(status)s
+""", {"status": "Active"}, as_dict=True)
+\`\`\`
+
+**HOOKS.PY - App Hooks:**
+\`\`\`python
+# apps/my_app/my_app/hooks.py
+app_name = "my_app"
+app_title = "My App"
+app_publisher = "Your Company"
+app_description = "My Custom Frappe App"
+app_version = "0.0.1"
+
+# Document Events
+doc_events = {
+    "Sales Order": {
+        "on_submit": "my_app.api.sales_order_submit"
+    }
+}
+
+# Scheduled Tasks
+scheduler_events = {
+    "daily": [
+        "my_app.tasks.daily_backup"
+    ]
+}
+\`\`\`
+
+**KEY REMINDERS:**
+- Always run \`bench migrate\` after creating/modifying DocTypes
+- Use \`frappe.db.commit()\` only when necessary (auto-commits on request end)
+- Check permissions with \`frappe.has_permission()\`
+- Use \`frappe.throw()\` to raise validation errors
+- Client-side: Use \`frappe.call()\` for server-side API calls
+
+**EXAMPLE TODO LIST FOR "CREATE DOCTYPE CUSTOMER":**
+
+📋 Tasks:
+- [ ] Create doctype directory: apps/my_app/my_app/doctype/customer/
+- [ ] Create customer.json with fields (name, email, phone)
+- [ ] Create customer.py controller with validation logic
+- [ ] Create customer.js for client-side behavior
+- [ ] Run bench migrate to create database table
+- [ ] Test DocType creation in Desk UI
+- [ ] Add permissions in customer.json
+
+Remember: Frappe has its own conventions! Always check:
+1. Is bench running? (\`bench start\`)
+2. Which site am I working on?
+3. Is the app installed on the site?
+4. Did I migrate after changes?
+`;
+        }
+
+        // Django specific context
+        if (projectTypeLower.includes('django')) {
+            return `
+
+**🐍 DJANGO PROJECT DETECTED**
+
+Use Django-specific patterns:
+- Models in \`models.py\`
+- Views in \`views.py\`
+- URLs in \`urls.py\`
+- Templates in \`templates/\`
+- Run migrations: \`python manage.py makemigrations && python manage.py migrate\`
+`;
+        }
+
+        // React specific context
+        if (projectTypeLower.includes('react')) {
+            return `
+
+**⚛️ REACT PROJECT DETECTED**
+
+Use React best practices:
+- Components in \`src/components/\`
+- Use hooks (useState, useEffect)
+- Props for data passing
+- Context for global state
+`;
+        }
+
+        return '';
     }
 
     /**

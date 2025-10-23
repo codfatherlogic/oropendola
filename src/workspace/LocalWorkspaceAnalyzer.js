@@ -111,7 +111,7 @@ class LocalWorkspaceAnalyzer {
                     .filter(line => line.trim() && !line.startsWith('#'))
                     .map(line => line.split('==')[0].trim());
 
-                analysis.projectType = this._detectPythonProjectType(analysis.dependencies);
+                analysis.projectType = this._detectPythonProjectType(analysis.dependencies, workspacePath);
                 analysis.configFiles.push('requirements.txt');
 
                 console.log(`🐍 Python project detected: ${analysis.projectType}`);
@@ -119,6 +119,13 @@ class LocalWorkspaceAnalyzer {
             } catch (error) {
                 console.warn('⚠️ Failed to parse requirements.txt:', error.message);
             }
+        }
+
+        // Check for Frappe/ERPNext project structure
+        const frappeDetected = this._detectFrappeProject(workspacePath, analysis);
+        if (frappeDetected) {
+            analysis.projectType = frappeDetected;
+            console.log(`📋 Frappe project detected: ${frappeDetected}`);
         }
 
         // Check for other project types
@@ -176,8 +183,13 @@ class LocalWorkspaceAnalyzer {
      * Detect Python project type from dependencies
      * @private
      */
-    _detectPythonProjectType(dependencies) {
+    _detectPythonProjectType(dependencies, workspacePath) {
         const deps = dependencies.map(d => d.toLowerCase());
+
+        // Check for Frappe/ERPNext
+        if (deps.includes('frappe') || deps.includes('erpnext')) {
+            return 'Frappe/ERPNext';
+        }
 
         if (deps.includes('django')) return 'Django';
         if (deps.includes('flask')) return 'Flask';
@@ -186,6 +198,61 @@ class LocalWorkspaceAnalyzer {
         if (deps.includes('pyramid')) return 'Pyramid';
 
         return 'Python';
+    }
+
+    /**
+     * Detect Frappe/ERPNext project by directory structure
+     * @private
+     */
+    _detectFrappeProject(workspacePath, analysis) {
+        try {
+            // Check for frappe-bench structure
+            const appsPath = path.join(workspacePath, 'apps');
+            const sitesPath = path.join(workspacePath, 'sites');
+            const benchConfigPath = path.join(workspacePath, 'config');
+
+            // Check if this is a bench directory
+            if (fs.existsSync(appsPath) && fs.existsSync(sitesPath)) {
+                analysis.configFiles.push('apps/', 'sites/');
+
+                // List apps in bench
+                const apps = fs.readdirSync(appsPath).filter(file => {
+                    const appPath = path.join(appsPath, file);
+                    return fs.statSync(appPath).isDirectory() && file !== '.DS_Store';
+                });
+
+                analysis.frappeApps = apps;
+                console.log(`📋 Frappe apps found: ${apps.join(', ')}`);
+
+                // Check if ERPNext is installed
+                if (apps.includes('erpnext')) {
+                    return 'ERPNext (Frappe Bench)';
+                }
+
+                return 'Frappe Bench';
+            }
+
+            // Check if this is a Frappe app directory
+            const hooksPath = path.join(workspacePath, 'hooks.py');
+            const appJsonPath = path.join(workspacePath, 'pyproject.toml');
+
+            if (fs.existsSync(hooksPath)) {
+                analysis.configFiles.push('hooks.py');
+
+                // Check for app name in parent directory
+                const appName = path.basename(workspacePath);
+                analysis.frappeApp = appName;
+
+                console.log(`📋 Frappe app detected: ${appName}`);
+                return 'Frappe App';
+            }
+
+            return null;
+
+        } catch (error) {
+            console.warn('⚠️ Error detecting Frappe project:', error.message);
+            return null;
+        }
     }
 
     /**
