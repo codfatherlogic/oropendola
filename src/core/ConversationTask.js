@@ -14,6 +14,15 @@ const EventEmitter = require('events');
 const vscode = require('vscode');
 const FileChangeTracker = require('../utils/file-change-tracker');
 const RealtimeManager = require('./RealtimeManager');
+const { MessageQueueService } = require('./MessageQueueService');
+const CheckpointService = require('../services/CheckpointService');
+const {
+    saveApiMessages,
+    saveTaskMessages,
+    saveTaskMetadata,
+    apiMessageToTaskMessage
+} = require('./task-persistence');
+const { withRetryPreset } = require('../utils/exponential-backoff');
 
 class ConversationTask extends EventEmitter {
     constructor(taskId, options = {}) {
@@ -30,8 +39,10 @@ class ConversationTask extends EventEmitter {
         this.mode = options.mode || 'agent'; // 'ask' | 'edit' | 'agent'
         this.providerRef = options.providerRef; // WeakRef to parent provider
 
-        // Conversation state
-        this.messages = [];
+        // Conversation state - Dual message tracking (Kilos pattern)
+        this.messages = [];           // Legacy - keeping for compatibility
+        this.apiMessages = [];        // API conversation history (for AI calls)
+        this.taskMessages = [];       // UI display messages (for user display)
         this.toolResults = [];
         this.conversationId = null;
 
@@ -58,6 +69,12 @@ class ConversationTask extends EventEmitter {
         // Real-time WebSocket connection
         this.realtimeManager = null;
         this.realtimeConnected = false;
+
+        // New services (Kilos-inspired architecture)
+        this.messageQueue = new MessageQueueService();
+        this.checkpointService = null;  // Initialized on first use
+        this.isPaused = false;          // Pause/resume support
+        this.storageDir = options.storageDir;  // For persistence
 
         // Initialize realtime connection if session cookies provided
         console.log('🔥 [ConversationTask] Checking realtime connection requirements...');
@@ -606,6 +623,61 @@ ${dynamicContext}`;
     }
 
     /**
+     * Pause task execution
+     * Inspired by Kilos pause pattern
+     */
+    async pauseTask() {
+        if (this.status !== 'running') {
+            console.warn(`⚠️ [ConversationTask] Cannot pause: task is ${this.status}`);
+            return;
+        }
+
+        console.log(`⏸️ [ConversationTask ${this.taskId}] Pausing task`);
+
+        this.isPaused = true;
+        this.status = 'paused';
+
+        // Pause message queue
+        if (this.messageQueue) {
+            this.messageQueue.pause();
+        }
+
+        // Emit pause event
+        this.emit('taskPaused', this.taskId);
+
+        // Save checkpoint before pausing
+        await this._saveCheckpoint('pause');
+
+        console.log(`✅ [ConversationTask ${this.taskId}] Task paused`);
+    }
+
+    /**
+     * Resume task execution
+     * Inspired by Kilos resume pattern
+     */
+    async resumeTask() {
+        if (this.status !== 'paused') {
+            console.warn(`⚠️ [ConversationTask] Cannot resume: task is ${this.status}`);
+            return;
+        }
+
+        console.log(`▶️ [ConversationTask ${this.taskId}] Resuming task`);
+
+        this.isPaused = false;
+        this.status = 'running';
+
+        // Resume message queue
+        if (this.messageQueue) {
+            await this.messageQueue.resume();
+        }
+
+        // Emit resume event
+        this.emit('taskResumed', this.taskId);
+
+        console.log(`✅ [ConversationTask ${this.taskId}] Task resumed`);
+    }
+
+    /**
      * Centralized resource disposal
      * Inspired by Kilos Task.dispose() pattern
      *
@@ -615,6 +687,9 @@ ${dynamicContext}`;
      * 3. Abort controllers
      * 4. File watchers
      * 5. WeakRefs
+     * 6. Message queue
+     * 7. Checkpoint service
+     * 8. Message arrays
      */
     dispose() {
         console.log(`🧹 [ConversationTask ${this.taskId}.${this.instanceId}] Disposing task resources`);
@@ -666,9 +741,33 @@ ${dynamicContext}`;
             console.error('[ConversationTask] Error clearing provider reference:', error);
         }
 
-        // 6. Clear message arrays to free memory
+        // 6. Dispose message queue service
+        try {
+            if (this.messageQueue) {
+                this.messageQueue.dispose();
+                this.messageQueue = null;
+                console.log('✅ [ConversationTask] Disposed message queue');
+            }
+        } catch (error) {
+            console.error('[ConversationTask] Error disposing message queue:', error);
+        }
+
+        // 7. Dispose checkpoint service
+        try {
+            if (this.checkpointService) {
+                this.checkpointService.dispose();
+                this.checkpointService = null;
+                console.log('✅ [ConversationTask] Disposed checkpoint service');
+            }
+        } catch (error) {
+            console.error('[ConversationTask] Error disposing checkpoint service:', error);
+        }
+
+        // 8. Clear message arrays to free memory
         try {
             this.messages = [];
+            this.apiMessages = [];
+            this.taskMessages = [];
             this.toolResults = [];
             console.log('✅ [ConversationTask] Cleared message arrays');
         } catch (error) {
@@ -2570,6 +2669,162 @@ Use React best practices:
             console.error('⚠️ Failed to update .gitignore:', error.message);
             // Non-critical error - don't throw
         }
+    }
+
+    /**
+     * ========================================
+     * NEW METHODS - Kilos-inspired enhancements
+     * ========================================
+     */
+
+    /**
+     * Initialize checkpoint service on first use
+     * @private
+     */
+    async _initializeCheckpointService() {
+        if (this.checkpointService) {
+            return;
+        }
+
+        if (!this.storageDir) {
+            console.warn('⚠️ [ConversationTask] No storage directory - checkpoints disabled');
+            return;
+        }
+
+        const workspaceDir = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceDir) {
+            console.warn('⚠️ [ConversationTask] No workspace - checkpoints disabled');
+            return;
+        }
+
+        this.checkpointService = new CheckpointService(
+            this.taskId,
+            workspaceDir,
+            this.storageDir
+        );
+
+        await this.checkpointService.initialize();
+        console.log('✅ [ConversationTask] Checkpoint service initialized');
+    }
+
+    /**
+     * Save a checkpoint
+     * @param {string} description - Checkpoint description
+     * @private
+     */
+    async _saveCheckpoint(description) {
+        try {
+            await this._initializeCheckpointService();
+
+            if (!this.checkpointService) {
+                return;
+            }
+
+            const checkpointId = await this.checkpointService.save({
+                force: false,
+                suppressMessage: true,
+                description
+            });
+
+            if (checkpointId) {
+                console.log(`💾 [ConversationTask] Checkpoint saved: ${description}`);
+            }
+
+        } catch (error) {
+            console.error('[ConversationTask] Error saving checkpoint:', error);
+            // Non-critical - don't throw
+        }
+    }
+
+    /**
+     * Save task state to persistence
+     * @private
+     */
+    async _saveTaskState() {
+        if (!this.storageDir) {
+            return;
+        }
+
+        try {
+            // Save API messages
+            await saveApiMessages(this.taskId, this.apiMessages, this.storageDir);
+
+            // Save task messages
+            await saveTaskMessages(this.taskId, this.taskMessages, this.storageDir);
+
+            // Save metadata
+            const metadata = {
+                taskId: this.taskId,
+                instanceId: this.instanceId,
+                status: this.status,
+                mode: this.mode,
+                conversationId: this.conversationId,
+                createdAt: this.createdAt,
+                completedAt: this.taskEndTime,
+                consecutiveMistakeCount: this.consecutiveMistakeCount,
+                fileChanges: this.fileChangeTracker.getAllChanges()
+            };
+
+            await saveTaskMetadata(this.taskId, metadata, this.storageDir);
+
+            console.log(`💾 [ConversationTask] Task state saved for ${this.taskId}`);
+
+        } catch (error) {
+            console.error('[ConversationTask] Error saving task state:', error);
+            // Non-critical - don't throw
+        }
+    }
+
+    /**
+     * Add message with dual tracking
+     * Updates both legacy messages array and new dual tracking arrays
+     *
+     * @param {string} role - Message role
+     * @param {string} content - Message content
+     * @param {Array} images - Optional images
+     * @param {string} toolName - Optional tool name
+     */
+    addMessage(role, content, images = [], toolName = null) {
+        // Legacy behavior - keep for compatibility
+        const message = {
+            role,
+            content,
+            images: images || []
+        };
+
+        if (toolName) {
+            message.tool_name = toolName;
+        }
+
+        this.messages.push(message);
+
+        // NEW: Dual message tracking
+        // Add to API messages (for AI calls)
+        this.apiMessages.push(message);
+
+        // Add to task messages (for UI display)
+        const taskMessage = apiMessageToTaskMessage(message);
+        this.taskMessages.push(taskMessage);
+
+        console.log(`📝 [ConversationTask] Added ${role} message (dual tracking enabled)`);
+    }
+
+    /**
+     * Get task state for resumption
+     * @returns {Object} Task state
+     */
+    getTaskState() {
+        return {
+            taskId: this.taskId,
+            instanceId: this.instanceId,
+            status: this.status,
+            mode: this.mode,
+            conversationId: this.conversationId,
+            apiMessages: this.apiMessages,
+            taskMessages: this.taskMessages,
+            isPaused: this.isPaused,
+            fileChanges: this.fileChangeTracker.getAllChanges()
+        };
     }
 }
 
