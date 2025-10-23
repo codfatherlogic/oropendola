@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.0.0: Phase 1-5 complete - Inline editing + Smart reports + Auto permissions",
-  "version": "3.0.0",
+  "description": "AI-powered assistant - v3.1.0: Dynamic framework understanding + Smart reports + Inline editing",
+  "version": "3.1.0",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
