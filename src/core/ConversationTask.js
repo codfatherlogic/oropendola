@@ -171,12 +171,16 @@ class ConversationTask extends EventEmitter {
 
             // Add system prompt if not already present
             // Check if we already have a system message with the "THINK OUT LOUD" prompt
-            const hasSystemPrompt = this.messages.some(msg => 
+            const hasSystemPrompt = this.messages.some(msg =>
                 msg.role === 'system' && msg.content.includes('THINK OUT LOUD')
             );
 
             if (!hasSystemPrompt) {
-                console.log('📝 Adding progressive implementation system prompt');
+                console.log('📝 Adding progressive implementation system prompt with dynamic context');
+
+                // Get dynamic context from codebase analysis (async)
+                const dynamicContext = await this._getDynamicCodebaseContext();
+
                 const systemPrompt = `You are an intelligent AI coding assistant integrated into VS Code that works progressively and iteratively.
 
 **CRITICAL GUIDELINES - PROGRESSIVE IMPLEMENTATION:**
@@ -329,7 +333,7 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
 - Report what you did after each step
 - Never execute without a plan
 
-${this._getFrameworkSpecificContext()}`;
+${dynamicContext}`;
 
                 this.addMessage('system', systemPrompt);
             }
@@ -1994,11 +1998,51 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
     }
 
     /**
-     * Get framework-specific context for system prompt
+     * Get dynamically discovered codebase context
+     * @private
+     * @returns {Promise<string>} Dynamic context based on codebase analysis
+     */
+    async _getDynamicCodebaseContext() {
+        try {
+            // Get workspace path
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                return '';
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+
+            // Dynamically analyze codebase patterns
+            const CodebasePatternAnalyzer = require('../analysis/CodebasePatternAnalyzer');
+            const analyzer = new CodebasePatternAnalyzer();
+
+            console.log('🔍 Dynamically discovering codebase patterns...');
+            const patterns = await analyzer.analyzePatterns(workspacePath);
+
+            // Build context from discovered patterns
+            const DynamicContextBuilder = require('../analysis/DynamicContextBuilder');
+            const context = DynamicContextBuilder.buildContext(patterns);
+
+            console.log('✅ Dynamic context built from codebase analysis');
+
+            return context;
+
+        } catch (error) {
+            console.warn('⚠️ Error building dynamic context:', error.message);
+            return '';
+        }
+    }
+
+    /**
+     * Get framework-specific context for system prompt (DEPRECATED - keeping for fallback)
      * @private
      * @returns {string} Framework-specific instructions
+     * @deprecated Use _getDynamicCodebaseContext() instead
      */
     _getFrameworkSpecificContext() {
+        // DEPRECATED: This method uses hardcoded framework knowledge
+        // Kept only as fallback if dynamic analysis fails
+
         // Check if workspace metadata contains framework info
         if (!this.workspaceMetadata) {
             return '';
@@ -2007,7 +2051,7 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
         const projectType = this.workspaceMetadata.type || '';
         const projectTypeLower = projectType.toLowerCase();
 
-        // Frappe/ERPNext specific context
+        // Minimal fallback context - encourage AI to discover patterns
         if (projectTypeLower.includes('frappe') || projectTypeLower.includes('erpnext')) {
             return `
 
