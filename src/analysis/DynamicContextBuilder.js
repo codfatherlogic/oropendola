@@ -26,7 +26,7 @@ class DynamicContextBuilder {
         context += this._buildDependenciesContext(patterns.dependencies);
 
         // File patterns
-        context += this._buildFilePatterns Context(patterns.filePatterns);
+        context += this._buildFilePatternsContext(patterns.filePatterns);
 
         // Import patterns
         context += this._buildImportPatternsContext(patterns.importPatterns);
