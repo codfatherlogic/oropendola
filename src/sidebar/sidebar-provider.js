@@ -2141,16 +2141,16 @@ class OropendolaSidebarProvider {
             // Run the task (handles everything automatically: retries, context, tools)
             console.log('🚀 Starting task execution');
 
-            // Add safety timeout - if task takes longer than 180 seconds, force reset UI
+            // Add safety timeout - if task takes longer than 600 seconds, force reset UI
             const safetyTimeout = setTimeout(() => {
-                console.warn('⚠️ Safety timeout triggered - forcing UI reset after 180s');
+                console.warn('⚠️ Safety timeout triggered - forcing UI reset after 600s');
                 if (this._view) {
                     this._view.webview.postMessage({ type: 'hideTyping' });
                     this._view.webview.postMessage({
                         type: 'addMessage',
                         message: {
                             role: 'system',
-                            content: '⚠️ Request timed out. The backend may be experiencing issues. Please try again or contact support.'
+                            content: '⚠️ Request timed out after 10 minutes. The backend may be experiencing issues. Please try again or contact support.'
                         }
                     });
                 }
@@ -2158,7 +2158,7 @@ class OropendolaSidebarProvider {
                 if (this._currentTask) {
                     this._currentTask.abortTask();
                 }
-            }, 180000); // 180 seconds
+            }, 600000); // 600 seconds (10 minutes)
 
             try {
                 await this._currentTask.run(enhancedText, attachments);

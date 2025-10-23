@@ -73,11 +73,16 @@ class TelemetryService {
                 },
                 {
                     timeout: 5000,
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: {
+                        'Content-Type': 'application/json'
+                        // Do not add 'Expect' header - causes 417 errors
+                    },
+                    maxRedirects: 0, // Prevents axios from adding Expect: 100-continue header
+                    validateStatus: (status) => status >= 200 && status < 500 // Accept 4xx as valid (log and continue)
                 }
             );
         } catch (error) {
-            console.error('Failed to send telemetry:', error);
+            console.error('Failed to send telemetry:', error.message || error);
             // Re-queue failed events (up to a limit)
             if (this.eventQueue.length < 100) {
                 this.eventQueue.push(...eventsToSend);
