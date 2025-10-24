@@ -34,5 +34,6 @@ export type MessageType =
   | 'updateTodos'
   | 'fileChangeAdded'
   | 'fileChangeUpdated'
+  | 'requestCommandConfirmation'
   | 'loginSuccess'
   | 'loginError';

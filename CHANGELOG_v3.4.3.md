@@ -246,6 +246,25 @@ statusBarManager.hideAll()
 
 ---
 
+## 🐛 Bug Fixes (Post-Release)
+
+### Critical: .toFixed() on Undefined Values ✅ FIXED
+**Issue:** `TypeError: Cannot read properties of undefined (reading 'toFixed')`
+
+**Fixed 6 locations:**
+1. ✅ Task report generator - framework confidence (task-summary-generator.js:384)
+2. ✅ Workspace memory size display (extension.js:589)
+3. ✅ Backend test cost display (extension.js:1431)
+4. ✅ Analytics total cost (extension.js:1341)
+5. ✅ Analytics provider cost (extension.js:1345)
+6. ✅ Framework detection context (ConversationTask.js:2706)
+
+**Solution:** Added proper null/undefined checks before all `.toFixed()` calls
+
+See [BUGFIX_toFixed_v3.4.3.md](BUGFIX_toFixed_v3.4.3.md) for detailed analysis.
+
+---
+
 ## 🐛 Known Issues
 
 1. **Status Bar Framework Update:**

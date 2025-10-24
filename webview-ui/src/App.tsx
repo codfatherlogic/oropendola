@@ -3,17 +3,21 @@ import { Header } from './components/Header';
 import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { EnhancedTodoPanel } from './components/EnhancedTodoPanel';
+import { FileChangesPanel } from './components/FileChangesPanel';
 import { useVSCode } from './hooks/useVSCode';
-import { Message, TodoItem, MessageType } from './types';
+import { Message, TodoItem, FileChange, MessageType } from './types';
 
 const App: React.FC = () => {
   const { postMessage, onMessage } = useVSCode();
   const [messages, setMessages] = useState<Message[]>([]);
   const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [mode, setMode] = useState<'ask' | 'agent'>('agent');
   const [thinkingStatus, setThinkingStatus] = useState<string | undefined>();
+  const [currentFile, setCurrentFile] = useState<string | undefined>();
+  const [pendingCommand, setPendingCommand] = useState<{command: string, riskLevel: string} | null>(null);
 
   useEffect(() => {
     const cleanup = onMessage((message) => {
@@ -29,16 +33,39 @@ const App: React.FC = () => {
           setIsTyping(true);
           setIsGenerating(true);
           setThinkingStatus(message.status || 'Thinking...');
+          setCurrentFile(message.currentFile);
           break;
 
         case 'hideTyping':
           setIsTyping(false);
           setIsGenerating(false);
           setThinkingStatus(undefined);
+          setCurrentFile(undefined);
           break;
 
         case 'updateTodos':
           setTodos(message.todos || []);
+          break;
+
+        case 'fileChangeAdded':
+          if (message.fileChange) {
+            setFileChanges((prev) => [...prev, message.fileChange]);
+          }
+          break;
+
+        case 'fileChangeUpdated':
+          if (message.fileChange) {
+            setFileChanges((prev) =>
+              prev.map((fc) => (fc.path === message.fileChange.path ? message.fileChange : fc))
+            );
+          }
+          break;
+
+        case 'requestCommandConfirmation':
+          setPendingCommand({
+            command: message.command,
+            riskLevel: message.riskLevel
+          });
           break;
 
         case 'loginSuccess':
@@ -138,6 +165,40 @@ const App: React.FC = () => {
     postMessage({ type: 'syncTodos' });
   };
 
+  const handleAcceptFileChange = (path: string) => {
+    postMessage({
+      type: 'acceptFileChange',
+      filePath: path
+    });
+  };
+
+  const handleRejectFileChange = (path: string) => {
+    postMessage({
+      type: 'rejectFileChange',
+      filePath: path
+    });
+  };
+
+  const handleAddContext = () => {
+    postMessage({ type: 'addContext' });
+  };
+
+  const handleConfirmCommand = () => {
+    postMessage({
+      type: 'commandConfirmationResponse',
+      confirmed: true
+    });
+    setPendingCommand(null);
+  };
+
+  const handleCancelCommand = () => {
+    postMessage({
+      type: 'commandConfirmationResponse',
+      confirmed: false
+    });
+    setPendingCommand(null);
+  };
+
   return (
     <div className="app-container">
       <Header
@@ -152,6 +213,34 @@ const App: React.FC = () => {
         onAcceptPlan={handleAcceptPlan}
         onRejectPlan={handleRejectPlan}
         mode={mode}
+      />
+      {pendingCommand && (
+        <div className="command-confirmation-panel">
+          <div className="command-confirmation-header">
+            <span className="command-icon">▶</span>
+            <span className="command-title">Run in terminal</span>
+            {pendingCommand.riskLevel === 'high' && (
+              <span className="risk-badge risk-high">Potential risks detected</span>
+            )}
+          </div>
+          <div className="command-preview">
+            <code>{pendingCommand.command}</code>
+          </div>
+          <div className="command-actions">
+            <button className="command-btn command-run" onClick={handleConfirmCommand}>
+              Run ⌘↵
+            </button>
+            <button className="command-btn command-cancel" onClick={handleCancelCommand}>
+              Cancel ⌘⌫
+            </button>
+          </div>
+        </div>
+      )}
+      <FileChangesPanel
+        fileChanges={fileChanges}
+        visible={fileChanges.length > 0}
+        onAccept={handleAcceptFileChange}
+        onReject={handleRejectFileChange}
       />
       <EnhancedTodoPanel
         todos={todos}
@@ -168,6 +257,8 @@ const App: React.FC = () => {
         isGenerating={isGenerating}
         mode={mode}
         onModeChange={handleModeChange}
+        onAddContext={handleAddContext}
+        currentFile={currentFile}
       />
     </div>
   );

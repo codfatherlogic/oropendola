@@ -1,0 +1,980 @@
+/*
+ * Clean UI Overrides - v3.4.3
+ * Modern, compact design inspired by GitHub/Linear
+ */
+
+/* ========================================
+   GLOBAL COMPACT SPACING
+   ======================================== */
+.messages-container {
+  padding: 12px 14px !important;
+  gap: 12px !important;
+}
+
+/* ========================================
+   CLEANER MESSAGES
+   ======================================== */
+.message {
+  padding: 10px 14px !important;
+  border-radius: 6px !important;
+  min-height: unset !important;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border) !important;
+}
+
+.message-user,
+.message-assistant {
+  padding: 10px 14px 10px 18px !important;
+}
+
+/* Thinner accent bars */
+.message-user::before,
+.message-assistant::before,
+.message-error::before {
+  width: 3px !important;
+}
+
+/* ========================================
+   COMPACT MESSAGE HEADER
+   ======================================== */
+.message-header {
+  margin-bottom: 6px !important;
+  padding-bottom: 4px !important;
+  border-bottom: none !important;
+}
+
+/* Hide "YOU" and "ASSISTANT" labels for cleaner UI */
+.message-label {
+  display: none !important;
+}
+
+/* Hide message icon badges (U/AI) */
+.message-icon {
+  display: none !important;
+}
+
+/* Hide entire message header for ultra-clean UI */
+.message-header {
+  display: none !important;
+}
+
+.copy-btn {
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+}
+
+/* ========================================
+   COMPACT MESSAGE CONTENT
+   ======================================== */
+.message-content {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+.message-content p {
+  margin: 4px 0 !important;
+}
+
+.message-content ul,
+.message-content ol {
+  margin: 6px 0 !important;
+  padding-left: 20px !important;
+}
+
+.message-content li {
+  margin: 2px 0 !important;
+}
+
+/* Compact code blocks */
+.message pre {
+  padding: 8px 10px !important;
+  margin: 6px 0 !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+}
+
+.message code {
+  padding: 2px 4px !important;
+  font-size: 12px !important;
+  border-radius: 3px !important;
+}
+
+/* ========================================
+   COMPACT FILE CHANGES (GitHub Style)
+   ======================================== */
+.file-changes {
+  margin: 8px 0 !important;
+  padding: 0 !important;
+}
+
+.file-changes-header {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  color: var(--vscode-descriptionForeground) !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.file-changes-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.file-change-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 8px !important;
+  background: var(--vscode-editor-background) !important;
+  border-radius: 3px !important;
+  font-size: 12px !important;
+  font-family: var(--vscode-editor-font-family), monospace !important;
+  transition: background 0.15s !important;
+}
+
+.file-change-item:hover {
+  background: var(--vscode-list-hoverBackground) !important;
+}
+
+.file-change-icon {
+  font-size: 11px !important;
+  flex-shrink: 0 !important;
+  width: 14px !important;
+  text-align: center !important;
+}
+
+.file-change-path {
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.file-change-status {
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+}
+
+.file-change-status.added {
+  background: rgba(46, 204, 113, 0.15) !important;
+  color: #2ecc71 !important;
+}
+
+.file-change-status.modified {
+  background: rgba(255, 193, 7, 0.15) !important;
+  color: #ffc107 !important;
+}
+
+.file-change-status.deleted {
+  background: rgba(231, 76, 60, 0.15) !important;
+  color: #e74c3c !important;
+}
+
+/* ========================================
+   COMPACT TODO PANEL (Linear Style)
+   ======================================== */
+.enhanced-todo-panel {
+  margin: 8px 12px !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  background: var(--vscode-editor-background) !important;
+}
+
+.todo-header {
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--vscode-panel-border) !important;
+}
+
+.todo-title {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.todo-icon {
+  font-size: 13px !important;
+}
+
+.todo-count {
+  font-size: 11px !important;
+  color: var(--vscode-descriptionForeground) !important;
+  font-weight: 500 !important;
+}
+
+.panel-collapse-arrow {
+  font-size: 10px !important;
+  padding: 2px !important;
+  color: var(--vscode-descriptionForeground) !important;
+}
+
+.todo-actions {
+  gap: 2px !important;
+}
+
+.todo-action-btn {
+  padding: 4px 6px !important;
+  font-size: 12px !important;
+  border-radius: 3px !important;
+}
+
+/* ========================================
+   COMPACT TODO ITEMS
+   ======================================== */
+.todo-content {
+  padding: 4px !important;
+}
+
+.todo-list {
+  gap: 2px !important;
+}
+
+.todo-item {
+  padding: 6px 8px !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  gap: 6px !important;
+  transition: background 0.15s !important;
+}
+
+.todo-item:hover {
+  background: var(--vscode-list-hoverBackground) !important;
+}
+
+.todo-checkbox {
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 3px !important;
+  font-size: 10px !important;
+}
+
+.todo-content-text {
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+.todo-delete-btn {
+  font-size: 11px !important;
+  padding: 2px 4px !important;
+}
+
+/* In-progress indicator */
+.todo-item.in_progress {
+  border-left: 2px solid #ffc107 !important;
+  padding-left: 6px !important;
+  background: rgba(255, 193, 7, 0.05) !important;
+}
+
+/* ========================================
+   COMPACT THINKING STATUS
+   ======================================== */
+.thinking-status {
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  background: var(--vscode-editor-background) !important;
+  border-radius: 4px !important;
+  margin: 4px 8px !important;
+}
+
+.thinking-dot {
+  font-size: 8px !important;
+}
+
+.thinking-text {
+  font-size: 11px !important;
+}
+
+/* ========================================
+   COMPACT INPUT AREA
+   ======================================== */
+.input-container {
+  padding: 10px 12px !important;
+}
+
+.input-field {
+  padding: 8px 10px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+  min-height: 36px !important;
+  max-height: 120px !important;
+}
+
+.send-button,
+.stop-button {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 6px !important;
+  font-size: 16px !important;
+}
+
+.mode-dropdown {
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+}
+
+.mode-label {
+  font-size: 10px !important;
+}
+
+/* ========================================
+   COMPACT ACTION BUTTONS
+   ======================================== */
+.message-actions {
+  margin-top: 8px !important;
+  padding-top: 8px !important;
+  gap: 6px !important;
+}
+
+.message-action-btn {
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  border-radius: 4px !important;
+}
+
+/* ========================================
+   COMPACT EMPTY STATE
+   ======================================== */
+.empty-state {
+  padding: 16px !important;
+}
+
+.empty-icon {
+  font-size: 36px !important;
+  margin-bottom: 12px !important;
+}
+
+.empty-title {
+  font-size: 14px !important;
+  margin-bottom: 6px !important;
+}
+
+.empty-desc {
+  font-size: 12px !important;
+}
+
+.suggestion-btn {
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  border-radius: 4px !important;
+}
+
+/* ========================================
+   COMPACT HEADER
+   ======================================== */
+.header {
+  padding: 10px 14px !important;
+}
+
+.header-title {
+  font-size: 12px !important;
+  gap: 6px !important;
+}
+
+.header-title img {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.icon-button {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 13px !important;
+  padding: 4px !important;
+}
+
+/* ========================================
+   COMPACT STATS
+   ======================================== */
+.todo-stats {
+  padding: 6px 8px !important;
+  margin-top: 8px !important;
+  padding-top: 8px !important;
+  gap: 10px !important;
+  font-size: 10px !important;
+}
+
+.todo-stat {
+  gap: 3px !important;
+}
+
+/* ========================================
+   SCROLLBAR STYLING
+   ======================================== */
+.messages-container::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background) !important;
+  border-radius: 4px !important;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground) !important;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================== */
+@media (max-width: 400px) {
+  .messages-container {
+    padding: 8px !important;
+    gap: 8px !important;
+  }
+
+  .message {
+    padding: 8px 10px !important;
+  }
+
+  .message-content {
+    font-size: 12px !important;
+  }
+}
+
+/* ========================================
+   ANIMATION IMPROVEMENTS
+   ======================================== */
+.message {
+  animation: slideIn 0.2s ease-out !important;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================
+   FOCUS STYLES
+   ======================================== */
+.input-field:focus {
+  border-color: var(--vscode-focusBorder) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder) !important;
+}
+
+button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder) !important;
+  outline-offset: 1px !important;
+}
+
+/* ========================================
+   IMPROVED HIERARCHY
+   ======================================== */
+h1, h2, h3, h4, h5, h6 {
+  margin: 8px 0 4px !important;
+  line-height: 1.3 !important;
+}
+
+.message-content h1 {
+  font-size: 18px !important;
+}
+
+.message-content h2 {
+  font-size: 16px !important;
+}
+
+.message-content h3 {
+  font-size: 14px !important;
+}
+
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+  font-size: 13px !important;
+}
+
+/* ========================================
+   TABLE IMPROVEMENTS
+   ======================================== */
+.message-content table {
+  font-size: 12px !important;
+  border-collapse: collapse !important;
+  margin: 8px 0 !important;
+}
+
+.message-content th,
+.message-content td {
+  padding: 4px 8px !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+}
+
+.message-content th {
+  font-weight: 600 !important;
+  background: var(--vscode-editor-background) !important;
+}
+
+/* ========================================
+   BLOCKQUOTE STYLING
+   ======================================== */
+.message-content blockquote {
+  margin: 6px 0 !important;
+  padding: 6px 10px !important;
+  border-left: 3px solid var(--vscode-panel-border) !important;
+  background: var(--vscode-editor-background) !important;
+  font-size: 12px !important;
+  font-style: italic !important;
+}
+
+/* ========================================
+   FILE CHANGES PANEL
+   ======================================== */
+.file-changes-panel {
+  margin: 8px 12px !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  background: var(--vscode-editor-background) !important;
+  display: none;
+}
+
+.file-changes-panel.visible {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-changes-header {
+  padding: 8px 12px !important;
+  border-bottom: 1px solid var(--vscode-panel-border) !important;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-changes-header:hover {
+  background: var(--vscode-list-hoverBackground) !important;
+}
+
+.file-changes-panel.collapsed .file-changes-header {
+  border-bottom: none !important;
+}
+
+.file-changes-title {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.file-changes-icon {
+  font-size: 13px !important;
+}
+
+.file-changes-count {
+  font-size: 11px !important;
+  color: var(--vscode-descriptionForeground) !important;
+  font-weight: 500 !important;
+}
+
+.file-changes-content {
+  padding: 4px !important;
+}
+
+.file-changes-empty {
+  padding: 20px !important;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.file-changes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px !important;
+}
+
+.file-change-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 6px 8px !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  transition: background 0.15s !important;
+  border-left: 2px solid transparent !important;
+}
+
+.file-change-row:hover {
+  background: var(--vscode-list-hoverBackground) !important;
+}
+
+.file-change-row.added {
+  border-left-color: #2ecc71 !important;
+}
+
+.file-change-row.modified {
+  border-left-color: #ffc107 !important;
+}
+
+.file-change-row.deleted {
+  border-left-color: #e74c3c !important;
+}
+
+.file-change-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-change-icon {
+  font-size: 11px !important;
+  flex-shrink: 0 !important;
+  width: 14px !important;
+  text-align: center !important;
+}
+
+.file-change-path {
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
+  font-family: var(--vscode-editor-font-family), monospace !important;
+}
+
+.file-status-icon {
+  font-size: 12px !important;
+  margin-left: 4px;
+}
+
+.file-change-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.file-action-btn {
+  background: transparent !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  padding: 3px 8px !important;
+  border-radius: 3px !important;
+  font-size: 11px !important;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.file-action-btn.accept-btn {
+  color: #2ecc71 !important;
+  border-color: #2ecc7180 !important;
+}
+
+.file-action-btn.accept-btn:hover {
+  background: #2ecc7126 !important;
+  border-color: #2ecc71 !important;
+}
+
+.file-action-btn.reject-btn {
+  color: #e74c3c !important;
+  border-color: #e74c3c80 !important;
+}
+
+.file-action-btn.reject-btn:hover {
+  background: #e74c3c26 !important;
+  border-color: #e74c3c !important;
+}
+
+/* ========================================
+   INPUT AREA REDESIGN
+   ======================================== */
+.input-container {
+  padding: 12px !important;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBar-background);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Add Context button at top */
+.add-context-btn-top {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--vscode-foreground) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  font-weight: 500;
+}
+
+.add-context-btn-top:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.add-context-btn-top:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Large textarea */
+.input-field-large {
+  flex: 1;
+  background: var(--vscode-input-background) !important;
+  color: var(--vscode-input-foreground) !important;
+  border: 1px solid var(--vscode-input-border) !important;
+  border-radius: 6px !important;
+  padding: 12px !important;
+  font-size: 14px !important;
+  font-family: inherit !important;
+  resize: none !important;
+  min-height: 80px !important;
+  max-height: 200px !important;
+  transition: border-color 0.2s;
+}
+
+.input-field-large:focus {
+  outline: none !important;
+  border-color: var(--vscode-focusBorder) !important;
+}
+
+.input-field-large:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Bottom controls bar */
+.input-controls-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+}
+
+.input-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Compact dropdowns */
+.mode-dropdown-compact,
+.auto-dropdown-compact {
+  background: transparent !important;
+  color: var(--vscode-foreground) !important;
+  border: none !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  cursor: pointer;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.mode-dropdown-compact:hover:not(:disabled),
+.auto-dropdown-compact:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.mode-dropdown-compact:disabled,
+.auto-dropdown-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Current file indicator */
+.current-file-indicator {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Token usage */
+.token-usage {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-weight: 500;
+  font-family: monospace;
+}
+
+/* Compact icon buttons */
+.icon-button-compact {
+  background: transparent !important;
+  border: none !important;
+  color: var(--vscode-descriptionForeground) !important;
+  cursor: pointer;
+  padding: 4px !important;
+  border-radius: 3px;
+  font-size: 14px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button-compact:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+.icon-button-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Send button compact */
+.send-button-compact {
+  background: var(--vscode-button-background) !important;
+  color: var(--vscode-button-foreground) !important;
+  border: none !important;
+  border-radius: 4px !important;
+  width: 28px !important;
+  height: 28px !important;
+  cursor: pointer;
+  font-size: 16px !important;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.send-button-compact:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground) !important;
+}
+
+.send-button-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   COMMAND CONFIRMATION (INLINE, NO POPUP)
+   ======================================== */
+.command-confirmation-panel {
+  margin: 8px 12px;
+  padding: 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.command-confirmation-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.command-icon {
+  font-size: 14px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.command-title {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.risk-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.risk-badge.risk-high {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+}
+
+.command-preview {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.command-preview code {
+  font-family: var(--vscode-editor-font-family), monospace;
+  font-size: 12px;
+  color: var(--vscode-foreground);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.command-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.command-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.command-run {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+}
+
+.command-run:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.command-cancel {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.command-cancel:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--vscode-foreground);
+}

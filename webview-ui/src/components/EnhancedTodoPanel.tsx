@@ -21,7 +21,7 @@ export const EnhancedTodoPanel: React.FC<EnhancedTodoPanelProps> = ({
   onSync,
   thinkingStatus
 }) => {
-  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(true);
 
   if (!visible && todos.length === 0) return null;
 

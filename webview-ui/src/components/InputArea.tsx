@@ -6,6 +6,8 @@ interface InputAreaProps {
   isGenerating: boolean;
   mode: 'ask' | 'agent';
   onModeChange: (mode: 'ask' | 'agent') => void;
+  onAddContext?: () => void;
+  currentFile?: string;
 }
 
 export const InputArea: React.FC<InputAreaProps> = ({
@@ -13,13 +15,17 @@ export const InputArea: React.FC<InputAreaProps> = ({
   onStop,
   isGenerating,
   mode,
-  onModeChange
+  onModeChange,
+  onAddContext,
+  currentFile
 }) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = () => {
-    if (message.trim() && !isGenerating) {
+    if (isGenerating) {
+      onStop();
+    } else if (message.trim()) {
       onSend(message);
       setMessage('');
       if (textareaRef.current) {
@@ -44,47 +50,69 @@ export const InputArea: React.FC<InputAreaProps> = ({
 
   return (
     <div className="input-container">
-      <div className="input-wrapper-container">
-        <div className="input-bottom-row">
-          <textarea
-            ref={textareaRef}
-            className="input-field"
-            placeholder="Ask Oropendola to do anything"
-            rows={1}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onInput={handleInput}
+      {/* Add Context button at top */}
+      <button
+        className="add-context-btn-top"
+        onClick={onAddContext}
+        disabled={isGenerating}
+        title="Add context from files"
+      >
+        ＋ Add Context
+      </button>
+
+      {/* Large textarea */}
+      <textarea
+        ref={textareaRef}
+        className="input-field-large"
+        placeholder="Plan and build autonomously..."
+        rows={3}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onInput={handleInput}
+        disabled={isGenerating}
+      />
+
+      {/* Bottom controls bar */}
+      <div className="input-controls-bottom">
+        <div className="input-controls-left">
+          <select
+            className="mode-dropdown-compact"
+            value={mode}
+            onChange={(e) => onModeChange(e.target.value as 'ask' | 'agent')}
             disabled={isGenerating}
-          />
-          <button
-            className="send-button"
-            onClick={handleSend}
-            disabled={!message.trim() || isGenerating}
-            title="Send message"
           >
-            ↑
+            <option value="agent">Agent</option>
+            <option value="ask">Ask</option>
+          </select>
+          <select className="auto-dropdown-compact" disabled={isGenerating}>
+            <option value="auto">Auto</option>
+          </select>
+        </div>
+
+        <div className="input-controls-right">
+          {currentFile && (
+            <span className="current-file-indicator" title={currentFile}>
+              ⚙️ {currentFile}
+            </span>
+          )}
+          <span className="token-usage">44.0%</span>
+          <button
+            className="icon-button-compact"
+            title="Attach file"
+            disabled={isGenerating}
+          >
+            📎
           </button>
           <button
-            className="stop-button"
-            onClick={onStop}
-            style={{ display: isGenerating ? 'flex' : 'none' }}
-            title="Stop generation"
+            className="send-button-compact"
+            onClick={handleSend}
+            disabled={!isGenerating && !message.trim()}
+            title={isGenerating ? 'Stop generation' : 'Send message'}
           >
-            ◼
+            {isGenerating ? '◼' : '↑'}
           </button>
         </div>
-      </div>
-      <div className="mode-selector-bottom">
-        <span className="mode-label">Mode:</span>
-        <select
-          className="mode-dropdown"
-          value={mode}
-          onChange={(e) => onModeChange(e.target.value as 'ask' | 'agent')}
-        >
-          <option value="agent">Agent</option>
-          <option value="ask">Ask</option>
-        </select>
       </div>
     </div>
   );

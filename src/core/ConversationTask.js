@@ -392,6 +392,45 @@ When creating todos, ALWAYS use this exact format so the UI can parse it:
 - [ ] Second task description
 - [ ] Third task description
 
+**CRITICAL: AUTOMATIC CONTEXT AWARENESS**
+
+When the user makes vague requests WITHOUT specifying a file, AUTOMATICALLY use the active file context:
+
+**Vague requests that require active file context:**
+- "fix this" / "fix the syntax" / "fix the error"
+- "explain this" / "what does this do"
+- "optimize this" / "improve this"
+- "add tests" / "add comments"
+- "refactor this" / "clean this up"
+
+**How to handle these requests:**
+1. **DON'T ASK FOR CLARIFICATION** - The context object contains everything you need!
+2. **CHECK context.activeFile** which includes:
+   - context.activeFile.path: The file path (e.g., "employee_summary.json")
+   - context.activeFile.content: Full file content
+   - context.activeFile.cursorPosition: Where the cursor is (line, character)
+   - context.activeFile.selectedText: Any selected text
+   - context.activeFile.language: File language/type
+
+3. **IMMEDIATELY USE THE ACTIVE FILE:**
+   - If user says "fix the syntax", check the activeFile.content for syntax errors
+   - If user says "explain this", explain the code in activeFile.content
+   - If user says "add tests", create tests for the file in activeFile.path
+
+**EXAMPLE - CORRECT BEHAVIOR:**
+
+User: "fix the syntax"
+Context: { activeFile: { path: "employee.json", content: "{\n  \"name\": \"Employee\"\n  \"type\": \"DocType\"\n}", language: "json" } }
+
+✅ CORRECT Response:
+"I see syntax errors in employee.json - missing comma after \"name\". Let me fix that..."
+[fixes the file]
+
+❌ WRONG Response:
+"Could you please clarify which file needs syntax fixing?"
+
+**REMEMBER:** Users expect you to automatically understand what file they're working on - just like GitHub Copilot, Cursor, and other modern AI assistants!
+
 **WORKFLOW - SYSTEMATIC APPROACH:**
 1. **Search First** → Use Grep/Glob to find ALL relevant code locations
 2. **Create TODO List** → Break down the task into clear steps
@@ -1638,6 +1677,29 @@ ${dynamicContext}`;
     }
 
     /**
+     * Request command confirmation from user in chat (no popup)
+     * Returns: Promise<boolean> - true if confirmed, false if cancelled
+     */
+    async _requestCommandConfirmation(command, riskLevel) {
+        return new Promise((resolve) => {
+            // Send confirmation request to webview
+            this.panel.webview.postMessage({
+                type: 'requestCommandConfirmation',
+                command: command,
+                riskLevel: riskLevel
+            });
+
+            // Create one-time listener for response
+            const disposable = this.panel.webview.onDidReceiveMessage(message => {
+                if (message.type === 'commandConfirmationResponse') {
+                    disposable.dispose();
+                    resolve(message.confirmed);
+                }
+            });
+        });
+    }
+
+    /**
      * Determine risk level of command
      * Returns: 'safe', 'moderate', 'high'
      */
@@ -1695,31 +1757,16 @@ ${dynamicContext}`;
         const commandIndex = this.executedCommands.length - 1;
 
         try {
-            // 🔒 Smart risk-based confirmation
+            // 🔒 Smart risk-based confirmation (inline in chat, no popup)
             const riskLevel = this._getCommandRiskLevel(command);
             commandRecord.riskLevel = riskLevel;
 
-            if (riskLevel === 'high') {
-                const confirm = await vscode.window.showWarningMessage(
-                    `🚨 HIGH RISK: This command may be destructive!\n\nCommand: ${command}\n\nAre you absolutely sure?`,
-                    { modal: true },
-                    'Yes, I understand the risk',
-                    'No, cancel'
-                );
+            if (riskLevel === 'high' || riskLevel === 'moderate') {
+                // Send command confirmation request to chat UI (no modal popup)
+                const confirmed = await this._requestCommandConfirmation(command, riskLevel);
 
-                if (confirm !== 'Yes, I understand the risk') {
-                    throw new Error('High-risk command cancelled by user');
-                }
-            } else if (riskLevel === 'moderate') {
-                const confirm = await vscode.window.showInformationMessage(
-                    `⚠️ This command will make system changes:\n\n${command}\n\nContinue?`,
-                    { modal: true },
-                    'Yes',
-                    'No'
-                );
-
-                if (confirm !== 'Yes') {
-                    throw new Error('Moderate-risk command cancelled by user');
+                if (!confirmed) {
+                    throw new Error('Command cancelled by user');
                 }
             }
             // 'safe' commands run without confirmation
