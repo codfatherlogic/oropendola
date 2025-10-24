@@ -185,6 +185,18 @@ class RealtimeManager extends EventEmitter {
             this.emit('new_comment', data);
         });
 
+        // Intent Classification events (v3.2.2 - UI Enhancement)
+        this.socket.on('intent_classified', (data) => {
+            console.log('🎯 [RealtimeManager] Received intent_classified:', data);
+            this.emit('intent_classified', data);
+        });
+
+        // Privacy Filter events (v3.2.2 - UI Enhancement)
+        this.socket.on('privacy_filter', (data) => {
+            console.log('🔒 [RealtimeManager] Received privacy_filter:', data);
+            this.emit('privacy_filter', data);
+        });
+
         // Custom events (extend as needed)
         this.socket.onAny((eventName, ...args) => {
             console.log('🔔 [RealtimeManager] Received event:', eventName, args);

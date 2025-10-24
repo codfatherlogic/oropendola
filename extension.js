@@ -22,6 +22,10 @@ const { CopilotChatPanel } = require('./src/views/CopilotChatPanel');
 // Backend Integration v2.0 - New Panels
 const TodoPanel = require('./src/panels/TodoPanel');
 
+// v3.4.3: Workspace Memory and Status Bar
+const WorkspaceMemoryService = require('./src/memory/WorkspaceMemoryService');
+const StatusBarManager = require('./src/ui/StatusBarManager');
+
 let gitHubManager;
 let chatManager;
 let repositoryAnalyzer;
@@ -48,6 +52,10 @@ let inlineCompletionStatusBar;
 // Backend Integration v2.0 - UI Panels
 let todoPanel;
 
+// v3.4.3: Workspace Memory and Status Bar
+let workspaceMemory;
+let statusBarManager;
+
 /**
  * Extension activation
  * @param {vscode.ExtensionContext} context
@@ -70,6 +78,36 @@ function activate(context) {
         )
     );
     console.log('✅ Sidebar provider registered');
+
+    // v3.4.3: Initialize Status Bar Manager
+    try {
+        statusBarManager = new StatusBarManager();
+        context.subscriptions.push(statusBarManager);
+
+        // Initialize with default state
+        const config = vscode.workspace.getConfiguration('oropendola');
+        const mode = config.get('chat.mode', 'agent');
+        statusBarManager.updateMode(mode);
+        statusBarManager.updateConnection(false); // Will update when connected
+
+        console.log('✅ Status Bar Manager initialized');
+    } catch (error) {
+        console.error('❌ Status Bar Manager error:', error);
+    }
+
+    // v3.4.3: Initialize Workspace Memory Service (if workspace available)
+    try {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            workspaceMemory = new WorkspaceMemoryService(workspacePath);
+            console.log('✅ Workspace Memory Service initialized');
+        } else {
+            console.log('ℹ️  No workspace folder - memory service not initialized');
+        }
+    } catch (error) {
+        console.error('❌ Workspace Memory Service error:', error);
+    }
 
     // Initialize managers with error handling
     try {
@@ -469,6 +507,159 @@ function registerCommands(context) {
                     vscode.commands.executeCommand('workbench.action.output.toggleOutput');
                 }
             });
+        })
+    );
+
+    // v3.4.3: Workspace Memory Commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.setPreferredApp', async () => {
+            if (!workspaceMemory) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+
+            const appName = await vscode.window.showInputBox({
+                prompt: 'Enter your preferred Frappe app name',
+                placeHolder: 'e.g., erpnext, custom_app',
+                validateInput: (value) => {
+                    return value.trim() ? null : 'App name cannot be empty';
+                }
+            });
+
+            if (appName) {
+                await workspaceMemory.setPreferredApp(appName.trim());
+                vscode.window.showInformationMessage(`✅ Preferred app set to: ${appName.trim()}`);
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.clearWorkspaceMemory', async () => {
+            if (!workspaceMemory) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+
+            const confirm = await vscode.window.showWarningMessage(
+                'Are you sure you want to clear all workspace memory? This cannot be undone.',
+                { modal: true },
+                'Clear Memory',
+                'Cancel'
+            );
+
+            if (confirm === 'Clear Memory') {
+                await workspaceMemory.clear();
+                vscode.window.showInformationMessage('🗑️  Workspace memory cleared');
+            }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showWorkspaceMemory', async () => {
+            if (!workspaceMemory) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+
+            const exists = await workspaceMemory.exists();
+            if (!exists) {
+                vscode.window.showInformationMessage('No workspace memory found');
+                return;
+            }
+
+            const stats = await workspaceMemory.getStatistics();
+            const preferredApp = await workspaceMemory.getPreferredApp();
+            const recentReports = await workspaceMemory.getLastReports(5);
+            const size = await workspaceMemory.getMemorySize();
+
+            // v3.4.3 fix: Handle undefined size
+            const sizeStr = size !== undefined && size !== null
+                ? `${(size / 1024).toFixed(2)} KB`
+                : 'Unknown';
+
+            const info = [
+                '📊 **Workspace Memory Status**',
+                '',
+                '**Statistics:**',
+                `- Total Tasks: ${stats.totalTasks || 0}`,
+                `- Total Files Changed: ${stats.totalFiles || 0}`,
+                `- Last Task: ${stats.lastTaskDate ? new Date(stats.lastTaskDate).toLocaleString() : 'Never'}`,
+                '',
+                '**Preferences:**',
+                `- Preferred App: ${preferredApp || 'Not set'}`,
+                '',
+                '**Recent Reports:**',
+                `- ${recentReports.length} reports stored`,
+                '',
+                `**Memory Size:** ${sizeStr}`
+            ].join('\n');
+
+            vscode.window.showInformationMessage(info, { modal: true });
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.viewLastReport', async () => {
+            if (!workspaceMemory) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+
+            const reports = await workspaceMemory.getLastReports(1);
+            if (reports.length === 0) {
+                vscode.window.showInformationMessage('No task reports found');
+                return;
+            }
+
+            const report = reports[0];
+            if (report.filepath) {
+                const doc = await vscode.workspace.openTextDocument(report.filepath);
+                await vscode.window.showTextDocument(doc, { preview: false });
+            } else {
+                vscode.window.showErrorMessage('Report file not found');
+            }
+        })
+    );
+
+    // v3.4.3: Status Bar Commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showFrameworkInfo', async () => {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showInformationMessage('No workspace folder open');
+                return;
+            }
+
+            // Show quick pick with framework detection info
+            vscode.window.showInformationMessage(
+                'Framework detection runs automatically when you send a message to the AI. The detected framework is shown in the status bar.',
+                'OK'
+            );
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.toggleMode', async () => {
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const modes = ['chat', 'agent', 'code'];
+            const currentMode = config.get('chat.mode', 'agent');
+            const nextMode = modes[(modes.indexOf(currentMode) + 1) % modes.length];
+
+            await config.update('chat.mode', nextMode, vscode.ConfigurationTarget.Workspace);
+
+            if (statusBarManager) {
+                statusBarManager.updateMode(nextMode);
+            }
+
+            const modeDescriptions = {
+                'chat': 'Simple Q&A without tool execution',
+                'agent': 'Full autonomy with tools (recommended)',
+                'code': 'Optimized for code generation'
+            };
+
+            vscode.window.showInformationMessage(
+                `🔄 Mode changed to: ${nextMode.toUpperCase()}\n${modeDescriptions[nextMode]}`
+            );
         })
     );
 }
@@ -1141,20 +1332,34 @@ function registerBackendIntegrationCommands(context) {
                 const { apiClient } = require('./src/api/client');
                 const stats = await apiClient.getUsageStats(30, 'all');
 
+                // v3.4.3 fix: Handle undefined cost values
+                const totalRequests = stats.total_requests || 0;
+                const totalTokens = stats.total_tokens || 0;
+                const totalCost = stats.total_cost !== undefined && stats.total_cost !== null
+                    ? `$${stats.total_cost.toFixed(2)}`
+                    : 'Unknown';
+                const avgResponseTime = stats.avg_response_time || 'N/A';
+
+                // Format provider stats
+                const providerStats = Object.entries(stats.by_provider || {}).map(([provider, data]) => {
+                    const cost = data.cost !== undefined && data.cost !== null
+                        ? `$${data.cost.toFixed(2)}`
+                        : 'Unknown';
+                    return `• ${provider}: ${data.requests || 0} requests, ${cost}`;
+                }).join('\n');
+
                 // Format message
                 const message = `
 📊 **Usage Analytics (Last 30 Days)**
 
-**Total Requests**: ${stats.total_requests}
-**Total Tokens**: ${stats.total_tokens.toLocaleString()}
-**Total Cost**: $${stats.total_cost.toFixed(2)}
+**Total Requests**: ${totalRequests}
+**Total Tokens**: ${totalTokens.toLocaleString()}
+**Total Cost**: ${totalCost}
 
 **By Provider**:
-${Object.entries(stats.by_provider || {}).map(([provider, data]) =>
-    `• ${provider}: ${data.requests} requests, $${data.cost.toFixed(2)}`
-).join('\n')}
+${providerStats || 'No data available'}
 
-**Average Response Time**: ${stats.avg_response_time || 'N/A'}s
+**Average Response Time**: ${avgResponseTime}s
                 `.trim();
 
                 vscode.window.showInformationMessage(message, { modal: true });
@@ -1230,14 +1435,23 @@ ${Object.entries(stats.by_provider || {}).map(([provider, data]) =>
                     max_tokens: 50
                 });
 
+                // v3.4.3 fix: Handle undefined values in backend response
+                const response = result.response || 'No response';
+                const model = result.model || 'Unknown';
+                const provider = result.provider || 'Unknown';
+                const tokens = result.usage?.total_tokens || 'Unknown';
+                const cost = result.cost !== undefined && result.cost !== null
+                    ? `$${result.cost.toFixed(6)}`
+                    : 'Unknown';
+
                 const message = `
 ✅ **Backend Connection Successful!**
 
-**Response**: ${result.response}
-**Model**: ${result.model}
-**Provider**: ${result.provider}
-**Tokens**: ${result.usage.total_tokens}
-**Cost**: $${result.cost.toFixed(6)}
+**Response**: ${response}
+**Model**: ${model}
+**Provider**: ${provider}
+**Tokens**: ${tokens}
+**Cost**: ${cost}
                 `.trim();
 
                 vscode.window.showInformationMessage(message, { modal: true });

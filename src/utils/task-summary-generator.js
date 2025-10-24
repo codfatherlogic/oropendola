@@ -12,13 +12,20 @@ class TaskSummaryGenerator {
     static generate(options = {}) {
         const {
             taskId,
+            taskDescription,
             startTime,
             endTime,
             fileChanges = [],
             todos = [],
             toolResults = [],
             errors = [],
-            mode = 'agent'
+            mode = 'agent',
+            framework = null,
+            commands = [],
+            messages = [],
+            memoryRefs = [],
+            riskLevel = 'unknown',
+            conclusion = ''
         } = options;
 
         const duration = endTime && startTime ?
@@ -26,7 +33,10 @@ class TaskSummaryGenerator {
 
         return {
             taskId,
+            taskDescription,
             mode,
+            framework,
+            riskLevel,
             duration: {
                 seconds: duration,
                 formatted: this._formatDuration(duration)
@@ -40,6 +50,10 @@ class TaskSummaryGenerator {
             fileChanges: this._summarizeFileChanges(fileChanges),
             todos: this._summarizeTodos(todos),
             toolExecution: this._summarizeTools(toolResults),
+            commands: commands,
+            chat: this._summarizeChat(messages),
+            memoryRefs: memoryRefs,
+            conclusion: conclusion || this._generateConclusion(fileChanges, todos, errors),
             validation: this._generateValidation(fileChanges, errors),
             recommendations: this._generateRecommendations(fileChanges, errors)
         };
@@ -286,6 +300,77 @@ class TaskSummaryGenerator {
     }
 
     /**
+     * Summarize chat messages
+     * @private
+     */
+    static _summarizeChat(messages) {
+        if (!messages || messages.length === 0) {
+            return { total: 0, messages: [] };
+        }
+
+        const summary = messages.map(msg => ({
+            role: msg.role || 'unknown',
+            content: this._truncateMessage(msg.content || msg.text || '', 200),
+            timestamp: msg.timestamp || null
+        }));
+
+        return {
+            total: messages.length,
+            messages: summary,
+            userMessages: messages.filter(m => m.role === 'user').length,
+            assistantMessages: messages.filter(m => m.role === 'assistant').length
+        };
+    }
+
+    /**
+     * Truncate message for summary
+     * @private
+     */
+    static _truncateMessage(text, maxLength) {
+        if (!text || text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
+    }
+
+    /**
+     * Generate AI conclusion
+     * @private
+     */
+    static _generateConclusion(fileChanges, todos, errors) {
+        const filesCreated = fileChanges.filter(c => c.action === 'create').length;
+        const filesModified = fileChanges.filter(c => c.action === 'modify').length;
+        const todosCompleted = todos.filter(t => t.completed).length;
+        const hasErrors = errors.length > 0;
+
+        const parts = [];
+
+        if (filesCreated > 0) {
+            parts.push(`Created ${filesCreated} ${filesCreated === 1 ? 'file' : 'files'}`);
+        }
+
+        if (filesModified > 0) {
+            parts.push(`modified ${filesModified} ${filesModified === 1 ? 'file' : 'files'}`);
+        }
+
+        if (todos.length > 0) {
+            parts.push(`completed ${todosCompleted}/${todos.length} tasks`);
+        }
+
+        let conclusion = parts.join(', ');
+
+        if (hasErrors) {
+            conclusion += '. Some errors were encountered during execution. Review the issues section below.';
+        } else {
+            conclusion += '. All operations completed successfully.';
+        }
+
+        if (todosCompleted === todos.length && todos.length > 0) {
+            conclusion += ' Ready for review and deployment.';
+        }
+
+        return conclusion.charAt(0).toUpperCase() + conclusion.slice(1);
+    }
+
+    /**
      * Generate markdown report
      */
     static generateMarkdown(summary, context = {}) {
@@ -294,16 +379,26 @@ class TaskSummaryGenerator {
 
         // Header with emoji and metadata
         const statusIcon = summary.overview.status === 'completed_successfully' ? '✅' : '⚠️';
-        md += `# ${statusIcon} Task Completion Report\n\n`;
-        md += `**Workspace:** ${workspaceName || 'Unknown'}\n`;
-        md += `**Date:** ${new Date().toLocaleString()}\n`;
-        md += `**Status:** ${summary.overview.status === 'completed_successfully' ? '✅ Success' : '⚠️ Completed with issues'}\n`;
-        md += `**Duration:** ${summary.duration.formatted}\n\n`;
-
-        if (taskDescription) {
-            md += `## 📋 Task Description\n\n`;
-            md += `${taskDescription}\n\n`;
+        md += `# ${statusIcon} AI Task Report\n\n`;
+        md += `**Task:** ${summary.taskDescription || taskDescription || 'AI-assisted development task'}\n`;
+        // v3.4.3 fix: Handle undefined confidence
+        if (summary.framework && summary.framework.name) {
+            const confidenceStr = summary.framework.confidence !== undefined && summary.framework.confidence !== null
+                ? ` (confidence ${Math.round(summary.framework.confidence * 100)}%)`
+                : '';
+            md += `**Framework:** ${summary.framework.name}${confidenceStr}\n`;
+        } else {
+            md += `**Framework:** Not detected\n`;
         }
+        md += `**Mode:** ${summary.mode === 'ask' ? 'Ask Mode' : 'Agent Mode'}\n`;
+        md += `**Workspace:** ${workspaceName || 'Unknown'}\n`;
+        md += `**Timestamp:** ${new Date(summary.timestamp.completed || new Date()).toISOString()}\n`;
+        md += `**Duration:** ${summary.duration.formatted}\n`;
+        md += `**Status:** ${summary.overview.status === 'completed_successfully' ? '✅ Success' : '⚠️ Completed with issues'}\n`;
+        if (summary.riskLevel && summary.riskLevel !== 'unknown') {
+            md += `**Risk Level:** ${summary.riskLevel}\n`;
+        }
+        md += `\n---\n\n`;
 
         // Executive Summary
         md += `## 📊 Executive Summary\n\n`;
@@ -356,6 +451,15 @@ class TaskSummaryGenerator {
             md += `\n`;
         }
 
+        // Commands Executed
+        if (summary.commands && summary.commands.length > 0) {
+            md += `## 🔧 Commands Executed\n\n`;
+            summary.commands.forEach((cmd, i) => {
+                md += `${i + 1}. \`${cmd}\`\n`;
+            });
+            md += `\n`;
+        }
+
         // TODO Execution
         if (summary.overview.todosTotal > 0) {
             md += `## ✅ TODO Execution\n\n`;
@@ -380,6 +484,34 @@ class TaskSummaryGenerator {
                 });
                 md += `\n`;
             }
+        }
+
+        // Chat History
+        if (summary.chat && summary.chat.total > 0) {
+            md += `## 💬 Chat Summary\n\n`;
+            md += `**Total Messages:** ${summary.chat.total} (${summary.chat.userMessages} user, ${summary.chat.assistantMessages} assistant)\n\n`;
+            md += `| Role | Message |\n`;
+            md += `|------|----------|\n`;
+            summary.chat.messages.forEach(msg => {
+                const roleIcon = msg.role === 'user' ? '👤' : msg.role === 'assistant' ? '🤖' : 'ℹ️';
+                md += `| ${roleIcon} ${msg.role} | ${msg.content} |\n`;
+            });
+            md += `\n`;
+        }
+
+        // AI Conclusion
+        if (summary.conclusion) {
+            md += `## 🎯 AI Conclusion\n\n`;
+            md += `${summary.conclusion}\n\n`;
+        }
+
+        // Memory References
+        if (summary.memoryRefs && summary.memoryRefs.length > 0) {
+            md += `## 🧠 Memory References\n\n`;
+            summary.memoryRefs.forEach(ref => {
+                md += `- ${ref}\n`;
+            });
+            md += `\n`;
         }
 
         // Errors and Warnings
@@ -420,6 +552,42 @@ class TaskSummaryGenerator {
         md += `**Generated at:** ${new Date(summary.timestamp.generatedAt).toLocaleString()}\n`;
 
         return md;
+    }
+
+    /**
+     * Generate JSON report
+     * @param {object} summary - Summary object
+     * @returns {string} JSON string
+     */
+    static generateJSON(summary) {
+        return JSON.stringify(summary, null, 2);
+    }
+
+    /**
+     * Save report to file
+     * @param {string} content - Report content (Markdown or JSON)
+     * @param {string} format - File format ('md' or 'json')
+     * @param {string} workspacePath - Workspace root path
+     * @returns {string} File path
+     */
+    static saveReport(content, format, workspacePath) {
+        const fs = require('fs');
+        const path = require('path');
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '-' + Date.now();
+        const filename = `ai-task-report-${timestamp}.${format}`;
+        const filepath = path.join(workspacePath, '.vscode', filename);
+
+        // Ensure .vscode directory exists
+        const vscodeDir = path.join(workspacePath, '.vscode');
+        if (!fs.existsSync(vscodeDir)) {
+            fs.mkdirSync(vscodeDir, { recursive: true });
+        }
+
+        // Write file
+        fs.writeFileSync(filepath, content, 'utf8');
+
+        return filepath;
     }
 }
 

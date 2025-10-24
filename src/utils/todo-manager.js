@@ -147,9 +147,14 @@ class TodoManager {
      */
     _createTodo(text, type, order = null, completed = false) {
         this.idCounter++;
+
+        // Summarize verbose descriptions to max 60 characters
+        const summarizedText = this._summarizeTodo(text.trim());
+
         return {
             id: `todo_${Date.now()}_${this.idCounter}`,
-            text: text.trim(),
+            text: summarizedText,
+            fullText: text.trim(), // Keep original for reference
             type: type,
             order: order ? parseInt(order) : null,
             status: completed ? 'completed' : 'pending', // 'pending' | 'in_progress' | 'completed' | 'failed'
@@ -161,6 +166,40 @@ class TodoManager {
             level: 0, // Hierarchy level (0 = top-level, 1 = sub-task)
             relatedFile: null // File associated with this task
         };
+    }
+
+    /**
+     * Summarize verbose TODO descriptions to concise format
+     * @private
+     * @param {string} description - Original description
+     * @returns {string} Summarized description (max 60 chars)
+     */
+    _summarizeTodo(description) {
+        // Remove markdown formatting (**, `, etc.)
+        let summary = description
+            .replace(/\*\*/g, '')  // Remove bold
+            .replace(/`/g, '')      // Remove code ticks
+            .replace(/_/g, '')      // Remove italics
+            .trim();
+
+        // Extract just the action part before any colon or explanation
+        const colonIndex = summary.indexOf(':');
+        if (colonIndex > 0 && colonIndex < 60) {
+            summary = summary.substring(0, colonIndex).trim();
+        }
+
+        // Take first sentence only (stop at period, exclamation, question mark)
+        const sentenceMatch = summary.match(/^[^.!?]+[.!?]/);
+        if (sentenceMatch) {
+            summary = sentenceMatch[0].replace(/[.!?]$/, '').trim();
+        }
+
+        // If still too long, truncate to 60 characters
+        if (summary.length > 60) {
+            summary = summary.substring(0, 57) + '...';
+        }
+
+        return summary;
     }
 
     /**
@@ -330,17 +369,21 @@ class TodoManager {
 
     /**
      * Get TODO statistics
-     * @returns {Object} Stats object
+     * @returns {Object} Stats object with pending/in_progress/completed breakdown
      */
     getStats() {
         const total = this.todos.length;
-        const completed = this.getCompletedTodos().length;
-        const active = this.getActiveTodos().length;
+        const completed = this.todos.filter(t => t.status === 'completed').length;
+        const inProgress = this.todos.filter(t => t.status === 'in_progress').length;
+        const pending = this.todos.filter(t => t.status === 'pending').length;
+        const failed = this.todos.filter(t => t.status === 'failed').length;
 
         return {
             total,
             completed,
-            active,
+            pending,
+            in_progress: inProgress,
+            failed,
             completionRate: total > 0 ? Math.round((completed / total) * 100) : 0
         };
     }

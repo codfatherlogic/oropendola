@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.2.1: Fixed tool call format + defensive backend parser",
-  "version": "3.2.1",
+  "description": "AI-powered assistant - v3.4.3: Workspace memory, auto task reports, status bar indicators",
+  "version": "3.4.3",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -252,6 +252,42 @@
         "title": "Select AI Model",
         "category": "Oropendola",
         "icon": "$(server-process)"
+      },
+      {
+        "command": "oropendola.setPreferredApp",
+        "title": "Set Preferred Frappe App",
+        "category": "Oropendola",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "oropendola.clearWorkspaceMemory",
+        "title": "Clear Workspace Memory",
+        "category": "Oropendola",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "oropendola.showWorkspaceMemory",
+        "title": "Show Workspace Memory Status",
+        "category": "Oropendola",
+        "icon": "$(info)"
+      },
+      {
+        "command": "oropendola.viewLastReport",
+        "title": "View Last Task Report",
+        "category": "Oropendola",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "oropendola.showFrameworkInfo",
+        "title": "Show Framework Detection Info",
+        "category": "Oropendola",
+        "icon": "$(info)"
+      },
+      {
+        "command": "oropendola.toggleMode",
+        "title": "Toggle Chat Mode",
+        "category": "Oropendola",
+        "icon": "$(sync)"
       }
     ],
     "views": {
@@ -743,7 +779,8 @@
     "lint": "eslint .",
     "pretest": "npm run lint",
     "test": "node ./test/runTest.js",
-    "vscode:prepublish": "echo 'Skipping lint for now'",
+    "build:webview": "cd webview-ui && npm run build",
+    "vscode:prepublish": "npm run build:webview && echo 'Webview built successfully'",
     "package": "vsce package",
     "publish": "vsce publish"
   },

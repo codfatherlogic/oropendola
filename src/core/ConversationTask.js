@@ -23,6 +23,16 @@ const {
     apiMessageToTaskMessage
 } = require('./task-persistence');
 const { withRetryPreset } = require('../utils/exponential-backoff');
+const LocalWorkspaceAnalyzer = require('../workspace/LocalWorkspaceAnalyzer');
+const PromptFrameworkDetector = require('../workspace/PromptFrameworkDetector');
+const WorkspaceStructureLearner = require('../workspace/WorkspaceStructureLearner');
+const ConversationContextTracker = require('./ConversationContextTracker');
+const FrameworkFileStructureRegistry = require('../framework/FrameworkFileStructureRegistry');
+const DynamicFileGenerator = require('../framework/DynamicFileGenerator');
+const FrameworkConventions = require('../framework/FrameworkConventions');
+// v3.4.3: Workspace memory and task reporting
+const WorkspaceMemoryService = require('../memory/WorkspaceMemoryService');
+const TaskSummaryGenerator = require('../utils/task-summary-generator');
 
 class ConversationTask extends EventEmitter {
     constructor(taskId, options = {}) {
@@ -75,6 +85,25 @@ class ConversationTask extends EventEmitter {
         this.checkpointService = null;  // Initialized on first use
         this.isPaused = false;          // Pause/resume support
         this.storageDir = options.storageDir;  // For persistence
+
+        // v3.2.7: Conversation context tracking (Copilot-style)
+        this.contextTracker = new ConversationContextTracker();
+        this.structureLearner = new WorkspaceStructureLearner();
+        this.learnedStructure = null;   // Cached structure knowledge
+
+        // v3.4.0: Framework-aware file generation system
+        this.frameworkRegistry = new FrameworkFileStructureRegistry();
+        this.fileGenerator = new DynamicFileGenerator(this.frameworkRegistry);
+        this.frameworkConventions = new FrameworkConventions(this.frameworkRegistry);
+
+        // v3.4.3: Workspace memory and task tracking
+        this.workspaceMemory = null;  // Initialized lazily when workspace available
+        this.executedCommands = [];   // Track all terminal commands executed
+        this.memoryReferences = [];   // Track memory references used
+        this.initialPrompt = null;    // Store initial user prompt for reporting
+        this.startTime = Date.now();  // Task start timestamp
+        this.detectedFramework = null;  // Store detected framework
+        this.frameworkConfidence = 0;   // Store framework confidence
 
         // Initialize realtime connection if session cookies provided
         console.log('🔥 [ConversationTask] Checking realtime connection requirements...');
@@ -164,6 +193,22 @@ class ConversationTask extends EventEmitter {
                 this.emit('realtimeError', this.taskId, error);
             });
 
+            // UI Enhancement: Intent Classification (v3.2.2)
+            console.log('🔥 [ConversationTask] Setting up intent_classified listener...');
+            this.realtimeManager.on('intent_classified', (data) => {
+                console.log(`🎯 [ConversationTask ${this.taskId}] Intent classified:`, data);
+                // Forward to sidebar for UI badge display
+                this.emit('intentClassified', this.taskId, data);
+            });
+
+            // UI Enhancement: Privacy Filter (v3.2.2)
+            console.log('🔥 [ConversationTask] Setting up privacy_filter listener...');
+            this.realtimeManager.on('privacy_filter', (data) => {
+                console.log(`🔒 [ConversationTask ${this.taskId}] Privacy filter activated:`, data);
+                // Forward to sidebar for toast notification
+                this.emit('privacyFilter', this.taskId, data);
+            });
+
             // Connect immediately
             console.log('🔥 [ConversationTask] Calling realtimeManager.connect()...');
             this.realtimeManager.connect();
@@ -181,6 +226,11 @@ class ConversationTask extends EventEmitter {
      */
     async run(initialMessage, images = []) {
         try {
+            // v3.4.3: Store initial prompt for task reporting
+            if (!this.initialPrompt) {
+                this.initialPrompt = initialMessage;
+            }
+
             this.status = 'running';
             this.taskStartTime = new Date().toISOString();
             this.emit('taskStarted', this.taskId);
@@ -197,7 +247,8 @@ class ConversationTask extends EventEmitter {
                 console.log('📝 Adding progressive implementation system prompt with dynamic context');
 
                 // Get dynamic context from codebase analysis (async)
-                const dynamicContext = await this._getDynamicCodebaseContext();
+                // 🔥 v3.2.6: Pass initialMessage for prompt-based framework detection
+                const dynamicContext = await this._getDynamicCodebaseContext(initialMessage);
 
                 const systemPrompt = `You are an intelligent AI coding assistant integrated into VS Code that works progressively and iteratively.
 
@@ -886,7 +937,7 @@ ${dynamicContext}`;
                 url: `${this.apiUrl}/api/method/ai_assistant.api.chat_completion`,
                 data: requestData,
                 headers: headers,
-                timeout: 120000,
+                timeout: 1200000, // 20 minutes - complex AI requests need time
                 signal: this.abortController.signal,
                 maxContentLength: Infinity,
                 maxBodyLength: Infinity,
@@ -1078,13 +1129,19 @@ ${dynamicContext}`;
      * Parse tool calls from AI response
      * Supports markdown format (current Oropendola backend)
      * Modes:
-     * - ASK: Tool calls are ignored (read-only)
-     * - AGENT: All tool calls allowed + autonomous context discovery
+     * - ASK: Backend should send plan (TODOs) instead of tool_calls. User must approve plan before execution.
+     *        If backend mistakenly sends tool_calls in ask mode, they are ignored for safety.
+     * - AGENT: Backend sends tool_calls which are executed immediately (low-risk auto, high-risk ask)
+     *
+     * Note: The mode is sent to backend in API request (see _sendBackendRequest).
+     *       Backend is responsible for sending appropriate response format based on mode.
      */
     _parseToolCalls(aiResponse) {
         // In ASK mode, ignore all tool calls - just return empty array
+        // User must explicitly approve plan via "Accept Plan" button before execution
         if (this.mode === 'ask') {
-            console.log('ℹ️ ASK mode: Ignoring tool calls (read-only mode)');
+            console.log('ℹ️ ASK mode: Ignoring tool calls (plan must be approved first)');
+            console.log('ℹ️ Backend should send plan as TODOs, not tool_calls in ask mode');
             return [];
         }
 
@@ -1231,6 +1288,9 @@ ${dynamicContext}`;
                 const result = await this._executeSingleTool(tool);
                 results.push(result);
 
+                // 🔥 v3.2.7: Track context from tool calls
+                this.contextTracker.extractFromToolCall(tool);
+
                 // Emit tool execution complete event
                 this.emit('toolExecutionComplete', this.taskId, tool, result, i, toolCalls.length);
                 this.emit('toolCompleted', this.taskId, tool, result);
@@ -1269,6 +1329,9 @@ ${dynamicContext}`;
             case 'replace_string_in_file':
                 return await this._executeReplaceStringInFile(path, old_string, new_string, description);
 
+            case 'delete_file':
+                return await this._executeDeleteFile(path, description);
+
             case 'read_file':
                 return await this._executeReadFile(path);
 
@@ -1276,6 +1339,12 @@ ${dynamicContext}`;
             case 'run_terminal_command':
             case 'execute_command':
                 return await this._executeTerminalCommand(command || content, description);
+
+            case 'semantic_search':
+                return await this._executeSemanticSearch(toolCall);
+
+            case 'get_symbol_info':
+                return await this._executeGetSymbolInfo(toolCall);
 
             default:
                 throw new Error(`Unknown tool action: ${action}`);
@@ -1478,6 +1547,67 @@ ${dynamicContext}`;
     }
 
     /**
+     * Execute delete_file tool
+     */
+    async _executeDeleteFile(filePath, description) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            // Track file change - DELETING
+            const change = this.fileChangeTracker.addChange(filePath, 'delete', {
+                description: description || `Delete ${filePath}`
+            });
+            this.emit('fileChangeAdded', change);
+
+            // Update status - APPLYING
+            this.fileChangeTracker.updateStatus(filePath, 'applying');
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            // Check if file exists
+            try {
+                await fs.access(fullPath);
+            } catch (error) {
+                throw new Error(`File does not exist: ${filePath}`);
+            }
+
+            // Delete file
+            await fs.unlink(fullPath);
+
+            // Update status - APPLIED
+            this.fileChangeTracker.updateStatus(filePath, 'applied');
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            console.log(`✅ Deleted file: ${filePath}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'delete_file',
+                content: `Successfully deleted file: ${filePath}`,
+                success: true
+            };
+
+        } catch (error) {
+            // Track error
+            this.fileChangeTracker.updateStatus(filePath, 'failed', {
+                error: error.message
+            });
+            this.errors.push(error);
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            throw new Error(`Failed to delete file ${filePath}: ${error.message}`);
+        }
+    }
+
+    /**
      * Execute read_file tool
      */
     async _executeReadFile(filePath) {
@@ -1553,9 +1683,21 @@ ${dynamicContext}`;
      * Shows command execution in the terminal panel at bottom of VS Code
      */
     async _executeTerminalCommand(command, description) {
+        // v3.4.3: Track command execution for task reports
+        const commandRecord = {
+            command,
+            description: description || command,
+            timestamp: new Date().toISOString(),
+            riskLevel: null,
+            status: 'pending'
+        };
+        this.executedCommands.push(commandRecord);
+        const commandIndex = this.executedCommands.length - 1;
+
         try {
             // 🔒 Smart risk-based confirmation
             const riskLevel = this._getCommandRiskLevel(command);
+            commandRecord.riskLevel = riskLevel;
 
             if (riskLevel === 'high') {
                 const confirm = await vscode.window.showWarningMessage(
@@ -1630,6 +1772,9 @@ ${dynamicContext}`;
             // Note: We can't wait for command completion with terminal.sendText()
             // It executes asynchronously. User sees real-time output in terminal.
 
+            // v3.4.3: Mark command as successful
+            commandRecord.status = 'success';
+
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'run_terminal_command',
@@ -1642,6 +1787,10 @@ Output will appear in the "Oropendola AI" terminal.`,
         } catch (error) {
             console.error(`❌ Terminal command failed: ${command}`);
             console.error(`Error: ${error.message}`);
+
+            // v3.4.3: Mark command as failed
+            commandRecord.status = 'failed';
+            commandRecord.error = error.message;
 
             vscode.window.showErrorMessage(`❌ Command failed: ${command}`);
 
@@ -1679,6 +1828,243 @@ Output will appear in the "Oropendola AI" terminal.`,
         }
 
         return null;
+    }
+
+    /**
+     * Execute semantic_search tool
+     * Performs semantic code search across the workspace using VS Code's search API
+     */
+    async _executeSemanticSearch(toolCall) {
+        const { query, language, file_pattern } = toolCall;
+
+        try {
+            console.log(`🔍 Performing semantic search: "${query}"`);
+
+            const vscode = require('vscode');
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            // Use VS Code's findTextInFiles API
+            const searchResults = [];
+            const maxResults = 50; // Limit results to avoid overwhelming
+
+            // Build search pattern
+            let searchPattern = query;
+
+            // Perform search
+            const results = await vscode.workspace.findTextInFiles(
+                { pattern: searchPattern },
+                {
+                    maxResults,
+                    previewOptions: { matchLines: 1, charsPerLine: 200 },
+                    exclude: '**/node_modules/**'
+                }
+            );
+
+            // Process results
+            for (const result of results) {
+                const uri = result.uri;
+                const relativePath = vscode.workspace.asRelativePath(uri);
+
+                // Filter by language if specified
+                if (language) {
+                    const ext = uri.path.split('.').pop();
+                    const langExtensions = {
+                        'python': ['py'],
+                        'javascript': ['js', 'jsx'],
+                        'typescript': ['ts', 'tsx'],
+                        'json': ['json'],
+                        'html': ['html', 'htm']
+                    };
+
+                    const validExts = langExtensions[language.toLowerCase()] || [];
+                    if (validExts.length > 0 && !validExts.includes(ext)) {
+                        continue;
+                    }
+                }
+
+                // Filter by file pattern if specified
+                if (file_pattern && !relativePath.match(new RegExp(file_pattern))) {
+                    continue;
+                }
+
+                for (const match of result.ranges) {
+                    searchResults.push({
+                        file: relativePath,
+                        line: match.start.line + 1,
+                        column: match.start.character,
+                        preview: match.preview.text.trim()
+                    });
+                }
+            }
+
+            console.log(`✅ Semantic search found ${searchResults.length} results`);
+
+            // Format results for AI
+            let content = `Found ${searchResults.length} matches for "${query}":\n\n`;
+
+            if (searchResults.length === 0) {
+                content = `No matches found for "${query}"`;
+            } else {
+                const grouped = {};
+                searchResults.forEach(r => {
+                    if (!grouped[r.file]) grouped[r.file] = [];
+                    grouped[r.file].push(r);
+                });
+
+                for (const [file, matches] of Object.entries(grouped)) {
+                    content += `**${file}** (${matches.length} matches):\n`;
+                    matches.slice(0, 5).forEach(m => {
+                        content += `  Line ${m.line}: ${m.preview}\n`;
+                    });
+                    if (matches.length > 5) {
+                        content += `  ... and ${matches.length - 5} more matches\n`;
+                    }
+                    content += `\n`;
+                }
+            }
+
+            return {
+                tool_use_id: toolCall.id || this.taskId,
+                tool_name: 'semantic_search',
+                content,
+                success: true,
+                results: searchResults
+            };
+
+        } catch (error) {
+            console.error(`❌ Semantic search failed:`, error);
+
+            return {
+                tool_use_id: toolCall.id || this.taskId,
+                tool_name: 'semantic_search',
+                content: `Search failed: ${error.message}`,
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Execute get_symbol_info tool
+     * Gets information about a specific code symbol using VS Code's LSP
+     */
+    async _executeGetSymbolInfo(toolCall) {
+        const { symbol_name, file_path } = toolCall;
+
+        try {
+            console.log(`🔎 Getting symbol info for: "${symbol_name}"`);
+
+            const vscode = require('vscode');
+            const pathModule = require('path');
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            let targetUri;
+
+            if (file_path) {
+                // Search in specific file
+                const fullPath = pathModule.resolve(workspaceFolders[0].uri.fsPath, file_path);
+                targetUri = vscode.Uri.file(fullPath);
+            } else {
+                // Search across workspace
+                const workspaceSymbols = await vscode.commands.executeCommand(
+                    'vscode.executeWorkspaceSymbolProvider',
+                    symbol_name
+                );
+
+                if (!workspaceSymbols || workspaceSymbols.length === 0) {
+                    return {
+                        tool_use_id: toolCall.id || this.taskId,
+                        tool_name: 'get_symbol_info',
+                        content: `Symbol "${symbol_name}" not found in workspace`,
+                        success: false
+                    };
+                }
+
+                // Take first match
+                const symbol = workspaceSymbols[0];
+                targetUri = symbol.location.uri;
+            }
+
+            // Get document symbols
+            const document = await vscode.workspace.openTextDocument(targetUri);
+            const symbols = await vscode.commands.executeCommand(
+                'vscode.executeDocumentSymbolProvider',
+                targetUri
+            );
+
+            // Find matching symbol
+            const findSymbol = (symbols, name) => {
+                for (const sym of symbols || []) {
+                    if (sym.name === name || sym.name.includes(name)) {
+                        return sym;
+                    }
+                    if (sym.children) {
+                        const found = findSymbol(sym.children, name);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+
+            const symbol = findSymbol(symbols, symbol_name);
+
+            if (!symbol) {
+                return {
+                    tool_use_id: toolCall.id || this.taskId,
+                    tool_name: 'get_symbol_info',
+                    content: `Symbol "${symbol_name}" not found`,
+                    success: false
+                };
+            }
+
+            // Format symbol info
+            const relativePath = vscode.workspace.asRelativePath(targetUri);
+            const line = symbol.range.start.line + 1;
+            const kind = vscode.SymbolKind[symbol.kind];
+
+            let content = `Symbol: ${symbol.name}\n`;
+            content += `Kind: ${kind}\n`;
+            content += `Location: ${relativePath}:${line}\n`;
+            content += `Range: Lines ${symbol.range.start.line + 1}-${symbol.range.end.line + 1}\n`;
+
+            // Get the actual code
+            const symbolText = document.getText(symbol.range);
+            const preview = symbolText.split('\n').slice(0, 10).join('\n');
+            content += `\nCode Preview:\n\`\`\`\n${preview}\n\`\`\`\n`;
+
+            console.log(`✅ Found symbol: ${symbol.name} (${kind})`);
+
+            return {
+                tool_use_id: toolCall.id || this.taskId,
+                tool_name: 'get_symbol_info',
+                content,
+                success: true,
+                symbol: {
+                    name: symbol.name,
+                    kind,
+                    location: relativePath,
+                    line,
+                    range: symbol.range
+                }
+            };
+
+        } catch (error) {
+            console.error(`❌ Get symbol info failed:`, error);
+
+            return {
+                tool_use_id: toolCall.id || this.taskId,
+                tool_name: 'get_symbol_info',
+                content: `Failed to get symbol info: ${error.message}`,
+                success: false
+            };
+        }
     }
 
     /**
@@ -2259,10 +2645,12 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
 
     /**
      * Get dynamically discovered codebase context
+     * ✨ v3.2.6: Enhanced with hybrid framework detection (workspace + prompt)
      * @private
-     * @returns {Promise<string>} Dynamic context based on codebase analysis
+     * @param {string} initialMessage - User's initial message for prompt-based detection
+     * @returns {Promise<string>} Dynamic context based on codebase analysis + framework hints
      */
-    async _getDynamicCodebaseContext() {
+    async _getDynamicCodebaseContext(initialMessage = '') {
         try {
             // Get workspace path
             const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -2271,6 +2659,170 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
             }
 
             const workspacePath = workspaceFolders[0].uri.fsPath;
+
+            // 🔥 STEP 1: Workspace-based framework detection
+            console.log('🔍 [Framework Detection] Analyzing workspace files...');
+            const workspaceAnalyzer = new LocalWorkspaceAnalyzer();
+            const workspaceContext = await workspaceAnalyzer.analyzeWorkspace(workspacePath);
+
+            console.log(`📁 [Workspace] Detected: ${workspaceContext.projectType} (framework: ${workspaceContext.framework || 'unknown'})`);
+
+            // 🔥 STEP 2: Prompt-based framework detection
+            console.log('💬 [Framework Detection] Analyzing user prompt...');
+            const promptDetector = new PromptFrameworkDetector();
+            const promptDetection = promptDetector.detectFromPrompt(initialMessage, workspaceContext);
+
+            console.log(`💬 [Prompt] Detected: ${promptDetection.framework || 'none'} (confidence: ${promptDetection.confidence}, method: ${promptDetection.method})`);
+
+            // 🔥 STEP 3: Combine detections (prompt wins if high confidence)
+            let finalFramework = workspaceContext.projectType;
+            let detectionMethod = 'workspace';
+            let finalConfidence = 0.5; // Default workspace confidence
+
+            if (promptDetection.framework && promptDetection.confidence > 0.7) {
+                finalFramework = promptDetection.framework;
+                detectionMethod = promptDetection.method;
+                finalConfidence = promptDetection.confidence;
+                console.log(`✅ [Hybrid] Using prompt-detected framework: ${finalFramework} (${detectionMethod})`);
+            } else if (workspaceContext.framework) {
+                finalConfidence = 0.7; // Workspace detection is fairly confident
+                console.log(`✅ [Hybrid] Using workspace-detected framework: ${finalFramework}`);
+            }
+
+            // v3.4.3: Store detected framework and confidence for task reporting
+            this.detectedFramework = finalFramework;
+            this.frameworkConfidence = finalConfidence;
+
+            // 🔥 STEP 4: Get framework-specific hints for AI
+            const frameworkHints = promptDetector.getFrameworkHints(finalFramework, initialMessage);
+
+            // 🔥 STEP 5: Build enhanced context
+            let context = '';
+
+            // Add framework information
+            if (finalFramework && finalFramework !== 'Unknown') {
+                context += `\n\n**🎯 DETECTED FRAMEWORK: ${finalFramework.toUpperCase()}**\n`;
+                context += `Detection method: ${detectionMethod}\n`;
+                // v3.4.3 fix: Use finalConfidence which we stored earlier
+                const confidencePercent = finalConfidence !== undefined && finalConfidence !== null
+                    ? Math.round(finalConfidence * 100)
+                    : 50;
+                context += `Confidence: ${confidencePercent}%\n`;
+
+                // Add file type recommendations
+                if (frameworkHints.fileTypes.length > 0) {
+                    context += `\n**File Types:**\n`;
+                    frameworkHints.fileTypes.forEach(ext => {
+                        context += `- Use ${ext} files\n`;
+                    });
+                }
+
+                // Add conventions
+                if (frameworkHints.conventions.length > 0) {
+                    context += `\n**Framework Conventions:**\n`;
+                    frameworkHints.conventions.forEach(convention => {
+                        context += `- ${convention}\n`;
+                    });
+                }
+
+                // 🔥 v3.4.0: Framework-aware file generation instructions
+                if (frameworkHints.suggestedStructure) {
+                    const structure = frameworkHints.suggestedStructure;
+                    const entityType = structure.type.toLowerCase();
+
+                    // Get comprehensive file structure from registry
+                    const entity = this.frameworkRegistry.getEntity(finalFramework, entityType);
+                    if (entity) {
+                        const requiredFiles = this.frameworkRegistry.getRequiredFiles(finalFramework, entityType, true);
+                        const conventions = this.frameworkConventions.getConventionsSummary(finalFramework, entityType);
+
+                        context += `\n${conventions}\n`;
+                        context += `\n**🔴 CRITICAL: FILE GENERATION REQUIREMENTS**\n`;
+                        context += `\nWhen creating a ${finalFramework} ${structure.type}, you MUST generate ALL of the following files:\n\n`;
+
+                        requiredFiles.forEach((fileSpec, idx) => {
+                            const status = fileSpec.mandatory ? '🔴 MANDATORY' : '🟡 RECOMMENDED';
+                            context += `${idx + 1}. ${status}: **${fileSpec.type}${fileSpec.extension}**\n`;
+                            context += `   - Description: ${fileSpec.description}\n`;
+                            context += `   - Pattern: \`${fileSpec.pattern}\`\n`;
+                            if (fileSpec.bestPractice) {
+                                context += `   - ⭐ Best Practice: Essential for production-ready code\n`;
+                            }
+                            context += `\n`;
+                        });
+
+                        context += `\n**📋 IMPLEMENTATION INSTRUCTIONS:**\n`;
+                        context += `1. Create ALL mandatory files (marked with 🔴)\n`;
+                        context += `2. Include recommended files (marked with 🟡) for production quality\n`;
+                        context += `3. Follow the framework conventions listed above\n`;
+                        context += `4. Generate proper content for each file (not empty placeholders)\n`;
+                        context += `5. Include appropriate imports, classes, and boilerplate\n`;
+                        context += `6. Add validation logic where applicable\n`;
+                        context += `7. Include comprehensive comments and documentation\n`;
+                        context += `\n⚠️ DO NOT create only the .json file - all mandatory files must be created!\n`;
+                    } else {
+                        // Fallback to old structure display
+                        context += `\n**⚠️ REQUIRED File Structure for "${structure.type}":**\n`;
+                        context += `IMPORTANT: You MUST create ALL of the following files (not just .json):\n`;
+                        context += '```\n';
+                        structure.files.forEach(file => {
+                            context += `${file}\n`;
+                        });
+                        context += '```\n';
+                        context += `\n🔴 For ${finalFramework} ${structure.type}s, all files (.json, .py, .js) are mandatory!\n`;
+                    }
+                }
+
+                // Add workspace info
+                context += `\n**Workspace Info:**\n`;
+                context += `- Languages: ${workspaceContext.languages.join(', ') || 'Unknown'}\n`;
+                context += `- Dependencies: ${workspaceContext.dependencies.length} packages\n`;
+                if (workspaceContext.git) {
+                    context += `- Git Branch: ${workspaceContext.git.branch}\n`;
+                }
+
+                // 🔥 STEP 6: Learn workspace structure (v3.2.7)
+                console.log('🎓 [Learning] Analyzing workspace structure...');
+                this.learnedStructure = await this.structureLearner.learnStructure(workspacePath, finalFramework);
+
+                if (this.learnedStructure && this.learnedStructure.suggestedLocations) {
+                    context += `\n**📍 FILE CREATION LOCATIONS** (learned from workspace):\n`;
+
+                    // Add detected app metadata
+                    if (this.learnedStructure.appMetadata.appName) {
+                        context += `App Name: ${this.learnedStructure.appMetadata.appName}\n`;
+                        context += `Workspace Type: ${this.learnedStructure.appMetadata.type || 'unknown'}\n`;
+                    }
+
+                    // Add file location patterns
+                    context += `\n**Where to create files:**\n`;
+                    Object.entries(this.learnedStructure.suggestedLocations).forEach(([type, location]) => {
+                        context += `- ${type}: ${location}\n`;
+                    });
+
+                    // Add detected patterns
+                    if (this.learnedStructure.detectedPatterns.length > 0) {
+                        context += `\n**Detected Patterns:**\n`;
+                        this.learnedStructure.detectedPatterns.forEach(pattern => {
+                            context += `- ${pattern}\n`;
+                        });
+                    }
+
+                    // Add example files if available
+                    if (this.learnedStructure.exampleFiles.length > 0) {
+                        context += `\n**Example Files Found:**\n`;
+                        this.learnedStructure.exampleFiles.forEach(file => {
+                            context += `- ${file}\n`;
+                        });
+                    }
+                }
+            }
+
+            // 🔥 STEP 7: Add conversation context (v3.2.7)
+            const contextSummary = this.contextTracker.getContextSummary();
+            if (contextSummary) {
+                context += `\n${contextSummary}`;
+            }
 
             // Dynamically analyze codebase patterns
             const CodebasePatternAnalyzer = require('../analysis/CodebasePatternAnalyzer');
@@ -2281,9 +2833,12 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
 
             // Build context from discovered patterns
             const DynamicContextBuilder = require('../analysis/DynamicContextBuilder');
-            const context = DynamicContextBuilder.buildContext(patterns);
+            const patternContext = DynamicContextBuilder.buildContext(patterns);
 
-            console.log('✅ Dynamic context built from codebase analysis');
+            // Combine framework hints + pattern analysis
+            context += '\n' + patternContext;
+
+            console.log('✅ Dynamic context built with hybrid framework detection + structure learning');
 
             return context;
 
@@ -2841,6 +3396,204 @@ Use React best practices:
         this.taskMessages.push(taskMessage);
 
         console.log(`📝 [ConversationTask] Added ${role} message (dual tracking enabled)`);
+    }
+
+    /**
+     * v3.4.3: Complete task and generate comprehensive report
+     * Called when task finishes or is stopped
+     * @param {string} status - Task completion status ('completed', 'stopped', 'failed')
+     * @returns {Promise<Object>} Report result with filepath
+     */
+    async completeTask(status = 'completed') {
+        const endTime = Date.now();
+        this.taskEndTime = endTime;
+        this.status = status;
+
+        try {
+            console.log(`🏁 [ConversationTask] Completing task ${this.taskId} with status: ${status}`);
+
+            // Get workspace path for memory service and report saving
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            const workspacePath = workspaceFolders && workspaceFolders.length > 0
+                ? workspaceFolders[0].uri.fsPath
+                : null;
+
+            // Initialize workspace memory if available
+            if (workspacePath && !this.workspaceMemory) {
+                this.workspaceMemory = new WorkspaceMemoryService(workspacePath);
+            }
+
+            // Generate comprehensive task report
+            const report = TaskSummaryGenerator.generate({
+                taskId: this.taskId || `task-${Date.now()}`,
+                taskDescription: this.initialPrompt || 'No description provided',
+                framework: this.detectedFramework ? {
+                    name: this.detectedFramework,
+                    confidence: this.frameworkConfidence || 0
+                } : null,
+                commands: this.executedCommands || [],
+                messages: this.messages || [],
+                memoryRefs: this.memoryReferences || [],
+                riskLevel: this._calculateRiskLevel(),
+                fileChanges: this.fileChangeTracker?.getAllChanges() || [],
+                todos: [], // TODO: Extract todos from messages if needed
+                toolResults: this.toolResults || [],
+                errors: this.errors || [],
+                mode: this.mode || 'agent',
+                startTime: this.startTime || endTime,
+                endTime
+            });
+
+            console.log(`📊 [ConversationTask] Task report generated:`, {
+                filesChanged: report.fileChanges?.summary?.total || 0,
+                commandsRun: report.commands?.length || 0,
+                riskLevel: report.riskLevel
+            });
+
+            let filepath = null;
+            let jsonFilepath = null;
+
+            // Save report to .vscode/ if workspace available
+            if (workspacePath) {
+                // Generate markdown
+                const markdown = TaskSummaryGenerator.generateMarkdown(report, {
+                    includeTimestamp: true,
+                    includeContext: true
+                });
+
+                // Save markdown report
+                filepath = TaskSummaryGenerator.saveReport(
+                    markdown,
+                    'md',
+                    workspacePath
+                );
+                console.log(`✅ Task report saved: ${filepath}`);
+
+                // Save JSON version for programmatic access
+                try {
+                    const json = JSON.stringify(report, null, 2);
+                    jsonFilepath = TaskSummaryGenerator.saveReport(
+                        json,
+                        'json',
+                        workspacePath
+                    );
+                    console.log(`✅ Task report JSON saved: ${jsonFilepath}`);
+                } catch (jsonError) {
+                    console.warn(`⚠️ Failed to save JSON report: ${jsonError.message}`);
+                }
+
+                // Save to workspace memory
+                if (this.workspaceMemory) {
+                    try {
+                        report.filepath = filepath;
+                        await this.workspaceMemory.saveReport(report);
+                        console.log(`💾 Report saved to workspace memory`);
+                    } catch (memError) {
+                        console.warn(`⚠️ Failed to save to workspace memory: ${memError.message}`);
+                    }
+                }
+            } else {
+                console.warn(`⚠️ No workspace path - report not saved to file`);
+            }
+
+            // Emit task completion event
+            this.emit('taskCompleted', {
+                taskId: this.taskId,
+                status,
+                report,
+                filepath,
+                jsonFilepath
+            });
+
+            return {
+                status,
+                report,
+                filepath,
+                jsonFilepath,
+                summary: report.overview
+            };
+
+        } catch (error) {
+            console.error('❌ Failed to generate task report:', error);
+            return {
+                status,
+                error: error.message,
+                report: null,
+                filepath: null
+            };
+        }
+    }
+
+    /**
+     * v3.4.3: Calculate risk level based on file changes and commands
+     * @private
+     * @returns {string} Risk level: 'low', 'medium', or 'high'
+     */
+    _calculateRiskLevel() {
+        const riskFactors = [];
+
+        // Check file changes for security-sensitive patterns
+        const sensitivePatterns = [
+            'package.json',
+            'package-lock.json',
+            'yarn.lock',
+            '.env',
+            '.key',
+            '.pem',
+            '.crt',
+            'Dockerfile',
+            'docker-compose.yml',
+            'tsconfig.json',
+            'webpack.config',
+            '.gitignore'
+        ];
+
+        const fileChanges = this.fileChangeTracker?.getAllChanges() || [];
+        const hasSecurityFiles = fileChanges.some(change => {
+            const path = change.path || change.file || '';
+            return sensitivePatterns.some(pattern => {
+                return path.toLowerCase().includes(pattern.toLowerCase());
+            });
+        });
+
+        if (hasSecurityFiles) {
+            riskFactors.push('security-sensitive-files');
+        }
+
+        // Check for errors
+        if (this.errors && this.errors.length > 0) {
+            riskFactors.push('errors-encountered');
+        }
+
+        // Check command executions
+        const dangerousCommands = ['rm -rf', 'sudo', 'chmod 777', 'git push --force', 'npm publish', 'yarn publish'];
+        const hasDangerousCmd = this.executedCommands.some(cmdRecord => {
+            return dangerousCommands.some(danger => cmdRecord.command.includes(danger));
+        });
+
+        if (hasDangerousCmd) {
+            riskFactors.push('dangerous-commands');
+        }
+
+        // Check high-risk commands
+        const highRiskCommands = this.executedCommands.filter(cmd => cmd.riskLevel === 'high');
+        if (highRiskCommands.length > 0) {
+            riskFactors.push('high-risk-commands-executed');
+        }
+
+        // Check number of files changed
+        if (fileChanges.length > 10) {
+            riskFactors.push('many-files-changed');
+        }
+
+        // Calculate risk level
+        if (riskFactors.length === 0) {
+            return 'low';
+        } else if (riskFactors.length <= 2) {
+            return 'medium';
+        } else {
+            return 'high';
+        }
     }
 
     /**

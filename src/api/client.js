@@ -14,7 +14,7 @@ class ApiClient {
         // Get configuration
         const config = vscode.workspace.getConfiguration('oropendola');
         const baseUrl = config.get('api.url') || config.get('serverUrl') || 'https://oropendola.ai';
-        const timeout = config.get('apiTimeout') || 120000; // 2 minutes for AI requests
+        const timeout = config.get('apiTimeout') || 1200000; // 20 minutes for AI requests (complex tasks need time)
 
         // API Key authentication (preferred for extensions)
         this.apiKey = config.get('api.key');

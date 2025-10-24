@@ -1,0 +1,318 @@
+/* Enhanced Todo Panel - Hierarchical Collapsible Style */
+
+.enhanced-todo-panel {
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  margin: 12px 16px;
+  overflow: hidden;
+  display: none;
+}
+
+.enhanced-todo-panel.visible {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.todo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.todo-header:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.enhanced-todo-panel.collapsed .todo-header {
+  border-bottom: none;
+}
+
+.todo-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.panel-collapse-arrow {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+
+.todo-icon {
+  font-size: 16px;
+}
+
+.todo-count {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.todo-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.todo-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.todo-action-btn:hover:not(:disabled) {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.todo-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Thinking Status */
+.thinking-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 193, 7, 0.1);
+  border-bottom: 1px solid rgba(255, 193, 7, 0.3);
+  font-size: 12px;
+  color: var(--vscode-foreground);
+}
+
+.thinking-dot {
+  color: #FFC107;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.thinking-text {
+  font-style: italic;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Content */
+.todo-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.todo-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  font-size: 13px;
+}
+
+/* Hierarchical List */
+.todo-list-hierarchical {
+  padding: 8px 0;
+}
+
+/* Collapsible Todo Item */
+.collapsible-todo-container {
+  position: relative;
+}
+
+.collapsible-todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.collapsible-todo-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.collapsible-todo-item:hover .todo-delete-btn {
+  opacity: 1;
+}
+
+/* Level indentation */
+.collapsible-todo-item.level-0 {
+  font-weight: 500;
+}
+
+.collapsible-todo-item.level-1 {
+  font-size: 13px;
+}
+
+.collapsible-todo-item.level-2 {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+/* Collapse Arrow */
+.collapse-arrow {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 2px;
+  font-size: 10px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.collapse-arrow:hover {
+  color: var(--vscode-foreground);
+}
+
+/* Status Indicator */
+.status-indicator {
+  font-size: 14px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Todo Content */
+.todo-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.todo-text {
+  color: var(--vscode-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.todo-text.completed {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.todo-metadata {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+/* Status-based styling */
+.collapsible-todo-item.completed {
+  opacity: 0.7;
+}
+
+.collapsible-todo-item.in_progress {
+  background: rgba(255, 193, 7, 0.05);
+  border-left: 3px solid #FFC107;
+  padding-left: 13px;
+}
+
+.collapsible-todo-item.failed {
+  background: rgba(244, 67, 54, 0.05);
+  border-left: 3px solid #F44336;
+  padding-left: 13px;
+}
+
+/* Delete Button */
+.todo-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  opacity: 0;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.todo-delete-btn:hover {
+  background: rgba(244, 67, 54, 0.2);
+  color: #F44336;
+}
+
+/* Children Container */
+.todo-children {
+  position: relative;
+}
+
+.todo-children::before {
+  content: '';
+  position: absolute;
+  left: 24px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--vscode-panel-border);
+  opacity: 0.3;
+}
+
+/* Stats Bar */
+.todo-stats-bar {
+  display: flex;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--vscode-editor-background);
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: 11px;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.stat.in-progress {
+  color: #FFC107;
+}
+
+.stat.completed {
+  color: #4CAF50;
+}
+
+.stat.pending {
+  color: #9E9E9E;
+}
