@@ -69,6 +69,7 @@ export class TaskStorage {
         status TEXT NOT NULL CHECK(status IN ('active', 'completed', 'failed', 'terminated')),
         conversation_id TEXT NOT NULL,
         messages_json TEXT NOT NULL DEFAULT '[]',
+        messages_text TEXT,
         checkpoints_json TEXT NOT NULL DEFAULT '[]',
         current_checkpoint TEXT,
         context_tokens INTEGER NOT NULL DEFAULT 0,
@@ -110,11 +111,11 @@ export class TaskStorage {
       -- Triggers to keep FTS index updated
       CREATE TRIGGER IF NOT EXISTS tasks_fts_insert AFTER INSERT ON tasks BEGIN
         INSERT INTO tasks_fts(rowid, id, text, messages_text)
-        VALUES (new.rowid, new.id, new.text, new.messages_json);
+        VALUES (new.rowid, new.id, new.text, new.messages_text);
       END;
 
       CREATE TRIGGER IF NOT EXISTS tasks_fts_update AFTER UPDATE ON tasks BEGIN
-        UPDATE tasks_fts SET text = new.text, messages_text = new.messages_json
+        UPDATE tasks_fts SET text = new.text, messages_text = new.messages_text
         WHERE rowid = new.rowid;
       END;
 
@@ -161,14 +162,20 @@ export class TaskStorage {
       }
     }
 
+    // Extract text from messages for FTS
+    const messagesText = newTask.messages
+      .map(m => m.text || m.ask || m.say || '')
+      .filter(Boolean)
+      .join(' ')
+
     await this.db.run(`
       INSERT INTO tasks (
         id, created_at, updated_at, completed_at, text, status,
-        conversation_id, messages_json, checkpoints_json, current_checkpoint,
+        conversation_id, messages_json, messages_text, checkpoints_json, current_checkpoint,
         context_tokens, context_window,
         tokens_in, tokens_out, cache_reads, cache_writes, total_cost,
         version, mode, model, total_duration, file_changes_json, tags_json, error, stack
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       newTask.id,
       newTask.createdAt,
@@ -178,6 +185,7 @@ export class TaskStorage {
       newTask.status,
       newTask.conversationId,
       JSON.stringify(newTask.messages),
+      messagesText,
       JSON.stringify(newTask.checkpoints),
       newTask.currentCheckpoint || null,
       newTask.contextTokens,
@@ -230,6 +238,12 @@ export class TaskStorage {
       updatedAt: Date.now()
     }
 
+    // Extract text from messages for FTS
+    const messagesText = updatedTask.messages
+      .map(m => m.text || m.ask || m.say || '')
+      .filter(Boolean)
+      .join(' ')
+
     await this.db.run(`
       UPDATE tasks SET
         updated_at = ?,
@@ -237,6 +251,7 @@ export class TaskStorage {
         text = ?,
         status = ?,
         messages_json = ?,
+        messages_text = ?,
         checkpoints_json = ?,
         current_checkpoint = ?,
         context_tokens = ?,
@@ -260,6 +275,7 @@ export class TaskStorage {
       updatedTask.text,
       updatedTask.status,
       JSON.stringify(updatedTask.messages),
+      messagesText,
       JSON.stringify(updatedTask.checkpoints),
       updatedTask.currentCheckpoint || null,
       updatedTask.contextTokens,
@@ -317,8 +333,8 @@ export class TaskStorage {
       // Use full-text search
       const ftsQuery = `
         SELECT t.* FROM tasks t
-        JOIN tasks_fts fts ON t.rowid = fts.rowid
-        WHERE fts MATCH ?
+        JOIN tasks_fts ON t.rowid = tasks_fts.rowid
+        WHERE tasks_fts MATCH ?
       `
       const ftsParams = [filters.search]
 
@@ -342,6 +358,9 @@ export class TaskStorage {
     if (filters?.limit) {
       query += ' LIMIT ?'
       params.push(filters.limit)
+    } else if (filters?.offset) {
+      // OFFSET requires LIMIT in SQLite, use -1 for all rows
+      query += ' LIMIT -1'
     }
 
     if (filters?.offset) {
