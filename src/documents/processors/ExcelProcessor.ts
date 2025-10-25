@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import type {
     ProcessedDocument,
     DocumentMetadata,
@@ -24,21 +24,25 @@ export class ExcelProcessor {
     ): Promise<ProcessedDocument> {
         try {
             // Read Excel file
-            const workbook = XLSX.readFile(filePath);
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.readFile(filePath);
+
+            // Get sheet names
+            const sheetNames = workbook.worksheets.map(ws => ws.name);
 
             // Extract all sheets as tables
             const tables = this.extractTables(workbook);
 
             // Convert to text representation
-            const content = this.convertTablesToText(tables, workbook.SheetNames);
+            const content = this.convertTablesToText(tables, sheetNames);
 
             // Update metadata
             metadata.wordCount = this.countWords(content);
-            metadata.pageCount = workbook.SheetNames.length; // One "page" per sheet
+            metadata.pageCount = sheetNames.length; // One "page" per sheet
 
             // Add Excel-specific metadata
-            metadata.sheets = workbook.SheetNames;
-            metadata.sheetCount = workbook.SheetNames.length;
+            metadata.sheets = sheetNames;
+            metadata.sheetCount = sheetNames.length;
 
             const result: ProcessedDocument = {
                 content,
@@ -56,20 +60,22 @@ export class ExcelProcessor {
 
     /**
      * Extract tables from all sheets
-     * @param workbook - XLSX workbook object
+     * @param workbook - ExcelJS workbook object
      * @returns Array of tables
      */
-    private extractTables(workbook: XLSX.WorkBook): DocumentTable[] {
+    private extractTables(workbook: ExcelJS.Workbook): DocumentTable[] {
         const tables: DocumentTable[] = [];
 
-        for (const sheetName of workbook.SheetNames) {
-            const worksheet = workbook.Sheets[sheetName];
+        for (const worksheet of workbook.worksheets) {
+            // Extract all rows as 2D array
+            const data: any[][] = [];
 
-            // Convert sheet to JSON
-            const data: any[][] = XLSX.utils.sheet_to_json(worksheet, {
-                header: 1,
-                defval: '',
-                blankrows: false
+            worksheet.eachRow((row, rowNumber) => {
+                const rowData: any[] = [];
+                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                    rowData.push(cell.value !== null && cell.value !== undefined ? String(cell.value) : '');
+                });
+                data.push(rowData);
             });
 
             // Skip empty sheets
@@ -99,7 +105,7 @@ export class ExcelProcessor {
                 tables.push({
                     headers,
                     rows,
-                    caption: sheetName
+                    caption: worksheet.name
                 });
             }
         }
@@ -181,19 +187,33 @@ export class ExcelProcessor {
      */
     async exportSheetAsCSV(filePath: string, sheetName?: string): Promise<string> {
         try {
-            const workbook = XLSX.readFile(filePath);
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.readFile(filePath);
 
             // Use first sheet if not specified
-            const targetSheet = sheetName || workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[targetSheet];
+            const targetSheet = sheetName || workbook.worksheets[0]?.name;
+            const worksheet = workbook.getWorksheet(targetSheet || '');
 
             if (!worksheet) {
                 throw new Error(`Sheet "${targetSheet}" not found`);
             }
 
             // Convert to CSV
-            const csv = XLSX.utils.sheet_to_csv(worksheet);
-            return csv;
+            const csvRows: string[] = [];
+            worksheet.eachRow((row, rowNumber) => {
+                const rowData: string[] = [];
+                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                    const value = cell.value !== null && cell.value !== undefined ? String(cell.value) : '';
+                    // Escape CSV values
+                    const escaped = value.includes(',') || value.includes('"') || value.includes('\n')
+                        ? `"${value.replace(/"/g, '""')}"`
+                        : value;
+                    rowData.push(escaped);
+                });
+                csvRows.push(rowData.join(','));
+            });
+
+            return csvRows.join('\n');
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to export CSV: ${errorMessage}`);
@@ -208,18 +228,38 @@ export class ExcelProcessor {
      */
     async exportSheetAsJSON(filePath: string, sheetName?: string): Promise<any[]> {
         try {
-            const workbook = XLSX.readFile(filePath);
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.readFile(filePath);
 
             // Use first sheet if not specified
-            const targetSheet = sheetName || workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[targetSheet];
+            const targetSheet = sheetName || workbook.worksheets[0]?.name;
+            const worksheet = workbook.getWorksheet(targetSheet || '');
 
             if (!worksheet) {
                 throw new Error(`Sheet "${targetSheet}" not found`);
             }
 
-            // Convert to JSON
-            const json = XLSX.utils.sheet_to_json(worksheet);
+            // Convert to JSON array of objects
+            const json: any[] = [];
+            let headers: string[] = [];
+
+            worksheet.eachRow((row, rowNumber) => {
+                if (rowNumber === 1) {
+                    // First row becomes headers
+                    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                        headers.push(cell.value !== null && cell.value !== undefined ? String(cell.value) : `Column${colNumber}`);
+                    });
+                } else {
+                    // Subsequent rows become objects
+                    const rowObj: any = {};
+                    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                        const header = headers[colNumber - 1] || `Column${colNumber}`;
+                        rowObj[header] = cell.value !== null && cell.value !== undefined ? cell.value : null;
+                    });
+                    json.push(rowObj);
+                }
+            });
+
             return json;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -234,17 +274,18 @@ export class ExcelProcessor {
      * @param cellAddress - Cell address (e.g., 'A1', 'B5')
      * @returns Cell value
      */
-    getCellValue(filePath: string, sheetName: string, cellAddress: string): any {
+    async getCellValue(filePath: string, sheetName: string, cellAddress: string): Promise<any> {
         try {
-            const workbook = XLSX.readFile(filePath);
-            const worksheet = workbook.Sheets[sheetName];
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.readFile(filePath);
+            const worksheet = workbook.getWorksheet(sheetName);
 
             if (!worksheet) {
                 throw new Error(`Sheet "${sheetName}" not found`);
             }
 
-            const cell = worksheet[cellAddress];
-            return cell ? cell.v : null;
+            const cell = worksheet.getCell(cellAddress);
+            return cell ? cell.value : null;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to get cell value: ${errorMessage}`);
@@ -258,25 +299,28 @@ export class ExcelProcessor {
      * @param range - Cell range (e.g., 'A1:C10')
      * @returns 2D array of cell values
      */
-    getCellRange(filePath: string, sheetName: string, range: string): any[][] {
+    async getCellRange(filePath: string, sheetName: string, range: string): Promise<any[][]> {
         try {
-            const workbook = XLSX.readFile(filePath);
-            const worksheet = workbook.Sheets[sheetName];
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.readFile(filePath);
+            const worksheet = workbook.getWorksheet(sheetName);
 
             if (!worksheet) {
                 throw new Error(`Sheet "${sheetName}" not found`);
             }
 
-            // Parse range
-            const rangeObj = XLSX.utils.decode_range(range);
+            // Parse range (e.g., 'A1:C10')
+            const [startCell, endCell] = range.split(':');
+            const startRef = this.parseCellAddress(startCell);
+            const endRef = this.parseCellAddress(endCell);
+
             const data: any[][] = [];
 
-            for (let row = rangeObj.s.r; row <= rangeObj.e.r; row++) {
+            for (let row = startRef.row; row <= endRef.row; row++) {
                 const rowData: any[] = [];
-                for (let col = rangeObj.s.c; col <= rangeObj.e.c; col++) {
-                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-                    const cell = worksheet[cellAddress];
-                    rowData.push(cell ? cell.v : null);
+                for (let col = startRef.col; col <= endRef.col; col++) {
+                    const cell = worksheet.getCell(row, col);
+                    rowData.push(cell ? cell.value : null);
                 }
                 data.push(rowData);
             }
@@ -289,37 +333,67 @@ export class ExcelProcessor {
     }
 
     /**
+     * Parse cell address (e.g., 'A1' -> {row: 1, col: 1})
+     * @param address - Cell address
+     * @returns Row and column numbers
+     */
+    private parseCellAddress(address: string): { row: number; col: number } {
+        const match = address.match(/^([A-Z]+)(\d+)$/);
+        if (!match) {
+            throw new Error(`Invalid cell address: ${address}`);
+        }
+
+        const colLetters = match[1];
+        const rowNumber = parseInt(match[2], 10);
+
+        // Convert column letters to number (A=1, B=2, ..., Z=26, AA=27, ...)
+        let colNumber = 0;
+        for (let i = 0; i < colLetters.length; i++) {
+            colNumber = colNumber * 26 + (colLetters.charCodeAt(i) - 64);
+        }
+
+        return { row: rowNumber, col: colNumber };
+    }
+
+    /**
      * Get document metadata without full processing
      * @param filePath - Path to Excel file
      * @returns Basic metadata
      */
     async getMetadata(filePath: string): Promise<Partial<DocumentMetadata>> {
         try {
-            const workbook = XLSX.readFile(filePath, { bookProps: true });
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.readFile(filePath);
             const stats = fs.statSync(filePath);
+
+            // Get sheet names
+            const sheetNames = workbook.worksheets.map(ws => ws.name);
 
             // Count total cells across all sheets
             let totalCells = 0;
-            for (const sheetName of workbook.SheetNames) {
-                const worksheet = workbook.Sheets[sheetName];
-                const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-                totalCells += (range.e.r - range.s.r + 1) * (range.e.c - range.s.c + 1);
+            for (const worksheet of workbook.worksheets) {
+                const dimensions = worksheet.dimensions;
+                if (dimensions) {
+                    const rowCount = dimensions.bottom - dimensions.top + 1;
+                    const colCount = dimensions.right - dimensions.left + 1;
+                    totalCells += rowCount * colCount;
+                }
             }
 
             return {
                 fileName: path.basename(filePath),
                 filePath,
                 fileSize: stats.size,
-                pageCount: workbook.SheetNames.length,
-                sheets: workbook.SheetNames,
-                sheetCount: workbook.SheetNames.length,
+                pageCount: sheetNames.length,
+                sheets: sheetNames,
+                sheetCount: sheetNames.length,
                 createdAt: stats.birthtime,
                 modifiedAt: stats.mtime,
                 // Excel-specific properties
-                author: workbook.Props?.Author,
-                title: workbook.Props?.Title,
-                subject: workbook.Props?.Subject,
-                keywords: workbook.Props?.Keywords?.split(',').map(k => k.trim())
+                author: workbook.creator,
+                title: workbook.title,
+                subject: workbook.subject,
+                keywords: workbook.keywords?.split(',').map(k => k.trim())
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
