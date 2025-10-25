@@ -1,0 +1,121 @@
+/* TaskStateControls Styles */
+
+.task-state-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-state-controls vscode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-state-controls .codicon {
+  font-size: 14px;
+}
+
+/* Status Badges */
+.task-state-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.task-state-badge .codicon {
+  font-size: 14px;
+}
+
+.task-state-completed {
+  background-color: var(--vscode-testing-iconPassed);
+  color: var(--vscode-editor-background);
+}
+
+.task-state-failed {
+  background-color: var(--vscode-testing-iconFailed);
+  color: var(--vscode-editor-background);
+}
+
+.task-state-terminated {
+  background-color: var(--vscode-descriptionForeground);
+  color: var(--vscode-editor-background);
+}
+
+/* Compact version */
+.task-state-controls-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-state-controls-compact vscode-button {
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+/* Status color classes for use elsewhere */
+.status-active {
+  color: var(--vscode-charts-blue);
+}
+
+.status-completed {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.status-failed {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.status-terminated {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Spinner animation for active status icon */
+.codicon-modifier-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Hover effects */
+.task-state-controls vscode-button:not([disabled]):hover {
+  opacity: 0.9;
+}
+
+/* Disabled state */
+.task-state-controls vscode-button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .task-state-controls {
+    gap: 8px;
+  }
+
+  .task-state-controls vscode-button {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+
+  .task-state-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+  }
+}

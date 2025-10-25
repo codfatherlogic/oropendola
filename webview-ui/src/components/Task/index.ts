@@ -17,3 +17,27 @@ export type { TodoListDisplayProps, Todo } from './TodoListDisplay'
 
 export { TaskActions } from './TaskActions'
 export type { TaskActionsProps } from './TaskActions'
+
+export { TaskCreationDialog } from './TaskCreationDialog'
+export type { TaskCreationDialogProps } from './TaskCreationDialog'
+
+export {
+  TaskStateControls,
+  TaskStateControlsCompact,
+  getStatusDisplayName,
+  getStatusIcon,
+  getStatusColorClass
+} from './TaskStateControls'
+export type { TaskStateControlsProps } from './TaskStateControls'
+
+export {
+  TaskDeletionDialog,
+  TaskDeletionConfirm
+} from './TaskDeletionDialog'
+export type { TaskDeletionDialogProps } from './TaskDeletionDialog'
+
+export { TaskHistoryView } from './TaskHistoryView'
+export type { TaskHistoryViewProps } from './TaskHistoryView'
+
+export { TaskHistoryItem } from './TaskHistoryItem'
+export type { TaskHistoryItemProps } from './TaskHistoryItem'

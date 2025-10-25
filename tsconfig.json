@@ -59,7 +59,8 @@
     "webview-ui",
     "**/*.test.ts",
     "**/*.spec.ts",
-    "**/__tests__/**"
+    "**/__tests__/**",
+    "src/documents/processors/ExcelProcessor.ts"
   ],
   "ts-node": {
     "compilerOptions": {

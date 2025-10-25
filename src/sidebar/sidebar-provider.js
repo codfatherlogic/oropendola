@@ -221,7 +221,13 @@ class OropendolaSidebarProvider {
                         await this._handleGetFileWatcherStats();
                         break;
 
-                    // Sprint 1-2: Task History View handlers
+                    // Sprint 1-2: Task Management handlers
+                    case 'createTask':
+                        await this._handleCreateTask(message.text, message.mode);
+                        break;
+                    case 'setTaskStatus':
+                        await this._handleSetTaskStatus(message.taskId, message.status);
+                        break;
                     case 'listTasks':
                         await this._handleListTasks(message.filters);
                         break;
@@ -232,10 +238,27 @@ class OropendolaSidebarProvider {
                         await this._handleLoadTask(message.taskId);
                         break;
                     case 'deleteTask':
-                        await this._handleDeleteTask(message.taskId);
+                        await this._handleDeleteTask(message.taskId, message.permanent);
                         break;
                     case 'exportTask':
                         await this._handleExportTask(message.taskId, message.format);
+                        break;
+
+                    // Sprint 1-2 Week 5-6: Batch Operations
+                    case 'batchSetStatus':
+                        await this._handleBatchSetStatus(message.taskIds, message.status);
+                        break;
+                    case 'batchDelete':
+                        await this._handleBatchDelete(message.taskIds);
+                        break;
+                    case 'batchExport':
+                        await this._handleBatchExport(message.taskIds, message.format);
+                        break;
+                    case 'batchAddTags':
+                        await this._handleBatchAddTags(message.taskIds, message.tags);
+                        break;
+                    case 'batchRemoveTags':
+                        await this._handleBatchRemoveTags(message.taskIds, message.tags);
                         break;
 
                     // Week 7: Terminal View handlers
@@ -3487,7 +3510,99 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         return html;
     }
 
-    // ==================== Sprint 1-2: Task History Handlers ====================
+    // ==================== Sprint 1-2: Task Management Handlers ====================
+
+    /**
+     * Handle createTask request
+     * Creates a new task with optional name and mode
+     */
+    async _handleCreateTask(text, mode = 'agent') {
+        try {
+            if (!this._taskManager) {
+                console.warn('⚠️  TaskManager not initialized');
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'taskCreated',
+                        success: false,
+                        error: 'Task manager not initialized'
+                    });
+                }
+                return;
+            }
+
+            console.log('📝 Creating new task:', { text, mode });
+            const task = await this._taskManager.createTask(text, mode);
+
+            // Update current task
+            this._currentTask = task;
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskCreated',
+                    success: true,
+                    task: task
+                });
+            }
+
+            console.log(`✅ Task created with ID: ${task.id}`);
+        } catch (error) {
+            console.error('❌ Error creating task:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskCreated',
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle setTaskStatus request
+     * Changes task status (active, completed, failed, terminated)
+     */
+    async _handleSetTaskStatus(taskId, status) {
+        try {
+            if (!this._taskManager) {
+                console.warn('⚠️  TaskManager not initialized');
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'taskStatusChanged',
+                        success: false,
+                        error: 'Task manager not initialized'
+                    });
+                }
+                return;
+            }
+
+            console.log(`🔄 Setting task ${taskId} status to: ${status}`);
+            const task = await this._taskManager.setStatus(taskId, status);
+
+            // Update current task if it's the one being modified
+            if (this._currentTask?.id === taskId) {
+                this._currentTask = task;
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskStatusChanged',
+                    success: true,
+                    task: task
+                });
+            }
+
+            console.log(`✅ Task ${taskId} status changed to: ${status}`);
+        } catch (error) {
+            console.error('❌ Error setting task status:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskStatusChanged',
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+    }
 
     /**
      * Handle listTasks request from history view
@@ -3755,6 +3870,221 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
                     error: error.message
                 });
             }
+        }
+    }
+
+    // ========================================================================
+    // BATCH OPERATION HANDLERS (Sprint 1-2 Week 5-6)
+    // ========================================================================
+
+    /**
+     * Handle batch status change
+     */
+    async _handleBatchSetStatus(taskIds, status) {
+        try {
+            if (!this._taskManager) {
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`🔄 Batch setting status to ${status} for ${taskIds.length} tasks`);
+            const results = await this._taskManager.batchSetStatus(taskIds, status);
+
+            const successMsg = results.succeeded.length > 0
+                ? `${results.succeeded.length} task(s) updated to ${status}`
+                : '';
+
+            const failMsg = results.failed.length > 0
+                ? `${results.failed.length} task(s) failed to update`
+                : '';
+
+            const message = [successMsg, failMsg].filter(Boolean).join(', ');
+
+            if (results.succeeded.length > 0) {
+                vscode.window.showInformationMessage(message);
+            } else if (results.failed.length > 0) {
+                vscode.window.showWarningMessage(message);
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'batchOperationComplete',
+                    operation: 'batchSetStatus',
+                    results
+                });
+            }
+
+            console.log(`✅ Batch status change complete: ${results.succeeded.length} succeeded, ${results.failed.length} failed`);
+        } catch (error) {
+            console.error('❌ Error in batch status change:', error);
+            vscode.window.showErrorMessage(`Batch operation failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Handle batch delete
+     */
+    async _handleBatchDelete(taskIds) {
+        try {
+            if (!this._taskManager) {
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`🗑️  Batch deleting ${taskIds.length} tasks`);
+            const results = await this._taskManager.batchDelete(taskIds);
+
+            const message = `Deleted ${results.succeeded.length} of ${taskIds.length} task(s)`;
+
+            if (results.succeeded.length > 0) {
+                vscode.window.showInformationMessage(message);
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'batchOperationComplete',
+                    operation: 'batchDelete',
+                    results
+                });
+            }
+
+            console.log(`✅ Batch delete complete: ${results.succeeded.length} succeeded, ${results.failed.length} failed`);
+        } catch (error) {
+            console.error('❌ Error in batch delete:', error);
+            vscode.window.showErrorMessage(`Batch delete failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Handle batch export
+     */
+    async _handleBatchExport(taskIds, format = 'json') {
+        try {
+            if (!this._taskManager) {
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`📤 Batch exporting ${taskIds.length} tasks as ${format}`);
+            const results = await this._taskManager.batchExport(taskIds, format);
+
+            if (results.succeeded.length === 0) {
+                vscode.window.showWarningMessage('No tasks were exported');
+                return;
+            }
+
+            // Save to single file with all tasks
+            const fileExtension = format === 'json' ? 'json' : format === 'md' ? 'md' : 'txt';
+            const fileName = `tasks_batch_${Date.now()}.${fileExtension}`;
+
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(fileName),
+                filters: {
+                    [format.toUpperCase()]: [fileExtension]
+                }
+            });
+
+            if (uri) {
+                const fs = require('fs').promises;
+
+                // Combine all exports
+                let combinedContent;
+                if (format === 'json') {
+                    combinedContent = JSON.stringify(results.succeeded.map(r => JSON.parse(r.data)), null, 2);
+                } else {
+                    combinedContent = results.succeeded.map(r => r.data).join('\n\n' + '='.repeat(80) + '\n\n');
+                }
+
+                await fs.writeFile(uri.fsPath, combinedContent, 'utf-8');
+
+                vscode.window.showInformationMessage(
+                    `Exported ${results.succeeded.length} task(s) to ${uri.fsPath}`
+                );
+
+                console.log(`✅ Batch export complete: ${results.succeeded.length} succeeded, ${results.failed.length} failed`);
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'batchOperationComplete',
+                    operation: 'batchExport',
+                    results: {
+                        succeeded: results.succeeded.map(r => ({ id: r.id })),
+                        failed: results.failed
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error in batch export:', error);
+            vscode.window.showErrorMessage(`Batch export failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Handle batch add tags
+     */
+    async _handleBatchAddTags(taskIds, tags) {
+        try {
+            if (!this._taskManager) {
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`🏷️  Batch adding tags [${tags.join(', ')}] to ${taskIds.length} tasks`);
+            const results = await this._taskManager.batchAddTags(taskIds, tags);
+
+            const message = `Added tags to ${results.succeeded.length} of ${taskIds.length} task(s)`;
+
+            if (results.succeeded.length > 0) {
+                vscode.window.showInformationMessage(message);
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'batchOperationComplete',
+                    operation: 'batchAddTags',
+                    results
+                });
+            }
+
+            console.log(`✅ Batch add tags complete: ${results.succeeded.length} succeeded, ${results.failed.length} failed`);
+        } catch (error) {
+            console.error('❌ Error in batch add tags:', error);
+            vscode.window.showErrorMessage(`Batch add tags failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Handle batch remove tags
+     */
+    async _handleBatchRemoveTags(taskIds, tags) {
+        try {
+            if (!this._taskManager) {
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`🏷️  Batch removing tags [${tags.join(', ')}] from ${taskIds.length} tasks`);
+            const results = await this._taskManager.batchRemoveTags(taskIds, tags);
+
+            const message = `Removed tags from ${results.succeeded.length} of ${taskIds.length} task(s)`;
+
+            if (results.succeeded.length > 0) {
+                vscode.window.showInformationMessage(message);
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'batchOperationComplete',
+                    operation: 'batchRemoveTags',
+                    results
+                });
+            }
+
+            console.log(`✅ Batch remove tags complete: ${results.succeeded.length} succeeded, ${results.failed.length} failed`);
+        } catch (error) {
+            console.error('❌ Error in batch remove tags:', error);
+            vscode.window.showErrorMessage(`Batch remove tags failed: ${error.message}`);
         }
     }
 

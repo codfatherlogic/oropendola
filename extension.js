@@ -27,7 +27,7 @@ const WorkspaceMemoryService = require('./src/memory/WorkspaceMemoryService');
 const StatusBarManager = require('./src/ui/StatusBarManager');
 
 // Sprint 1-2: Task Persistence Layer
-const TaskManager = require('./src/services/tasks/TaskManager');
+const { TaskManager } = require('./src/core/TaskManager');
 
 let gitHubManager;
 let chatManager;
@@ -149,10 +149,7 @@ function activate(context) {
 
     // Sprint 1-2: Initialize Task Manager
     try {
-        const path = require('path');
-        const os = require('os');
-        const storagePath = path.join(os.homedir(), '.oropendola');
-        taskManager = new TaskManager(storagePath);
+        taskManager = new TaskManager(context);
 
         // Initialize TaskManager (async, but don't block extension activation)
         taskManager.initialize().then(() => {

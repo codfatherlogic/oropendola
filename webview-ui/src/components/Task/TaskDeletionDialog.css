@@ -1,0 +1,320 @@
+/* TaskDeletionDialog Styles */
+
+.task-deletion-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.task-deletion-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 550px;
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+  animation: slideIn 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-deletion-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.task-deletion-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--vscode-inputValidation-errorBackground);
+  color: var(--vscode-inputValidation-errorForeground);
+}
+
+.task-deletion-icon .codicon {
+  font-size: 24px;
+}
+
+.task-deletion-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.task-deletion-content {
+  padding: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Task Preview */
+.task-deletion-preview {
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+}
+
+.task-deletion-preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.task-deletion-preview-text {
+  font-size: 14px;
+  color: var(--vscode-foreground);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.task-deletion-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-deletion-preview-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.task-deletion-preview-meta .codicon {
+  font-size: 14px;
+}
+
+/* Warning */
+.task-deletion-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background-color: var(--vscode-inputValidation-warningBackground);
+  border: 1px solid var(--vscode-inputValidation-warningBorder);
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.task-deletion-warning .codicon {
+  font-size: 16px;
+  color: var(--vscode-inputValidation-warningForeground);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.task-deletion-warning span:last-child {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--vscode-foreground);
+}
+
+/* Options */
+.task-deletion-option {
+  margin-bottom: 16px;
+}
+
+.task-deletion-option vscode-checkbox {
+  font-size: 13px;
+}
+
+/* Confirmation input */
+.task-deletion-confirm {
+  margin-top: 16px;
+  padding: 12px;
+  background-color: var(--vscode-inputValidation-errorBackground);
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+  border-radius: 4px;
+}
+
+.task-deletion-confirm label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+}
+
+.task-deletion-confirm strong {
+  font-weight: 600;
+  font-family: var(--vscode-editor-font-family);
+  background-color: var(--vscode-textCodeBlock-background);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.task-deletion-confirm-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.task-deletion-confirm-input:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.task-deletion-confirm-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Footer */
+.task-deletion-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.task-deletion-delete-btn {
+  background-color: var(--vscode-inputValidation-errorBackground) !important;
+  border-color: var(--vscode-inputValidation-errorBorder) !important;
+}
+
+.task-deletion-delete-btn:hover:not([disabled]) {
+  opacity: 0.9;
+}
+
+/* Keyboard hint */
+.task-deletion-keyboard-hint {
+  padding: 8px 20px 12px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-deletion-keyboard-hint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: var(--vscode-keybindingLabel-background);
+  color: var(--vscode-keybindingLabel-foreground);
+  border: 1px solid var(--vscode-keybindingLabel-border);
+  border-radius: 3px;
+  font-family: var(--vscode-font-family);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  box-shadow: 0 1px 0 var(--vscode-keybindingLabel-border);
+}
+
+/* Simple version */
+.task-deletion-simple {
+  max-width: 400px;
+}
+
+.task-deletion-simple .task-deletion-header {
+  padding: 16px 20px;
+}
+
+.task-deletion-simple .task-deletion-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.task-deletion-simple .task-deletion-content {
+  padding: 16px 20px;
+}
+
+.task-deletion-simple .task-deletion-content p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Loading spinner */
+.codicon-modifier-spin {
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .task-deletion-dialog {
+    width: 95%;
+    max-width: none;
+  }
+
+  .task-deletion-content {
+    max-height: 50vh;
+  }
+
+  .task-deletion-preview-meta {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .task-deletion-dialog {
+    border-width: 2px;
+  }
+
+  .task-deletion-header,
+  .task-deletion-footer,
+  .task-deletion-preview,
+  .task-deletion-warning,
+  .task-deletion-confirm {
+    border-width: 2px;
+  }
+}

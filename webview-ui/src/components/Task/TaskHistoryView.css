@@ -1,0 +1,206 @@
+/* TaskHistoryView Styles */
+
+.task-history-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Header */
+.task-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.task-history-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+/* Stats Bar */
+.task-history-stats {
+  display: flex;
+  gap: 20px;
+  padding: 12px 20px;
+  background-color: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex-wrap: wrap;
+}
+
+.task-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.task-stat-label {
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-stat-value {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.task-stat-value.status-active {
+  color: var(--vscode-charts-blue);
+}
+
+.task-stat-value.status-completed {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.task-stat-value.status-failed {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.task-stat-value.status-terminated {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Search and Filters */
+.task-history-filters {
+  padding: 16px 20px;
+  background-color: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.task-history-search {
+  margin-bottom: 12px;
+}
+
+.task-history-search vscode-text-field {
+  width: 100%;
+}
+
+.task-history-filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.task-history-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.task-history-filter label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-history-filter vscode-dropdown {
+  width: 100%;
+}
+
+/* Batch Actions */
+.task-history-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background-color: var(--vscode-inputValidation-infoBackground);
+  border-bottom: 1px solid var(--vscode-inputValidation-infoBorder);
+}
+
+.batch-actions-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+  margin-right: auto;
+}
+
+/* Task List */
+.task-history-list {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Loading State */
+.task-history-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--vscode-descriptionForeground);
+  gap: 12px;
+}
+
+.task-history-loading .codicon {
+  font-size: 32px;
+}
+
+/* Empty State */
+.task-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--vscode-descriptionForeground);
+  gap: 12px;
+}
+
+.task-history-empty .codicon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.task-history-empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .task-history-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .task-history-stats {
+    gap: 12px;
+  }
+
+  .task-history-filter-row {
+    flex-direction: column;
+  }
+
+  .task-history-filter {
+    min-width: 100%;
+  }
+
+  .task-history-batch-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* Spinner animation */
+.codicon-modifier-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

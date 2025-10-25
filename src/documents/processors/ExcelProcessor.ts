@@ -70,9 +70,9 @@ export class ExcelProcessor {
             // Extract all rows as 2D array
             const data: any[][] = [];
 
-            worksheet.eachRow((row, rowNumber) => {
+            worksheet.eachRow((row, _rowNumber) => {
                 const rowData: any[] = [];
-                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                row.eachCell({ includeEmpty: true }, (cell, _colNumber) => {
                     rowData.push(cell.value !== null && cell.value !== undefined ? String(cell.value) : '');
                 });
                 data.push(rowData);
@@ -200,9 +200,9 @@ export class ExcelProcessor {
 
             // Convert to CSV
             const csvRows: string[] = [];
-            worksheet.eachRow((row, rowNumber) => {
+            worksheet.eachRow((row, _rowNumber) => {
                 const rowData: string[] = [];
-                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                row.eachCell({ includeEmpty: true }, (cell, _colNumber) => {
                     const value = cell.value !== null && cell.value !== undefined ? String(cell.value) : '';
                     // Escape CSV values
                     const escaped = value.includes(',') || value.includes('"') || value.includes('\n')
