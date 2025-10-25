@@ -40,21 +40,21 @@ class CapturedTerminal {
         });
 
         // Capture stdout
-        this.process.stdout.on('data', (data) => {
+        this.process.stdout.on('data', data => {
             const text = data.toString();
             this._captureOutput(text);
             this.writeEmitter.fire(text);
         });
 
         // Capture stderr
-        this.process.stderr.on('data', (data) => {
+        this.process.stderr.on('data', data => {
             const text = data.toString();
             this._captureOutput(text);
             this.writeEmitter.fire(text);
         });
 
         // Handle process exit
-        this.process.on('exit', (code) => {
+        this.process.on('exit', code => {
             console.log('🖥️ [CapturedTerminal] Process exited with code:', code);
             this.closeEmitter.fire(code || 0);
         });
@@ -142,7 +142,7 @@ class CapturedTerminal {
         for (const entry of this.outputBuffer) {
             if (regex.test(entry.text)) {
                 results.push(entry);
-                if (results.length >= maxResults) break;
+                if (results.length >= maxResults) {break;}
             }
         }
 

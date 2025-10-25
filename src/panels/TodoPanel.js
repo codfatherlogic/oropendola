@@ -65,7 +65,7 @@ class TodoPanel {
      * Refresh todo list
      */
     async refresh() {
-        if (!this.panel) return;
+        if (!this.panel) {return;}
 
         try {
             // Get todos with current filter
@@ -183,7 +183,7 @@ class TodoPanel {
             });
         }
 
-        if (!text) return;
+        if (!text) {return;}
 
         try {
             const todos = await backendTodoService.extractTodos(text, 'Manual extraction', true);
@@ -536,7 +536,7 @@ class TodoPanel {
     renderTodoItem(todo) {
         const priorityClass = `priority-${todo.priority?.toLowerCase() || 'medium'}`;
         const priorityIcon = todo.priority === 'High' ? '🔴' :
-                           todo.priority === 'Medium' ? '🟡' : '🟢';
+            todo.priority === 'Medium' ? '🟡' : '🟢';
 
         const actions = todo.status === 'Open' ? `
             <button onclick="startTodo('${todo.name}')">▶️ Start</button>

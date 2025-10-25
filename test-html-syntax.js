@@ -13,12 +13,12 @@ let bracketCount = 0;
 
 for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    
+
     if (line.includes("const html = '<!DOCTYPE")) {
         inHtmlSection = true;
         console.log(`HTML section starts at line ${i + 1}`);
     }
-    
+
     if (inHtmlSection) {
         // Count braces, parens, brackets in the string content
         const matches = line.match(/'[^']*'/g);
@@ -35,15 +35,15 @@ for (let i = 0; i < lines.length; i++) {
             });
         }
     }
-    
+
     if (inHtmlSection && line.includes('return html;')) {
         console.log(`HTML section ends at line ${i + 1}`);
         console.log(`Brace balance: ${braceCount}`);
         console.log(`Paren balance: ${parenCount}`);
         console.log(`Bracket balance: ${bracketCount}`);
-        if (braceCount !== 0) console.log('❌ UNBALANCED BRACES!');
-        if (parenCount !== 0) console.log('❌ UNBALANCED PARENTHESES!');
-        if (bracketCount !== 0) console.log('❌ UNBALANCED BRACKETS!');
+        if (braceCount !== 0) {console.log('❌ UNBALANCED BRACES!');}
+        if (parenCount !== 0) {console.log('❌ UNBALANCED PARENTHESES!');}
+        if (bracketCount !== 0) {console.log('❌ UNBALANCED BRACKETS!');}
         break;
     }
 }

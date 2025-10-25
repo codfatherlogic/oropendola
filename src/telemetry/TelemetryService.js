@@ -7,7 +7,7 @@ class TelemetryService {
         this.sessionId = this.generateSessionId();
         this.eventQueue = [];
         this.enabled = vscode.workspace.getConfiguration('oropendola').get('telemetry.enabled', true);
-        
+
         // Flush events every 30 seconds
         this.flushInterval = setInterval(() => this.flush(), 30000);
     }
@@ -17,7 +17,7 @@ class TelemetryService {
     }
 
     trackEvent(event, properties = {}) {
-        if (!this.enabled) return;
+        if (!this.enabled) {return;}
 
         this.eventQueue.push({
             event,
@@ -60,7 +60,7 @@ class TelemetryService {
     }
 
     async flush() {
-        if (this.eventQueue.length === 0 || !this.enabled) return;
+        if (this.eventQueue.length === 0 || !this.enabled) {return;}
 
         const eventsToSend = [...this.eventQueue];
         this.eventQueue = [];
@@ -78,7 +78,7 @@ class TelemetryService {
                         // Do not add 'Expect' header - causes 417 errors
                     },
                     maxRedirects: 0, // Prevents axios from adding Expect: 100-continue header
-                    validateStatus: (status) => status >= 200 && status < 500 // Accept 4xx as valid (log and continue)
+                    validateStatus: status => status >= 200 && status < 500 // Accept 4xx as valid (log and continue)
                 }
             );
         } catch (error) {

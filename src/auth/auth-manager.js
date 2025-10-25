@@ -422,7 +422,7 @@ class AuthManager {
      * Setup message handling for login panel
      */
     setupLoginMessageHandling() {
-        this.loginPanel.webview.onDidReceiveMessage(async (message) => {
+        this.loginPanel.webview.onDidReceiveMessage(async message => {
             switch (message.command) {
                 case 'login':
                     await this.handleLogin(message.email, message.password);
@@ -459,7 +459,7 @@ class AuthManager {
                 // Store authentication data
                 this.isAuthenticated = true;
                 this.currentUser = {
-                    email: email,
+                    email,
                     name: userData.full_name || userData.user || email,
                     token: userData.token || userData.api_key || userData.sid,
                     secret: userData.api_secret
@@ -565,7 +565,7 @@ class AuthManager {
      * Extract email from session cookies (helper method)
      */
     _extractEmailFromCookies(cookies) {
-        if (!cookies) return null;
+        if (!cookies) {return null;}
 
         // Try to extract user_id from cookies
         const match = cookies.match(/user_id=([^;]+)/);

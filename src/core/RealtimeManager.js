@@ -68,7 +68,7 @@ class RealtimeManager extends EventEmitter {
                 path: '/socket.io',
                 transports: ['websocket', 'polling'],
                 auth: {
-                    sid: sid
+                    sid
                 },
                 extraHeaders: {
                     'Cookie': this.sessionCookies
@@ -116,7 +116,7 @@ class RealtimeManager extends EventEmitter {
         });
 
         // Connection lost
-        this.socket.on('disconnect', (reason) => {
+        this.socket.on('disconnect', reason => {
             console.log('❌ [RealtimeManager] Disconnected:', reason);
             this.connected = false;
             this.emit('disconnected', reason);
@@ -129,7 +129,7 @@ class RealtimeManager extends EventEmitter {
         });
 
         // Connection error
-        this.socket.on('connect_error', (error) => {
+        this.socket.on('connect_error', error => {
             this.reconnectAttempts++;
             console.error('🔥🔥🔥 [RealtimeManager] ========== CONNECT_ERROR EVENT FIRED ==========');
             console.error(`❌ [RealtimeManager] Connection error (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}):`, error.message);
@@ -145,12 +145,12 @@ class RealtimeManager extends EventEmitter {
         });
 
         // Reconnection attempt
-        this.socket.on('reconnect_attempt', (attemptNumber) => {
+        this.socket.on('reconnect_attempt', attemptNumber => {
             console.log(`🔄 [RealtimeManager] Reconnection attempt ${attemptNumber}...`);
         });
 
         // Successfully reconnected
-        this.socket.on('reconnect', (attemptNumber) => {
+        this.socket.on('reconnect', attemptNumber => {
             console.log(`✅ [RealtimeManager] Reconnected after ${attemptNumber} attempts`);
             this.reconnectAttempts = 0;
         });
@@ -158,7 +158,7 @@ class RealtimeManager extends EventEmitter {
         // === Subscribe to Frappe events ===
 
         // AI Progress events (our main use case)
-        this.socket.on('ai_progress', (data) => {
+        this.socket.on('ai_progress', data => {
             console.log('🔥🔥🔥 [RealtimeManager] ========== AI_PROGRESS EVENT RECEIVED ==========');
             console.log('📊 [RealtimeManager] Event type:', data.type);
             console.log('📊 [RealtimeManager] Full data:', JSON.stringify(data, null, 2));
@@ -168,31 +168,31 @@ class RealtimeManager extends EventEmitter {
         });
 
         // Frappe msgprint (notifications)
-        this.socket.on('msgprint', (data) => {
+        this.socket.on('msgprint', data => {
             console.log('📢 [RealtimeManager] Received msgprint:', data);
             this.emit('msgprint', data);
         });
 
         // Frappe eval_js (execute JavaScript - use carefully)
-        this.socket.on('eval_js', (data) => {
+        this.socket.on('eval_js', data => {
             console.log('⚙️ [RealtimeManager] Received eval_js:', data);
             this.emit('eval_js', data);
         });
 
         // Frappe new comment event
-        this.socket.on('new_comment', (data) => {
+        this.socket.on('new_comment', data => {
             console.log('💬 [RealtimeManager] Received new_comment:', data);
             this.emit('new_comment', data);
         });
 
         // Intent Classification events (v3.2.2 - UI Enhancement)
-        this.socket.on('intent_classified', (data) => {
+        this.socket.on('intent_classified', data => {
             console.log('🎯 [RealtimeManager] Received intent_classified:', data);
             this.emit('intent_classified', data);
         });
 
         // Privacy Filter events (v3.2.2 - UI Enhancement)
-        this.socket.on('privacy_filter', (data) => {
+        this.socket.on('privacy_filter', data => {
             console.log('🔒 [RealtimeManager] Received privacy_filter:', data);
             this.emit('privacy_filter', data);
         });
@@ -224,7 +224,7 @@ class RealtimeManager extends EventEmitter {
      */
     _parseCookies(cookieString) {
         const cookies = {};
-        if (!cookieString) return cookies;
+        if (!cookieString) {return cookies;}
 
         cookieString.split(';').forEach(cookie => {
             const parts = cookie.trim().split('=');

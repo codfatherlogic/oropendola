@@ -22,23 +22,27 @@ export const MessageList: React.FC<MessageListProps> = ({
 }) => {
   if (showEmptyState) {
     return (
-      <div className="messages-container">
-        <div className="empty-state">
-          <div className="empty-icon">💬</div>
-          <div className="empty-title">Build with {mode === 'ask' ? 'ask' : 'agent'} mode</div>
-          <div className="empty-desc">
+      <div className="roo-messages-container">
+        <div className="roo-empty-state">
+          <div className="roo-empty-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div className="roo-empty-title">Build with {mode === 'ask' ? 'ask' : 'agent'} mode</div>
+          <div className="roo-empty-desc">
             {mode === 'ask'
               ? 'AI will show a plan before making changes'
               : 'AI will automatically execute your requests'}
           </div>
-          <div className="suggestions">
-            <button className="suggestion-btn" data-suggestion="Explain this code">
+          <div className="roo-suggestions">
+            <button className="roo-suggestion-btn" data-suggestion="Explain this code">
               Explain selected code
             </button>
-            <button className="suggestion-btn" data-suggestion="Create a new feature">
+            <button className="roo-suggestion-btn" data-suggestion="Create a new feature">
               Create a new feature
             </button>
-            <button className="suggestion-btn" data-suggestion="Fix bugs">
+            <button className="roo-suggestion-btn" data-suggestion="Fix bugs">
               Fix bugs
             </button>
           </div>
@@ -49,7 +53,7 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   return (
     <Virtuoso
-      className="messages-container"
+      className="roo-messages-container"
       data={messages}
       followOutput="smooth"
       alignToBottom
@@ -66,12 +70,12 @@ export const MessageList: React.FC<MessageListProps> = ({
         Footer: () => {
           if (!isTyping) return null;
           return (
-            <div className="typing-indicator">
+            <div className="roo-typing-indicator">
               <span>AI is thinking</span>
-              <div className="typing-dots">
-                <div className="typing-dot"></div>
-                <div className="typing-dot"></div>
-                <div className="typing-dot"></div>
+              <div className="roo-typing-dots">
+                <div className="roo-typing-dot"></div>
+                <div className="roo-typing-dot"></div>
+                <div className="roo-typing-dot"></div>
               </div>
             </div>
           );

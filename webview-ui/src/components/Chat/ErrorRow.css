@@ -1,0 +1,148 @@
+/**
+ * ErrorRow Styles
+ *
+ * VSCode-native styling for error messages
+ */
+
+.error-row {
+  margin: 8px 0;
+  border: 1px solid var(--vscode-inputValidation-errorBorder);
+  border-radius: 4px;
+  background: var(--vscode-inputValidation-errorBackground);
+  overflow: hidden;
+}
+
+.error-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(var(--vscode-inputValidation-errorBorder-rgb, 244, 67, 54), 0.1);
+}
+
+.error-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vscode-errorForeground);
+}
+
+.error-row-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--vscode-errorForeground);
+}
+
+.error-row-title-text {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.error-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.error-row-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--vscode-errorForeground);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 150ms ease;
+}
+
+.error-row-action-button:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.error-row-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.error-row-action-button .codicon {
+  font-size: 14px;
+}
+
+.error-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--vscode-errorForeground);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 150ms ease;
+}
+
+.error-row-toggle:hover {
+  opacity: 1;
+}
+
+.error-row-toggle-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.error-row-content {
+  padding: 12px;
+  border-top: 1px solid var(--vscode-inputValidation-errorBorder);
+}
+
+.error-row-message {
+  margin: 0;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--vscode-foreground);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: transparent;
+  padding: 0;
+}
+
+.error-row-additional {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Type-specific styling */
+.error-row-api_failure {
+  border-color: var(--vscode-inputValidation-warningBorder);
+  background: var(--vscode-inputValidation-warningBackground);
+}
+
+.error-row-api_failure .error-row-header {
+  background: rgba(var(--vscode-inputValidation-warningBorder-rgb, 255, 152, 0), 0.1);
+}
+
+.error-row-api_failure .error-row-title,
+.error-row-api_failure .error-row-icon,
+.error-row-api_failure .error-row-action-button,
+.error-row-api_failure .error-row-toggle {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.error-row-api_failure .error-row-content {
+  border-top-color: var(--vscode-inputValidation-warningBorder);
+}
+
+.error-row-mistake_limit {
+  border-color: var(--vscode-errorForeground);
+  background: var(--vscode-inputValidation-errorBackground);
+}

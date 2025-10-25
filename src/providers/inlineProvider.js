@@ -27,7 +27,7 @@ class AIInlineCompletionProvider {
      */
     async getCompletionsInternal(document, position) {
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-        if (!workspaceFolder) return [];
+        if (!workspaceFolder) {return [];}
 
         const line = document.lineAt(position.line);
         const textBefore = document.getText(
@@ -45,7 +45,7 @@ class AIInlineCompletionProvider {
                 document.languageId
             );
 
-            if (!response.success || !response.data) return [];
+            if (!response.success || !response.data) {return [];}
 
             return response.data.completions.map(completion => ({
                 insertText: completion.text,

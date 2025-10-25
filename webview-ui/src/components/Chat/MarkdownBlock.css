@@ -1,0 +1,112 @@
+/**
+ * MarkdownBlock Styles
+ *
+ * VSCode-native styling for markdown content
+ */
+
+.markdown-block {
+  color: var(--vscode-foreground);
+  font-size: 13px;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+
+.markdown-block p {
+  margin: 0 0 12px 0;
+}
+
+.markdown-block p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-block h1,
+.markdown-block h2,
+.markdown-block h3,
+.markdown-block h4,
+.markdown-block h5,
+.markdown-block h6 {
+  margin: 16px 0 8px 0;
+  font-weight: bold;
+  color: var(--vscode-foreground);
+}
+
+.markdown-block h1 { font-size: 24px; }
+.markdown-block h2 { font-size: 20px; }
+.markdown-block h3 { font-size: 16px; }
+.markdown-block h4 { font-size: 14px; }
+.markdown-block h5 { font-size: 13px; }
+.markdown-block h6 { font-size: 12px; }
+
+.markdown-block ul,
+.markdown-block ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.markdown-block li {
+  margin: 4px 0;
+}
+
+.markdown-block blockquote {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--vscode-textBlockQuote-border);
+  background: var(--vscode-textBlockQuote-background);
+  color: var(--vscode-foreground);
+}
+
+.markdown-block table {
+  border-collapse: collapse;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.markdown-block th,
+.markdown-block td {
+  border: 1px solid var(--vscode-panel-border);
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.markdown-block th {
+  background: var(--vscode-editor-background);
+  font-weight: bold;
+}
+
+.markdown-block .inline-code {
+  background: var(--vscode-textCodeBlock-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  color: var(--vscode-textPreformat-foreground);
+}
+
+.markdown-block .markdown-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.markdown-block .markdown-link:hover {
+  text-decoration: underline;
+  color: var(--vscode-textLink-activeForeground);
+}
+
+.markdown-block hr {
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border);
+  margin: 16px 0;
+}
+
+/* Partial/streaming state */
+.markdown-partial {
+  opacity: 0.8;
+}
+
+/* Code blocks */
+.markdown-block pre {
+  margin: 12px 0;
+  border-radius: 4px;
+  overflow: auto;
+}

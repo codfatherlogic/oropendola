@@ -1,0 +1,143 @@
+/**
+ * ViewNavigation Styles
+ * Clean, modern navigation with smooth transitions
+ */
+
+.view-navigation {
+  display: flex;
+  position: relative;
+  background-color: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding: 0;
+  margin: 0;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.nav-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: var(--vscode-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+  opacity: 0.7;
+}
+
+.nav-tab:hover {
+  opacity: 1;
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.nav-tab.active {
+  opacity: 1;
+  color: var(--vscode-button-foreground);
+}
+
+.nav-tab:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+}
+
+.nav-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.nav-label {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.nav-shortcut {
+  font-family: var(--vscode-font-family);
+  font-size: 10px;
+  opacity: 0.4;
+  margin-left: 4px;
+  padding: 2px 5px;
+  background-color: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-foreground);
+  border-radius: 3px;
+  border: 1px solid var(--vscode-panel-border);
+  user-select: none;
+  transition: opacity 0.2s ease;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+
+.nav-tab:hover .nav-shortcut {
+  opacity: 0.6;
+}
+
+.nav-tab.active .nav-shortcut {
+  opacity: 0.5;
+}
+
+.task-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Active indicator - animated underline */
+.nav-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 14.285%; /* 100% / 7 tabs */
+  height: 2px;
+  background-color: var(--vscode-button-background);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 2;
+}
+
+/* Responsive - stack on very small screens */
+@media (max-width: 300px) {
+  .nav-tab {
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  .nav-icon {
+    font-size: 16px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .nav-tab.active {
+    border-bottom: 3px solid var(--vscode-button-background);
+  }
+
+  .nav-indicator {
+    height: 3px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .nav-tab,
+  .nav-indicator {
+    transition: none;
+  }
+}

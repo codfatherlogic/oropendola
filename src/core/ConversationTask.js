@@ -98,6 +98,10 @@ class ConversationTask extends EventEmitter {
 
         // v3.4.3: Workspace memory and task tracking
         this.workspaceMemory = null;  // Initialized lazily when workspace available
+
+        // Sprint 1-2: Task Persistence Integration
+        this.taskManager = options.taskManager || null;  // TaskManager instance for persistence
+        this.persistentTaskId = null;  // ID in TaskManager (different from this.taskId)
         this.executedCommands = [];   // Track all terminal commands executed
         this.memoryReferences = [];   // Track memory references used
         this.initialPrompt = null;    // Store initial user prompt for reporting
@@ -146,7 +150,7 @@ class ConversationTask extends EventEmitter {
 
             // Forward ai_progress events to task listeners
             console.log('🔥 [ConversationTask] Setting up ai_progress listener...');
-            this.realtimeManager.on('ai_progress', (data) => {
+            this.realtimeManager.on('ai_progress', data => {
                 console.log('🔥🔥🔥 [ConversationTask] ========== RECEIVED AI_PROGRESS FROM REALTIME MANAGER ==========');
                 console.log(`📊 [ConversationTask ${this.taskId}] AI Progress [${data.type}]:`, data.message || '');
                 console.log('🔥 [ConversationTask] Full progress data:', JSON.stringify(data, null, 2));
@@ -183,7 +187,7 @@ class ConversationTask extends EventEmitter {
             });
 
             console.log('🔥 [ConversationTask] Setting up disconnected listener...');
-            this.realtimeManager.on('disconnected', (reason) => {
+            this.realtimeManager.on('disconnected', reason => {
                 console.log('🔥🔥🔥 [ConversationTask] ========== WEBSOCKET DISCONNECTED EVENT RECEIVED ==========');
                 console.log(`❌ [ConversationTask ${this.taskId}] Realtime connection lost:`, reason);
                 this.realtimeConnected = false;
@@ -191,7 +195,7 @@ class ConversationTask extends EventEmitter {
             });
 
             console.log('🔥 [ConversationTask] Setting up error listener...');
-            this.realtimeManager.on('error', (error) => {
+            this.realtimeManager.on('error', error => {
                 console.error('🔥🔥🔥 [ConversationTask] ========== WEBSOCKET ERROR EVENT RECEIVED ==========');
                 console.error(`❌ [ConversationTask ${this.taskId}] Realtime error:`, error);
                 console.error('❌ [ConversationTask] Error details:', error.message, error.stack);
@@ -200,7 +204,7 @@ class ConversationTask extends EventEmitter {
 
             // UI Enhancement: Intent Classification (v3.2.2)
             console.log('🔥 [ConversationTask] Setting up intent_classified listener...');
-            this.realtimeManager.on('intent_classified', (data) => {
+            this.realtimeManager.on('intent_classified', data => {
                 console.log(`🎯 [ConversationTask ${this.taskId}] Intent classified:`, data);
                 // Forward to sidebar for UI badge display
                 this.emit('intentClassified', this.taskId, data);
@@ -208,7 +212,7 @@ class ConversationTask extends EventEmitter {
 
             // UI Enhancement: Privacy Filter (v3.2.2)
             console.log('🔥 [ConversationTask] Setting up privacy_filter listener...');
-            this.realtimeManager.on('privacy_filter', (data) => {
+            this.realtimeManager.on('privacy_filter', data => {
                 console.log(`🔒 [ConversationTask ${this.taskId}] Privacy filter activated:`, data);
                 // Forward to sidebar for toast notification
                 this.emit('privacyFilter', this.taskId, data);
@@ -241,6 +245,26 @@ class ConversationTask extends EventEmitter {
             this.emit('taskStarted', this.taskId);
 
             console.log(`🚀 Task ${this.taskId} started`);
+
+            // Sprint 1-2: Auto-create task in TaskManager
+            if (this.taskManager && !this.persistentTaskId) {
+                try {
+                    const taskText = initialMessage.substring(0, 100) + (initialMessage.length > 100 ? '...' : '');
+                    const task = await this.taskManager.createTask(
+                        taskText,
+                        this.taskId,  // Use conversation taskId as conversationId
+                        {
+                            mode: this.mode,
+                            framework: this.detectedFramework || 'unknown'
+                        }
+                    );
+                    this.persistentTaskId = task.id;
+                    console.log(`💾 [TaskManager] Created persistent task: ${this.persistentTaskId}`);
+                } catch (error) {
+                    console.error('❌ [TaskManager] Failed to create task:', error);
+                    // Non-critical - continue without persistence
+                }
+            }
 
             // Add system prompt if not already present
             // Check if we already have a system message with the "THINK OUT LOUD" prompt
@@ -345,7 +369,7 @@ BAD ❌:
 "Here's my plan for building a POS app:
 
 1. **Project Setup**: Create package.json
-2. **UI Design**: Build the interface  
+2. **UI Design**: Build the interface
 3. **Database**: Set up SQLite
 4. **Features**: Add product management
 ...
@@ -595,17 +619,40 @@ ${dynamicContext}\`;
                         : '💭 Analyzing your request and planning the implementation...';
 
                     console.log('💭 Emitting AI response:', responseToShow.substring(0, 100) + '...');
-                    
+
                     // Store TODO stats for completion check
                     this._lastTodoStats = response._todo_stats || null;
-                    
+
                     this.emit('assistantMessage', this.taskId, responseToShow, {
                         todos: response._todos,
                         todo_stats: response._todo_stats,
                         file_changes: response._file_changes,
                         conversation_id: this.conversationId,
-                        hasToolCalls: toolCalls.length > 0  // Indicate if tools will follow
+                        hasToolCalls: toolCalls.length > 0,  // Indicate if tools will follow
+                        apiMetrics: response._apiMetrics  // Pass API metrics to webview
                     });
+
+                    // Sprint 1-2: Auto-save task state after each AI response
+                    if (this.taskManager && this.persistentTaskId) {
+                        try {
+                            await this.taskManager.saveTask(this.persistentTaskId, {
+                                messages: this.taskMessages || this.messages,
+                                apiMetrics: response._apiMetrics || {},
+                                contextTokens: this._calculateContextTokens(),
+                                metadata: {
+                                    mode: this.mode,
+                                    framework: this.detectedFramework,
+                                    conversationId: this.conversationId,
+                                    todos: response._todos,
+                                    todo_stats: response._todo_stats
+                                }
+                            });
+                            console.log(`💾 [TaskManager] Auto-saved task state`);
+                        } catch (error) {
+                            console.error('❌ [TaskManager] Failed to auto-save:', error);
+                            // Non-critical - continue
+                        }
+                    }
 
                     if (toolCalls.length > 0) {
                         console.log(`🔧 Found ${toolCalls.length} tool call(s) to execute`);
@@ -650,12 +697,12 @@ ${dynamicContext}\`;
                         // Check for duplicate responses (AI stuck in a loop)
                         if (this.messages && this.messages.length >= 2) {
                             const lastTwoMessages = this.messages.slice(-2);
-                            if (lastTwoMessages.length === 2 && 
-                                lastTwoMessages[0].role === 'assistant' && 
+                            if (lastTwoMessages.length === 2 &&
+                                lastTwoMessages[0].role === 'assistant' &&
                                 lastTwoMessages[1].role === 'assistant') {
                                 const prev = lastTwoMessages[0].content.trim();
                                 const current = lastTwoMessages[1].content.trim();
-                                
+
                                 // If responses are very similar (>90% match), it's stuck
                                 const similarity = this._calculateSimilarity(prev, current);
                                 if (similarity > 0.9) {
@@ -790,6 +837,17 @@ ${dynamicContext}\`;
         }
         this.abort = true;
         this.status = 'aborted';
+
+        // Sprint 1-2: Mark task as terminated in TaskManager
+        if (this.taskManager && this.persistentTaskId) {
+            try {
+                await this.taskManager.terminateTask(this.persistentTaskId);
+                console.log(`⏹ [TaskManager] Marked task as terminated`);
+            } catch (error) {
+                console.error('❌ [TaskManager] Failed to terminate task:', error);
+                // Non-critical - continue with abort
+            }
+        }
 
         // Emit abort event for listeners
         this.emit('taskAborted', this.taskId);
@@ -1039,15 +1097,15 @@ ${dynamicContext}\`;
                 method: 'POST',
                 url: `${this.apiUrl}/api/method/ai_assistant.api.chat_completion`,
                 data: requestData,
-                headers: headers,
+                headers,
                 timeout: 1200000, // 20 minutes - complex AI requests need time
                 signal: this.abortController.signal,
                 maxContentLength: Infinity,
                 maxBodyLength: Infinity,
-                httpAgent: httpAgent,
-                httpsAgent: httpsAgent,
+                httpAgent,
+                httpsAgent,
                 // Prevent axios from adding any automatic headers
-                transformRequest: [(data) => {
+                transformRequest: [data => {
                     return JSON.stringify(data);
                 }],
                 // Add request/response interceptors for better debugging
@@ -1109,26 +1167,26 @@ ${dynamicContext}\`;
 
             // Create a response object that can hold both text and tool_calls
             const aiResponse = {
-                toString: function() { return responseText; },
-                valueOf: function() { return responseText; },
+                toString: function () { return responseText; },
+                valueOf: function () { return responseText; },
                 text: responseText,
                 // For backward compatibility with code expecting a string
-                substring: function(...args) { return responseText.substring(...args); },
-                includes: function(...args) { return responseText.includes(...args); },
-                indexOf: function(...args) { return responseText.indexOf(...args); },
-                replace: function(...args) { return responseText.replace(...args); },
-                replaceAll: function(...args) { return responseText.replaceAll(...args); },
-                split: function(...args) { return responseText.split(...args); },
-                trim: function(...args) { return responseText.trim(...args); },
-                toLowerCase: function(...args) { return responseText.toLowerCase(...args); },
-                toUpperCase: function(...args) { return responseText.toUpperCase(...args); },
-                match: function(...args) { return responseText.match(...args); },
-                search: function(...args) { return responseText.search(...args); },
-                slice: function(...args) { return responseText.slice(...args); },
-                startsWith: function(...args) { return responseText.startsWith(...args); },
-                endsWith: function(...args) { return responseText.endsWith(...args); },
-                charAt: function(...args) { return responseText.charAt(...args); },
-                charCodeAt: function(...args) { return responseText.charCodeAt(...args); },
+                substring: function (...args) { return responseText.substring(...args); },
+                includes: function (...args) { return responseText.includes(...args); },
+                indexOf: function (...args) { return responseText.indexOf(...args); },
+                replace: function (...args) { return responseText.replace(...args); },
+                replaceAll: function (...args) { return responseText.replaceAll(...args); },
+                split: function (...args) { return responseText.split(...args); },
+                trim: function (...args) { return responseText.trim(...args); },
+                toLowerCase: function (...args) { return responseText.toLowerCase(...args); },
+                toUpperCase: function (...args) { return responseText.toUpperCase(...args); },
+                match: function (...args) { return responseText.match(...args); },
+                search: function (...args) { return responseText.search(...args); },
+                slice: function (...args) { return responseText.slice(...args); },
+                startsWith: function (...args) { return responseText.startsWith(...args); },
+                endsWith: function (...args) { return responseText.endsWith(...args); },
+                charAt: function (...args) { return responseText.charAt(...args); },
+                charCodeAt: function (...args) { return responseText.charCodeAt(...args); },
                 length: responseText.length
             };
 
@@ -1154,6 +1212,31 @@ ${dynamicContext}\`;
                                   (messageData.file_changes.modified?.length || 0) +
                                   (messageData.file_changes.deleted?.length || 0);
                 console.log(`📂 File changes: ${totalFiles} files affected`);
+            }
+
+            // Attach API metrics if available (for TaskHeader display)
+            // Transform backend usage format to frontend apiMetrics format
+            if (messageData.usage || messageData.cost || messageData.model) {
+                const usage = messageData.usage || {};
+                aiResponse._apiMetrics = {
+                    // Transform Anthropic usage format to frontend format
+                    tokensIn: usage.input_tokens || 0,
+                    tokensOut: usage.output_tokens || 0,
+                    cacheWrites: usage.cache_creation_input_tokens || 0,
+                    cacheReads: usage.cache_read_input_tokens || 0,
+                    cost: messageData.cost || 0,
+                    // Keep raw usage and model info for reference
+                    _raw: {
+                        usage: messageData.usage,
+                        model: messageData.model,
+                        provider: messageData.provider
+                    }
+                };
+                console.log('📊 Attached API metrics to response:', {
+                    tokensIn: aiResponse._apiMetrics.tokensIn,
+                    tokensOut: aiResponse._apiMetrics.tokensOut,
+                    cost: aiResponse._apiMetrics.cost
+                });
             }
 
             // Add AI response to messages (convert to string)
@@ -1208,22 +1291,22 @@ ${dynamicContext}\`;
      */
     _shouldRetry(error) {
         // Retry on timeout
-        if (error.code === 'ECONNABORTED') return true;
+        if (error.code === 'ECONNABORTED') {return true;}
 
         // Retry on network errors
-        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') return true;
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {return true;}
 
         // Retry on rate limits
-        if (error.response?.status === 429) return true;
+        if (error.response?.status === 429) {return true;}
 
         // Retry on 417 Expectation Failed (axios Expect header issue)
-        if (error.response?.status === 417) return true;
+        if (error.response?.status === 417) {return true;}
 
         // Retry on server errors (500-599)
-        if (error.response?.status >= 500) return true;
+        if (error.response?.status >= 500) {return true;}
 
         // Don't retry on client errors (400-499) except 429 and 417
-        if (error.response?.status >= 400 && error.response?.status < 500) return false;
+        if (error.response?.status >= 400 && error.response?.status < 500) {return false;}
 
         return false;
     }
@@ -1311,7 +1394,7 @@ ${dynamicContext}\`;
      * This prevents raw tool calls from being displayed to users
      */
     _cleanToolCallsFromResponse(responseText) {
-        if (!responseText) return '';
+        if (!responseText) {return '';}
 
         // Remove ```tool_call ... ``` blocks
         let cleaned = responseText.replace(/```tool_call[\s\S]*?```/g, '');
@@ -1355,7 +1438,7 @@ ${dynamicContext}\`;
             return {
                 action: actionMatch ? actionMatch[1] : 'unknown',
                 path: pathMatch ? pathMatch[1] : '',
-                content: content,
+                content,
                 description: descMatch ? descMatch[1] : ''
             };
 
@@ -1604,7 +1687,7 @@ ${dynamicContext}\`;
             this.fileChangeTracker.addChange(filePath, 'modify', {
                 description: description || `Replace string in ${filePath}`,
                 oldContent: content,
-                newContent: newContent,
+                newContent,
                 operation: 'replace_string'
             });
 
@@ -1616,7 +1699,7 @@ ${dynamicContext}\`;
 
             // Update status
             this.fileChangeTracker.updateStatus(filePath, 'applied', {
-                newContent: newContent
+                newContent
             });
 
             console.log(`✅ Replaced string in file: ${filePath}`);
@@ -1731,7 +1814,7 @@ ${dynamicContext}\`;
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'read_file',
-                content: content,
+                content,
                 success: true
             };
 
@@ -1745,12 +1828,12 @@ ${dynamicContext}\`;
      * Returns: Promise<boolean> - true if confirmed, false if cancelled
      */
     async _requestCommandConfirmation(command, riskLevel) {
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
             // Send confirmation request to webview
             this.panel.webview.postMessage({
                 type: 'requestCommandConfirmation',
-                command: command,
-                riskLevel: riskLevel
+                command,
+                riskLevel
             });
 
             // Create one-time listener for response
@@ -1963,7 +2046,7 @@ Output will appear in the "Oropendola AI" terminal.`,
             const maxResults = 50; // Limit results to avoid overwhelming
 
             // Build search pattern
-            let searchPattern = query;
+            const searchPattern = query;
 
             // Perform search
             const results = await vscode.workspace.findTextInFiles(
@@ -2022,7 +2105,7 @@ Output will appear in the "Oropendola AI" terminal.`,
             } else {
                 const grouped = {};
                 searchResults.forEach(r => {
-                    if (!grouped[r.file]) grouped[r.file] = [];
+                    if (!grouped[r.file]) {grouped[r.file] = [];}
                     grouped[r.file].push(r);
                 });
 
@@ -2118,7 +2201,7 @@ Output will appear in the "Oropendola AI" terminal.`,
                     }
                     if (sym.children) {
                         const found = findSymbol(sym.children, name);
-                        if (found) return found;
+                        if (found) {return found;}
                     }
                 }
                 return null;
@@ -2243,13 +2326,13 @@ Output will appear in the "Oropendola AI" terminal.`,
         // From middle messages, keep important ones
         const importantMiddle = middleMessages.filter(msg => {
             // Keep tool results (they contain execution outcomes)
-            if (msg.role === 'tool_result') return true;
+            if (msg.role === 'tool_result') {return true;}
 
             // Keep messages with images (user shared screenshots/diagrams)
-            if (msg.images && msg.images.length > 0) return true;
+            if (msg.images && msg.images.length > 0) {return true;}
 
             // Keep error messages
-            if (msg.role === 'error') return true;
+            if (msg.role === 'error') {return true;}
 
             // Keep messages that mention files (likely important context)
             if (typeof msg.content === 'string' &&
@@ -2338,7 +2421,7 @@ Output will appear in the "Oropendola AI" terminal.`,
         if (this.toolsExecutedInLastIteration) {
             console.log('ℹ️ Tools were executed, continuing to check for more work...');
             this.toolsExecutedInLastIteration = false;
-            
+
             // Add a gentle continuation message
             this.addMessage('user', 'Continue with the next step. What needs to be done next?', []);
             return true; // CONTINUE - keep the flow going
@@ -2348,7 +2431,7 @@ Output will appear in the "Oropendola AI" terminal.`,
         const lastMessage = this.messages[this.messages.length - 1];
         if (lastMessage && lastMessage.role === 'assistant') {
             const content = lastMessage.content.toLowerCase();
-            
+
             // Look for completion indicators
             const completionPhrases = [
                 'implementation is complete',
@@ -2359,19 +2442,19 @@ Output will appear in the "Oropendola AI" terminal.`,
                 'ready to use',
                 'you can now'
             ];
-            
+
             const seemsComplete = completionPhrases.some(phrase => content.includes(phrase));
-            
+
             if (seemsComplete) {
                 console.log('✅ AI indicated completion - task done');
                 return false; // Task complete
             }
-            
+
             // If AI just gave an overview/explanation without taking action, continue
             const hasNumberedList = /\n\s*\d+\.\s+\*\*/.test(lastMessage.content);
             if (hasNumberedList) {
                 console.log('🔄 AI provided a plan - prompting to start implementation');
-                
+
                 // Be VERY explicit and forceful
                 const forceImplementation = `STOP PLANNING. You are now REQUIRED to take ACTION.
 
@@ -2391,8 +2474,8 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
                 this.addMessage('user', forceImplementation, []);
                 return true; // Continue with implementation
             }
-            
-            
+
+
             // Check if todos were just created and need to be executed
             if (this._lastTodoStats && this._lastTodoStats.total > 0 && this._lastTodoStats.completed === 0) {
                 console.log(`📋 TODOs created (${this._lastTodoStats.total} items) - beginning execution`);
@@ -2403,7 +2486,7 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
                 this._lastTodoStats = null;
                 return true; // Continue with execution
             }
-            
+
             // Check if AI mentioned tools or actions but didn't execute them
             const mentionsTools = /create_file:|run_in_terminal:|package\.json|npm install/i.test(lastMessage.content);
             if (mentionsTools && !seemsComplete) {
@@ -2411,7 +2494,7 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
                 this.addMessage('user', 'Please actually create those files now using the available tools. Do not just describe what you would do - execute the actions.', []);
                 return true; // Continue
             }
-            
+
             // Don't auto-continue indefinitely - let the user drive the conversation
             // Only continue if there's clear indication more work is needed
             console.log('ℹ️ AI response received, no clear continuation signal - task pausing');
@@ -2670,10 +2753,10 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
         // System prompts need full length for autonomous execution mode
 
         this.messages.push({
-            role: role,
-            content: content, // Send full content without truncation
-            images: images,
-            toolName: toolName,
+            role,
+            content, // Send full content without truncation
+            images,
+            toolName,
             timestamp: new Date()
         });
     }
@@ -2716,28 +2799,28 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
      * @private
      */
     _calculateSimilarity(str1, str2) {
-        if (str1 === str2) return 1.0;
-        if (!str1 || !str2) return 0.0;
-        
+        if (str1 === str2) {return 1.0;}
+        if (!str1 || !str2) {return 0.0;}
+
         // Normalize strings: remove extra whitespace, lowercase
-        const normalize = (s) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+        const normalize = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
         const a = normalize(str1);
         const b = normalize(str2);
-        
-        if (a === b) return 1.0;
-        
+
+        if (a === b) {return 1.0;}
+
         // Calculate Levenshtein distance-based similarity
         const longer = a.length > b.length ? a : b;
         const shorter = a.length > b.length ? b : a;
-        
-        if (longer.length === 0) return 1.0;
-        
+
+        if (longer.length === 0) {return 1.0;}
+
         // Simple character-by-character comparison for efficiency
         let matches = 0;
         for (let i = 0; i < shorter.length; i++) {
-            if (shorter[i] === longer[i]) matches++;
+            if (shorter[i] === longer[i]) {matches++;}
         }
-        
+
         return matches / longer.length;
     }
 
@@ -2750,14 +2833,14 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
             const vscode = require('vscode');
             const fs = require('fs');
             const path = require('path');
-            
+
             // Get workspace folder
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {
                 console.log('⚠️ No workspace folder open - cannot save conversation');
                 return;
             }
-            
+
             const workspacePath = workspaceFolders[0].uri.fsPath;
             const conversationsDir = path.join(workspacePath, '.oropendola', 'conversations');
 
@@ -2767,12 +2850,12 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
                 // Add .oropendola to .gitignore
                 this._ensureGitignore(workspacePath);
             }
-            
+
             // Create filename with timestamp
             const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
             const filename = `conversation_${timestamp}.md`;
             const filepath = path.join(conversationsDir, filename);
-            
+
             // Format conversation as markdown
             let content = `# Oropendola AI Conversation\n\n`;
             content += `**Task ID:** ${this.taskId}\n`;
@@ -2780,24 +2863,24 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
             content += `**Ended:** ${this.taskEndTime || new Date().toISOString()}\n`;
             content += `**Status:** ${this.status}\n\n`;
             content += `---\n\n`;
-            
+
             // Add messages
             for (const msg of this.messages) {
-                if (msg.role === 'system') continue; // Skip system prompts
-                
+                if (msg.role === 'system') {continue;} // Skip system prompts
+
                 const role = msg.role === 'user' ? '**You:**' : '**Oropendola:**';
                 content += `### ${role}\n\n`;
                 content += `${msg.content}\n\n`;
                 content += `---\n\n`;
             }
-            
+
             // Write file
             fs.writeFileSync(filepath, content, 'utf8');
             console.log(`💾 Conversation saved to: ${filepath}`);
-            
+
             // Emit event so UI can show notification
             this.emit('conversationSaved', this.taskId, filepath);
-            
+
         } catch (error) {
             console.error('❌ Error saving conversation:', error);
         }
@@ -3327,7 +3410,7 @@ Use React best practices:
             startTime: this.taskStartTime,
             endTime: this.taskEndTime,
             fileChanges: this.fileChangeTracker.getAllChanges(),
-            todos: todos,
+            todos,
             toolResults: this.toolResults,
             errors: this.errors,
             mode: this.mode
@@ -3397,7 +3480,7 @@ Use React best practices:
                         filesModified: summary.fileChanges.modified.length,
                         todosCompleted: summary.overview.todosCompleted,
                         todosTotal: summary.overview.todosTotal,
-                        reportPath: reportPath,
+                        reportPath,
                         reportName: reportFileName
                     }
                 });
@@ -3706,6 +3789,28 @@ Use React best practices:
                 console.warn(`⚠️ No workspace path - report not saved to file`);
             }
 
+            // Sprint 1-2: Update task status in TaskManager
+            if (this.taskManager && this.persistentTaskId) {
+                try {
+                    if (status === 'completed') {
+                        await this.taskManager.completeTask(this.persistentTaskId, report);
+                        console.log(`✅ [TaskManager] Marked task as completed`);
+                    } else if (status === 'failed' || status === 'error') {
+                        await this.taskManager.failTask(
+                            this.persistentTaskId,
+                            this.errors[this.errors.length - 1] || 'Task failed'
+                        );
+                        console.log(`❌ [TaskManager] Marked task as failed`);
+                    } else if (status === 'terminated' || status === 'aborted') {
+                        await this.taskManager.terminateTask(this.persistentTaskId);
+                        console.log(`⏹ [TaskManager] Marked task as terminated`);
+                    }
+                } catch (error) {
+                    console.error('❌ [TaskManager] Failed to update task status:', error);
+                    // Non-critical - continue
+                }
+            }
+
             // Emit task completion event
             this.emit('taskCompleted', {
                 taskId: this.taskId,
@@ -3739,6 +3844,20 @@ Use React best practices:
      * @private
      * @returns {string} Risk level: 'low', 'medium', or 'high'
      */
+    /**
+     * Calculate approximate context tokens used
+     * Sprint 1-2: For task persistence metrics
+     */
+    _calculateContextTokens() {
+        // Rough estimation: ~4 characters per token
+        const messages = this.messages || [];
+        const totalChars = messages.reduce((sum, msg) => {
+            const content = msg.content || '';
+            return sum + content.length;
+        }, 0);
+        return Math.ceil(totalChars / 4);
+    }
+
     _calculateRiskLevel() {
         const riskFactors = [];
 

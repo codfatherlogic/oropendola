@@ -224,7 +224,7 @@ class URLAnalyzer {
                     license: repoData.license?.name || 'No license'
                 },
                 languages: languagesResponse.data,
-                fileStructure: fileStructure,
+                fileStructure,
                 readme: readme ? readme.substring(0, 2000) : null, // Limit README size
                 branch: urlInfo.branch,
                 path: urlInfo.path
@@ -284,7 +284,7 @@ class URLAnalyzer {
                     updatedAt: projectData.last_activity_at,
                     topics: projectData.topics || []
                 },
-                fileStructure: fileStructure,
+                fileStructure,
                 readme: readme ? readme.substring(0, 2000) : null,
                 branch: urlInfo.branch,
                 path: urlInfo.path
@@ -362,10 +362,10 @@ class URLAnalyzer {
             return {
                 success: true,
                 type: 'web',
-                url: url,
-                contentType: contentType,
-                title: title,
-                description: description,
+                url,
+                contentType,
+                title,
+                description,
                 statusCode: response.status
             };
         } catch (error) {
@@ -413,14 +413,14 @@ class URLAnalyzer {
             if (analysis) {
                 analyses.push({
                     original: urlInfo,
-                    analysis: analysis
+                    analysis
                 });
             }
         }
 
         return {
             totalDetected: detectedUrls.length,
-            analyses: analyses,
+            analyses,
             timestamp: new Date().toISOString()
         };
     }
@@ -508,7 +508,7 @@ class URLAnalyzer {
 
         for (const item of contents) {
             const name = item.name || item.path?.split('/').pop();
-            if (!name) continue;
+            if (!name) {continue;}
 
             if (item.type === 'dir' || item.type === 'tree') {
                 directories.push(name);
@@ -534,9 +534,9 @@ class URLAnalyzer {
         return {
             totalFiles: files.length,
             files: files.slice(0, 20), // Limit to first 20 files
-            directories: directories,
-            mainFiles: mainFiles,
-            extensions: extensions
+            directories,
+            mainFiles,
+            extensions
         };
     }
 

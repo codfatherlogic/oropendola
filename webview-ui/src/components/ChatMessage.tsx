@@ -22,8 +22,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   onRejectPlan,
   showPlanActions
 }) => {
-  const roleClass = `message-${message.role}`;
-
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
   };
@@ -31,15 +29,40 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const getRoleIcon = () => {
     switch (message.role) {
       case 'user':
-        return 'U';
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="12" cy="7" r="4" strokeWidth="2"/>
+          </svg>
+        );
       case 'assistant':
-        return 'AI';
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 17L12 22L22 17M2 12L12 17L22 12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
       case 'error':
-        return '!';
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+            <path d="M12 8v4M12 16h.01" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        );
       case 'system':
-        return 'ℹ';
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+            <path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        );
       default:
-        return '?';
+        return (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+            <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        );
     }
   };
 
@@ -59,15 +82,20 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   };
 
   return (
-    <div className={`message ${roleClass}`}>
-      <div className="message-header">
-        <div className={`message-icon ${message.role}`}>{getRoleIcon()}</div>
-        <div className="message-label">{getRoleLabel()}</div>
-        <button className="copy-btn" onClick={handleCopy} title="Copy message">
-          📋
+    <div className={`roo-message roo-message-${message.role}`}>
+      <div className="roo-message-header">
+        <div className={`roo-message-icon roo-message-icon-${message.role}`}>
+          {getRoleIcon()}
+        </div>
+        <div className="roo-message-label">{getRoleLabel()}</div>
+        <button className="roo-copy-btn" onClick={handleCopy} title="Copy message">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2"/>
+          </svg>
         </button>
       </div>
-      <div className="message-content">
+      <div className="roo-message-content">
         <ReactMarkdown
           remarkPlugins={[remarkMath, remarkGfm]}
           rehypePlugins={[rehypeKatex]}
@@ -102,18 +130,24 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         </ReactMarkdown>
       </div>
       {showPlanActions && message.role === 'assistant' && (
-        <div className="message-actions">
+        <div className="roo-message-actions">
           <button
-            className="message-action-btn message-action-accept"
+            className="roo-action-btn roo-action-accept"
             onClick={() => onAcceptPlan?.(message.content)}
           >
-            ✓ Accept Plan
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M20 6L9 17l-5-5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Accept Plan
           </button>
           <button
-            className="message-action-btn message-action-reject"
+            className="roo-action-btn roo-action-reject"
             onClick={() => onRejectPlan?.(message.content)}
           >
-            ✗ Reject Plan
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M18 6L6 18M6 6l12 12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Reject Plan
           </button>
         </div>
       )}

@@ -237,7 +237,7 @@ class FrameworkConventions {
      * @private
      */
     _applyNamingConvention(str, convention) {
-        if (!str) return str;
+        if (!str) {return str;}
 
         switch (convention) {
             case 'snake_case':

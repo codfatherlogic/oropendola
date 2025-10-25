@@ -50,8 +50,8 @@ export const ConfigurationTarget = {
 };
 
 export const Uri = {
-    file: (path) => ({ fsPath: path, path }),
-    parse: (path) => ({ fsPath: path, path })
+    file: path => ({ fsPath: path, path }),
+    parse: path => ({ fsPath: path, path })
 };
 
 export const commands = {

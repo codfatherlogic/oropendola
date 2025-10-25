@@ -1,4 +1,4 @@
-(function() {
+(function () {
     const vscode = acquireVsCodeApi();
     const messagesContainer = document.getElementById('messages');
     const messageInput = document.getElementById('message-input');
@@ -10,7 +10,7 @@
     sendButton.addEventListener('click', sendMessage);
 
     // Handle Enter key (Shift+Enter for new line)
-    messageInput.addEventListener('keydown', (e) => {
+    messageInput.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
@@ -19,7 +19,7 @@
 
     function sendMessage() {
         const text = messageInput.value.trim();
-        if (!text || isLoading) return;
+        if (!text || isLoading) {return;}
 
         // Add user message to chat
         addMessageToChat({
@@ -31,13 +31,13 @@
         // Send to extension
         vscode.postMessage({
             command: 'sendMessage',
-            text: text
+            text
         });
 
         // Clear input
         messageInput.value = '';
         messageInput.style.height = 'auto';
-        
+
         // Show loading
         setLoading(true);
     }
@@ -59,7 +59,7 @@
         messageDiv.querySelectorAll('pre').forEach(pre => {
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'code-actions';
-            
+
             const copyBtn = document.createElement('button');
             copyBtn.className = 'code-action-btn';
             copyBtn.textContent = 'Copy';
@@ -67,7 +67,7 @@
                 const code = pre.querySelector('code')?.textContent || pre.textContent;
                 vscode.postMessage({
                     command: 'copyCode',
-                    code: code
+                    code
                 });
             };
 
@@ -78,7 +78,7 @@
                 const code = pre.querySelector('code')?.textContent || pre.textContent;
                 vscode.postMessage({
                     command: 'insertCode',
-                    code: code
+                    code
                 });
             };
 
@@ -116,7 +116,7 @@
     function setLoading(loading) {
         isLoading = loading;
         sendButton.disabled = loading;
-        
+
         if (loading) {
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'message assistant';
@@ -139,7 +139,7 @@
     // Handle messages from extension
     window.addEventListener('message', event => {
         const message = event.data;
-        
+
         switch (message.command) {
             case 'addMessage':
                 setLoading(false);
@@ -152,7 +152,7 @@
     });
 
     // Auto-resize textarea
-    messageInput.addEventListener('input', function() {
+    messageInput.addEventListener('input', function () {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 150) + 'px';
     });

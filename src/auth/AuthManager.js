@@ -1,15 +1,6 @@
 const vscode = require('vscode');
 const axios = require('axios');
 
-// Try to load keytar, but make it optional
-let keytar;
-try {
-    keytar = require('keytar');
-} catch (error) {
-    console.warn('keytar not available, using VS Code secrets API instead');
-    keytar = null;
-}
-
 class EnhancedAuthManager {
     static SERVICE_NAME = 'oropendola-vscode';
     static ACCOUNT_NAME = 'api-token';
@@ -22,29 +13,17 @@ class EnhancedAuthManager {
         this.refreshTimer = undefined;
     }
 
-    // Helper methods to use keytar or VS Code secrets API
+    // Use VS Code secrets API for secure credential storage
     async setCredentials(key, value) {
-        if (keytar) {
-            await keytar.setPassword(EnhancedAuthManager.SERVICE_NAME, key, value);
-        } else {
-            await this.context.secrets.store(`${EnhancedAuthManager.SERVICE_NAME}.${key}`, value);
-        }
+        await this.context.secrets.store(`${EnhancedAuthManager.SERVICE_NAME}.${key}`, value);
     }
 
     async getCredentials(key) {
-        if (keytar) {
-            return await keytar.getPassword(EnhancedAuthManager.SERVICE_NAME, key);
-        } else {
-            return await this.context.secrets.get(`${EnhancedAuthManager.SERVICE_NAME}.${key}`);
-        }
+        return await this.context.secrets.get(`${EnhancedAuthManager.SERVICE_NAME}.${key}`);
     }
 
     async deleteCredentials(key) {
-        if (keytar) {
-            await keytar.deletePassword(EnhancedAuthManager.SERVICE_NAME, key);
-        } else {
-            await this.context.secrets.delete(`${EnhancedAuthManager.SERVICE_NAME}.${key}`);
-        }
+        await this.context.secrets.delete(`${EnhancedAuthManager.SERVICE_NAME}.${key}`);
     }
 
     async authenticate() {

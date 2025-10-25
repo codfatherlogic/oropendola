@@ -38,12 +38,12 @@ class DiffPreviewManager {
             // Create temporary documents for comparison
             const originalDoc = await vscode.workspace.openTextDocument({
                 content: originalContent,
-                language: language
+                language
             });
 
             const modifiedDoc = await vscode.workspace.openTextDocument({
                 content: newContent,
-                language: language
+                language
             });
 
             // Store references for cleanup

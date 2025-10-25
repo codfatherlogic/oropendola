@@ -441,7 +441,7 @@ class FrameworkFileStructureRegistry {
      * @returns {Object|null} Framework structure or null
      */
     getFramework(framework) {
-        if (!framework) return null;
+        if (!framework) {return null;}
         const key = framework.toLowerCase().replace(/[.\s-]/g, '');
         return this.registry[key] || null;
     }
@@ -454,7 +454,7 @@ class FrameworkFileStructureRegistry {
      */
     getEntity(framework, entityType) {
         const fw = this.getFramework(framework);
-        if (!fw || !fw.entities) return null;
+        if (!fw || !fw.entities) {return null;}
 
         const key = entityType.toLowerCase().replace(/[.\s-]/g, '');
         return fw.entities[key] || null;
@@ -469,11 +469,11 @@ class FrameworkFileStructureRegistry {
      */
     getRequiredFiles(framework, entityType, includeBestPractices = true) {
         const entity = this.getEntity(framework, entityType);
-        if (!entity) return [];
+        if (!entity) {return [];}
 
         return entity.requiredFiles.filter(file => {
-            if (file.mandatory) return true;
-            if (includeBestPractices && file.bestPractice) return true;
+            if (file.mandatory) {return true;}
+            if (includeBestPractices && file.bestPractice) {return true;}
             return false;
         });
     }

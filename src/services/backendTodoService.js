@@ -274,10 +274,10 @@ class BackendTodoService extends EventEmitter {
         };
 
         for (const [status, items] of Object.entries(byStatus)) {
-            if (items.length === 0) continue;
+            if (items.length === 0) {continue;}
 
             const icon = status === 'Completed' ? '✅' :
-                        status === 'Working' ? '⏳' : '📋';
+                status === 'Working' ? '⏳' : '📋';
 
             markdown += `### ${icon} ${status} (${items.length})\n\n`;
 
@@ -285,7 +285,7 @@ class BackendTodoService extends EventEmitter {
                 const checkbox = status === 'Completed' ? '[x]' : '[ ]';
                 const priority = todo.priority ?
                     (todo.priority === 'High' ? '🔴' :
-                     todo.priority === 'Medium' ? '🟡' : '🟢') : '';
+                        todo.priority === 'Medium' ? '🟡' : '🟢') : '';
 
                 markdown += `- ${checkbox} ${priority} ${todo.description}`;
 

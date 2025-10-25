@@ -1,0 +1,237 @@
+/**
+ * SimpleTaskHeader Styles - Matching Roo-Code Exactly
+ */
+
+.task-header-container {
+  padding-top: 8px;
+  padding-bottom: 0;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.task-header {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-foreground);
+  opacity: 0.8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.task-header:hover {
+  background-color: var(--vscode-input-background);
+  opacity: 0.9;
+  color: var(--vscode-foreground);
+}
+
+.task-header.has-todos {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+
+/* Top Row */
+.task-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0;
+}
+
+.task-title-container {
+  display: flex;
+  align-items: center;
+  user-select: none;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.task-title-inline {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.task-label {
+  font-weight: bold;
+  margin-right: 4px;
+}
+
+.task-text {
+  opacity: 0.9;
+}
+
+.task-header-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.expand-button {
+  flex-shrink: 0;
+  min-height: 20px;
+  min-width: 20px;
+  padding: 2px;
+  cursor: pointer;
+  opacity: 0.85;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.expand-button:hover {
+  opacity: 1;
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* Metrics Inline (Collapsed State) */
+.task-metrics-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.metric-item {
+  margin-right: 4px;
+}
+
+/* Expanded State */
+.task-text-expanded {
+  font-size: var(--vscode-font-size);
+  overflow-y: auto;
+  word-break: break-word;
+  position: relative;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+}
+
+.task-metrics-table {
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding-top: 16px;
+  padding-bottom: 16px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  opacity: 0.5;
+}
+
+.task-metrics-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.task-metrics-table th {
+  font-weight: bold;
+  text-align: left;
+  vertical-align: top;
+  width: 1px;
+  white-space: nowrap;
+  padding-left: 4px;
+  padding-right: 12px;
+  height: 24px;
+}
+
+.task-metrics-table td {
+  vertical-align: top;
+}
+
+/* Context Progress Bar */
+.context-progress-container {
+  max-width: 320px;
+  margin-top: -2px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.context-progress-bar {
+  flex: 1;
+  height: 20px;
+  background-color: var(--vscode-progressBar-background);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.context-progress-fill {
+  height: 100%;
+  background-color: var(--vscode-progressBar-background);
+  opacity: 0.6;
+  transition: width 0.3s ease;
+}
+
+.context-progress-text {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Tokens Display */
+.tokens-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.token-metric {
+  margin-right: 4px;
+}
+
+/* Todo List */
+.todo-list-container {
+  background-color: var(--vscode-input-background);
+  padding: 10px;
+  padding-top: 0;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  opacity: 0.25;
+}
+
+.todo-item:last-child {
+  border-bottom: none;
+}
+
+.todo-checkbox {
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--vscode-button-background);
+}
+
+.todo-text {
+  flex: 1;
+  word-break: break-word;
+}
+
+.todo-done {
+  text-decoration: line-through;
+  opacity: 0.6;
+}

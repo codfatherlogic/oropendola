@@ -134,7 +134,7 @@ class ConversationHistoryService {
      */
     async getConversationMetadata(conversationId) {
         const conv = await this.getConversation(conversationId, 1);
-        if (!conv) return null;
+        if (!conv) {return null;}
 
         return {
             conversation_id: conv.conversation_id,

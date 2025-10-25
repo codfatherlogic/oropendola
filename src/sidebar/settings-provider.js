@@ -29,7 +29,7 @@ class OropendolaSettingsProvider {
         webviewView.webview.html = this._getSettingsHtml(webviewView.webview);
 
         // Handle messages from the webview
-        webviewView.webview.onDidReceiveMessage(async (message) => {
+        webviewView.webview.onDidReceiveMessage(async message => {
             switch (message.type) {
                 case 'signOut':
                     await this._handleSignOut();
@@ -128,8 +128,8 @@ class OropendolaSettingsProvider {
 
         return {
             isSignedIn: !!apiKey,
-            email: email,
-            username: username,
+            email,
+            username,
             displayName: email ? username.charAt(0).toUpperCase() + username.slice(1) : 'Guest User'
         };
     }

@@ -23,15 +23,15 @@ class TerminalManager {
 
         // Create VS Code terminal with custom pseudo-terminal
         const terminal = vscode.window.createTerminal({
-            name: name,
+            name,
             pty: capturedTerminal
         });
 
         // Store terminal
         this.terminals.set(terminalId, {
             vscodeTerminal: terminal,
-            capturedTerminal: capturedTerminal,
-            name: name,
+            capturedTerminal,
+            name,
             createdAt: new Date()
         });
 

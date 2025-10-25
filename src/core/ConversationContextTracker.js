@@ -237,7 +237,7 @@ class ConversationContextTracker {
      * @param {Object} toolCall - Tool call object
      */
     extractFromToolCall(toolCall) {
-        if (!toolCall) return;
+        if (!toolCall) {return;}
 
         const { action, path: filePath, description } = toolCall;
 
@@ -249,7 +249,7 @@ class ConversationContextTracker {
         if (description && /doctype/i.test(description)) {
             entityType = 'DocType';
             const match = description.match(/(?:creating|create)\s+(\w+)\s+doctype/i);
-            if (match) entityName = match[1];
+            if (match) {entityName = match[1];}
         }
 
         // React patterns

@@ -12,7 +12,7 @@ class OropendolaDiagnosticsProvider {
     async analyzeDiagnostics(document) {
         const cacheKey = document.uri.toString();
         const cached = this.analysisCache.get(cacheKey);
-        
+
         if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
             this.diagnosticCollection.set(document.uri, cached.diagnostics);
             return;
@@ -30,31 +30,31 @@ class OropendolaDiagnosticsProvider {
             );
 
             const diagnostics = [];
-            
+
             if (response.data?.message?.issues && Array.isArray(response.data.message.issues)) {
                 for (const issue of response.data.message.issues) {
                     const line = Math.max(0, (issue.line || 1) - 1);
                     const range = new vscode.Range(line, 0, line, 999);
-                    
+
                     const severity = this.mapSeverity(issue.severity);
                     const diagnostic = new vscode.Diagnostic(
                         range,
                         issue.message || 'Code issue detected',
                         severity
                     );
-                    
+
                     diagnostic.source = 'Oropendola AI';
                     diagnostic.code = issue.code;
-                    
+
                     if (issue.suggestions && issue.suggestions.length > 0) {
-                        diagnostic.relatedInformation = issue.suggestions.map((suggestion) => 
+                        diagnostic.relatedInformation = issue.suggestions.map(suggestion =>
                             new vscode.DiagnosticRelatedInformation(
                                 new vscode.Location(document.uri, range),
                                 suggestion
                             )
                         );
                     }
-                    
+
                     diagnostics.push(diagnostic);
                 }
             }

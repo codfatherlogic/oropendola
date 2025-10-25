@@ -38,7 +38,7 @@ class OropendolaAutocompleteProvider {
         }
 
         // Debounce requests to avoid spamming the API
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
             if (this.debounceTimer) {
                 clearTimeout(this.debounceTimer);
             }
@@ -147,7 +147,7 @@ Complete the code at the cursor position:`;
      * @private
      */
     _cleanCompletion(response) {
-        if (!response) return null;
+        if (!response) {return null;}
 
         let cleaned = response.trim();
 

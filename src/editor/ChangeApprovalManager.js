@@ -215,10 +215,10 @@ class ChangeApprovalManager {
      */
     async acceptChange(changeId) {
         const change = this._pendingChanges.find(c => c.id === changeId);
-        if (!change) return;
+        if (!change) {return;}
 
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
+        if (!workspaceFolders) {return;}
 
         const workspacePath = workspaceFolders[0].uri.fsPath;
 
@@ -279,7 +279,7 @@ class ChangeApprovalManager {
      * @private
      */
     _getContentPreview(content) {
-        if (!content) return '';
+        if (!content) {return '';}
 
         const lines = content.split('\n');
         const preview = lines.slice(0, 3).join('\n');

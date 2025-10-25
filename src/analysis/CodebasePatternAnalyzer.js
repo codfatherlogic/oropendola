@@ -466,7 +466,7 @@ class CodebasePatternAnalyzer {
                 line = line.trim();
                 if (line && !line.startsWith('#')) {
                     const dep = line.split(/[=<>!]/)[0].trim();
-                    if (dep) deps.push(dep);
+                    if (dep) {deps.push(dep);}
                 }
             });
         } else if (filename === 'setup.py') {
@@ -499,7 +499,7 @@ class CodebasePatternAnalyzer {
                 inRequire = false;
             } else if (inRequire || line.startsWith('require ')) {
                 const match = line.match(/^([^\s]+)/);
-                if (match) deps.push(match[1]);
+                if (match) {deps.push(match[1]);}
             }
         });
 
@@ -530,7 +530,7 @@ class CodebasePatternAnalyzer {
 
         lines.forEach(line => {
             const match = line.match(/gem\s+['"]([^'"]+)['"]/);
-            if (match) deps.push(match[1]);
+            if (match) {deps.push(match[1]);}
         });
 
         return deps;
@@ -544,8 +544,8 @@ class CodebasePatternAnalyzer {
             const importMatch = line.match(/^import\s+([a-z_][a-z0-9_]*)/i);
             const fromMatch = line.match(/^from\s+([a-z_][a-z0-9_.]*)\s+import/i);
 
-            if (importMatch) imports.push(importMatch[1]);
-            if (fromMatch) imports.push(fromMatch[1].split('.')[0]);
+            if (importMatch) {imports.push(importMatch[1]);}
+            if (fromMatch) {imports.push(fromMatch[1].split('.')[0]);}
         });
 
         return [...new Set(imports)];

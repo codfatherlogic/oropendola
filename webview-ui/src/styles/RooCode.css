@@ -1,0 +1,893 @@
+/* ============================================================================
+   ROO-CODE UI DESIGN SYSTEM - Oropendola AI Assistant
+   Professional, polished interface matching Roo-Code aesthetic
+   ============================================================================ */
+
+/* ============================================================================
+   VARIABLES & THEME
+   ============================================================================ */
+:root {
+  --roo-accent-primary: #007acc;
+  --roo-accent-success: #16c60c;
+  --roo-accent-warning: #f59e0b;
+  --roo-accent-error: #ef4444;
+  --roo-accent-info: #60a5fa;
+
+  --roo-border-radius-sm: 4px;
+  --roo-border-radius-md: 6px;
+  --roo-border-radius-lg: 8px;
+
+  --roo-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --roo-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --roo-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+  --roo-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --roo-transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================================
+   RESET & BASE
+   ============================================================================ */
+.roo-app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--vscode-sideBar-background);
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ============================================================================
+   HEADER - Polished top bar with branding
+   ============================================================================ */
+.roo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  min-height: 56px;
+  box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.05);
+}
+
+.roo-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.roo-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--roo-border-radius-md);
+  background: linear-gradient(135deg, var(--roo-accent-primary) 0%, #005a9e 100%);
+  box-shadow: var(--roo-shadow-sm);
+}
+
+.roo-logo svg {
+  color: white;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.roo-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roo-title-main {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.roo-title-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.roo-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roo-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 7px;
+  border-radius: var(--roo-border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--roo-transition-fast);
+  width: 32px;
+  height: 32px;
+  position: relative;
+}
+
+.roo-icon-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--roo-border-radius-md);
+  background: var(--vscode-toolbar-hoverBackground);
+  opacity: 0;
+  transition: opacity var(--roo-transition-fast);
+}
+
+.roo-icon-btn:hover::before {
+  opacity: 1;
+}
+
+.roo-icon-btn:hover {
+  color: var(--vscode-foreground);
+}
+
+.roo-icon-btn:active {
+  transform: scale(0.92);
+}
+
+.roo-icon-btn svg {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
+   MESSAGES CONTAINER - Main content area
+   ============================================================================ */
+.roo-messages-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ============================================================================
+   EMPTY STATE - Welcome screen with suggestions
+   ============================================================================ */
+.roo-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 30px;
+  color: var(--vscode-descriptionForeground);
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.roo-empty-icon {
+  margin-bottom: 24px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.roo-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--vscode-foreground);
+  letter-spacing: -0.02em;
+}
+
+.roo-empty-desc {
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 350px;
+  margin-bottom: 32px;
+  opacity: 0.8;
+}
+
+.roo-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.roo-suggestion-btn {
+  padding: 14px 20px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--roo-border-radius-lg);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  transition: all var(--roo-transition-fast);
+  box-shadow: var(--roo-shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.roo-suggestion-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--roo-accent-primary), #005a9e);
+  opacity: 0;
+  transition: opacity var(--roo-transition-fast);
+}
+
+.roo-suggestion-btn:hover {
+  border-color: var(--roo-accent-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--roo-shadow-md);
+}
+
+.roo-suggestion-btn:hover::before {
+  opacity: 0.05;
+}
+
+.roo-suggestion-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================================================
+   TYPING INDICATOR - Shows when AI is thinking
+   ============================================================================ */
+.roo-typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--roo-border-radius-lg);
+  color: var(--vscode-descriptionForeground);
+  font-size: 13px;
+  font-weight: 500;
+  max-width: fit-content;
+  box-shadow: var(--roo-shadow-sm);
+}
+
+.roo-typing-dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.roo-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--roo-accent-primary);
+  opacity: 0.4;
+  animation: roo-typing-bounce 1.4s infinite ease-in-out both;
+}
+
+.roo-typing-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.roo-typing-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes roo-typing-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.7);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   MESSAGES - Individual message styling
+   ============================================================================ */
+.roo-message {
+  padding: 18px 20px;
+  border-radius: var(--roo-border-radius-lg);
+  background: var(--vscode-editor-background);
+  position: relative;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  box-shadow: var(--roo-shadow-sm);
+  border: 1px solid var(--vscode-panel-border);
+  transition: all var(--roo-transition-fast);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.roo-message:hover {
+  box-shadow: var(--roo-shadow-md);
+}
+
+.roo-message-user {
+  border-left: 3px solid var(--roo-accent-primary);
+  background: linear-gradient(to right, rgba(0, 122, 204, 0.05) 0%, transparent 100%);
+}
+
+.roo-message-assistant {
+  border-left: 3px solid var(--roo-accent-success);
+  background: linear-gradient(to right, rgba(22, 198, 12, 0.05) 0%, transparent 100%);
+}
+
+.roo-message-error {
+  border-left: 3px solid var(--roo-accent-error);
+  background: linear-gradient(to right, rgba(239, 68, 68, 0.05) 0%, transparent 100%);
+}
+
+.roo-message-system {
+  border-left: 3px solid var(--roo-accent-info);
+  background: linear-gradient(to right, rgba(96, 165, 250, 0.05) 0%, transparent 100%);
+  font-style: italic;
+}
+
+.roo-message-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.roo-message-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--roo-border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--roo-shadow-sm);
+}
+
+.roo-message-icon-user {
+  background: linear-gradient(135deg, var(--roo-accent-primary) 0%, #005a9e 100%);
+  color: white;
+}
+
+.roo-message-icon-assistant {
+  background: linear-gradient(135deg, var(--roo-accent-success) 0%, #14a008 100%);
+  color: white;
+}
+
+.roo-message-icon-error {
+  background: linear-gradient(135deg, var(--roo-accent-error) 0%, #dc2626 100%);
+  color: white;
+}
+
+.roo-message-icon-system {
+  background: linear-gradient(135deg, var(--roo-accent-info) 0%, #3b82f6 100%);
+  color: white;
+}
+
+.roo-message-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+.roo-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--roo-border-radius-sm);
+  opacity: 0;
+  transition: all var(--roo-transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roo-message:hover .roo-copy-btn {
+  opacity: 0.6;
+}
+
+.roo-copy-btn:hover {
+  opacity: 1 !important;
+  background: var(--vscode-list-hoverBackground);
+}
+
+.roo-copy-btn:active {
+  transform: scale(0.92);
+}
+
+.roo-message-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--vscode-foreground);
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.roo-message-content p {
+  margin: 0 0 14px 0;
+}
+
+.roo-message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.roo-message-content code {
+  font-family: var(--vscode-editor-font-family), "SF Mono", Monaco, Consolas, monospace;
+  font-size: 13px;
+  background: var(--vscode-textCodeBlock-background);
+  padding: 3px 6px;
+  border-radius: var(--roo-border-radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.roo-message-content pre {
+  background: var(--vscode-textCodeBlock-background);
+  padding: 14px;
+  border-radius: var(--roo-border-radius-md);
+  overflow-x: auto;
+  margin: 14px 0;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.roo-message-content pre code {
+  background: none;
+  padding: 0;
+  border: none;
+}
+
+/* ============================================================================
+   MESSAGE ACTIONS - Accept/Reject plan buttons
+   ============================================================================ */
+.roo-message-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.roo-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--roo-border-radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--roo-transition-fast);
+  box-shadow: var(--roo-shadow-sm);
+  letter-spacing: -0.01em;
+}
+
+.roo-action-accept {
+  background: var(--roo-accent-success);
+  color: white;
+}
+
+.roo-action-accept:hover {
+  background: #14a008;
+  transform: translateY(-2px);
+  box-shadow: var(--roo-shadow-md);
+}
+
+.roo-action-accept:active {
+  transform: translateY(0);
+}
+
+.roo-action-reject {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.roo-action-reject:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--roo-accent-error);
+  color: var(--roo-accent-error);
+}
+
+/* ============================================================================
+   INPUT AREA - Bottom message input
+   ============================================================================ */
+.roo-input-container {
+  padding: 16px 20px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBar-background);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 -1px 0 0 rgba(0, 0, 0, 0.05);
+}
+
+.roo-add-context-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--roo-border-radius-md);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all var(--roo-transition-fast);
+  width: fit-content;
+  box-shadow: var(--roo-shadow-sm);
+  letter-spacing: -0.01em;
+}
+
+.roo-add-context-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+  border-color: var(--roo-accent-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--roo-shadow-md);
+}
+
+.roo-add-context-btn:active {
+  transform: translateY(0);
+}
+
+.roo-add-context-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.roo-input-field {
+  width: 100%;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: var(--roo-border-radius-lg);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  transition: all var(--roo-transition-fast);
+  line-height: 1.6;
+  box-shadow: inset var(--roo-shadow-sm);
+}
+
+.roo-input-field:focus {
+  outline: none;
+  border-color: var(--roo-accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1), inset var(--roo-shadow-sm);
+}
+
+.roo-input-field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.roo-input-field::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+  opacity: 0.6;
+}
+
+.roo-input-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.roo-input-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roo-mode-selector,
+.roo-auto-selector {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: var(--roo-border-radius-md);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--roo-transition-fast);
+  box-shadow: var(--roo-shadow-sm);
+}
+
+.roo-mode-selector:hover,
+.roo-auto-selector:hover {
+  background: var(--vscode-dropdown-listBackground);
+  border-color: var(--roo-accent-primary);
+}
+
+.roo-mode-selector:disabled,
+.roo-auto-selector:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.roo-input-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.roo-file-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--roo-border-radius-md);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roo-token-usage {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--roo-border-radius-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.roo-send-btn {
+  background: var(--roo-accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--roo-border-radius-md);
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--roo-transition-fast);
+  flex-shrink: 0;
+  box-shadow: var(--roo-shadow-sm);
+}
+
+.roo-send-btn:hover:not(:disabled) {
+  background: #005a9e;
+  transform: translateY(-2px);
+  box-shadow: var(--roo-shadow-md);
+}
+
+.roo-send-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.roo-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   COMMAND CONFIRMATION PANEL
+   ============================================================================ */
+.roo-command-panel {
+  margin: 14px 20px;
+  padding: 16px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--roo-border-radius-lg);
+  border-left: 3px solid var(--roo-accent-warning);
+  box-shadow: var(--roo-shadow-md);
+  animation: slideIn 0.3s ease-out;
+}
+
+.roo-command-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--vscode-foreground);
+}
+
+.roo-command-title {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+.roo-risk-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: var(--roo-border-radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.roo-risk-high {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--roo-accent-error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.roo-command-preview {
+  background: var(--vscode-textCodeBlock-background);
+  padding: 12px 14px;
+  border-radius: var(--roo-border-radius-md);
+  margin-bottom: 12px;
+  font-family: var(--vscode-editor-font-family), monospace;
+  font-size: 13px;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset var(--roo-shadow-sm);
+}
+
+.roo-command-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.roo-command-btn {
+  flex: 1;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--roo-border-radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all var(--roo-transition-fast);
+  box-shadow: var(--roo-shadow-sm);
+  letter-spacing: -0.01em;
+}
+
+.roo-command-run {
+  background: var(--roo-accent-success);
+  color: white;
+}
+
+.roo-command-run:hover {
+  background: #14a008;
+  transform: translateY(-2px);
+  box-shadow: var(--roo-shadow-md);
+}
+
+.roo-command-cancel {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.roo-command-cancel:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--roo-accent-primary);
+}
+
+/* ============================================================================
+   SCROLLBAR STYLING
+   ============================================================================ */
+.roo-messages-container::-webkit-scrollbar {
+  width: 10px;
+}
+
+.roo-messages-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.roo-messages-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.roo-messages-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+  background-clip: padding-box;
+}
+
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
+@media (max-width: 600px) {
+  .roo-header {
+    padding: 12px 16px;
+  }
+
+  .roo-messages-container {
+    padding: 16px;
+  }
+
+  .roo-message {
+    padding: 14px 16px;
+  }
+
+  .roo-input-container {
+    padding: 14px 16px;
+  }
+
+  .roo-empty-state {
+    padding: 40px 20px;
+  }
+}
+
+/* ============================================================================
+   ACCESSIBILITY & FOCUS STATES
+   ============================================================================ */
+*:focus-visible {
+  outline: 2px solid var(--roo-accent-primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--roo-accent-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   PRINT STYLES
+   ============================================================================ */
+@media print {
+  .roo-header,
+  .roo-input-container,
+  .roo-command-panel {
+    display: none !important;
+  }
+
+  .roo-message {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

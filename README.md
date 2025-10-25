@@ -68,6 +68,27 @@ One powerful AI assistant that handles everything:
 📚 **Quick Start**: [`QUICK_START_URL_ANALYSIS.md`](./docs/QUICK_START_URL_ANALYSIS.md)  
 📖 **Full Guide**: [`URL_ANALYSIS_FEATURE.md`](./docs/URL_ANALYSIS_FEATURE.md)
 
+### 💾 Task Persistence & History (NEW!)
+Never lose your work! Every conversation is automatically saved and browsable.
+
+- **Automatic Saving** - All conversations saved to local SQLite database
+- **History View** - Browse all past tasks with search and filters
+- **Resume Conversations** - Click any task to continue from where you left off
+- **Export Options** - Export tasks to JSON, Markdown, or plain text
+- **Full-Text Search** - Find tasks instantly with FTS5-powered search
+- **Task Metrics** - Track tokens, costs, and completion status
+- **Offline-First** - Works completely offline, data stored locally
+
+📚 **Learn more**:
+- User Guide: [`TASK_PERSISTENCE_USER_GUIDE.md`](./TASK_PERSISTENCE_USER_GUIDE.md)
+- Developer Guide: [`TASK_PERSISTENCE_DEV_GUIDE.md`](./TASK_PERSISTENCE_DEV_GUIDE.md)
+
+**How it works:**
+1. Start a conversation - Task automatically created
+2. Chat with AI - State auto-saved after each response
+3. Click "History" tab - See all your tasks
+4. Click any task - Continue the conversation!
+
 ### 📊 Subscription Management
 - Real-time usage tracking
 - Status bar indicator with color coding:

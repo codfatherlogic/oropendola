@@ -48,23 +48,23 @@ class ReportNameGenerator {
         const { fileChanges, todos, errors } = context;
 
         // Check for specific patterns
-        if (errors > 0) return 'bugfix';
+        if (errors > 0) {return 'bugfix';}
 
         const created = fileChanges.created?.length || 0;
         const modified = fileChanges.modified?.length || 0;
 
-        if (created > modified * 2) return 'feature';
-        if (modified > created) return 'refactor';
+        if (created > modified * 2) {return 'feature';}
+        if (modified > created) {return 'refactor';}
 
         // Check TODO keywords
         if (todos && todos.length > 0) {
             const allTodoText = todos.map(t => t.title || '').join(' ').toLowerCase();
 
-            if (allTodoText.includes('fix') || allTodoText.includes('bug')) return 'bugfix';
-            if (allTodoText.includes('add') || allTodoText.includes('create')) return 'feature';
-            if (allTodoText.includes('refactor') || allTodoText.includes('improve')) return 'refactor';
-            if (allTodoText.includes('test')) return 'testing';
-            if (allTodoText.includes('doc')) return 'documentation';
+            if (allTodoText.includes('fix') || allTodoText.includes('bug')) {return 'bugfix';}
+            if (allTodoText.includes('add') || allTodoText.includes('create')) {return 'feature';}
+            if (allTodoText.includes('refactor') || allTodoText.includes('improve')) {return 'refactor';}
+            if (allTodoText.includes('test')) {return 'testing';}
+            if (allTodoText.includes('doc')) {return 'documentation';}
         }
 
         return 'task'; // Default

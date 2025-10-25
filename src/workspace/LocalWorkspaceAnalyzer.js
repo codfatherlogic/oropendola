@@ -321,7 +321,7 @@ class LocalWorkspaceAnalyzer {
      */
     _detectNodeProject(workspacePath, analysis) {
         const packageJsonPath = path.join(workspacePath, 'package.json');
-        if (!fs.existsSync(packageJsonPath)) return null;
+        if (!fs.existsSync(packageJsonPath)) {return null;}
 
         try {
             const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
@@ -333,23 +333,23 @@ class LocalWorkspaceAnalyzer {
 
             // Detect specific framework
             if (deps.react) {
-                if (deps.next) return 'Next.js (React)';
-                if (deps['react-native']) return 'React Native';
+                if (deps.next) {return 'Next.js (React)';}
+                if (deps['react-native']) {return 'React Native';}
                 return 'React';
             }
 
             if (deps.vue) {
-                if (deps.nuxt) return 'Nuxt.js (Vue)';
+                if (deps.nuxt) {return 'Nuxt.js (Vue)';}
                 return 'Vue.js';
             }
 
-            if (deps.angular || deps['@angular/core']) return 'Angular';
-            if (deps.svelte) return 'Svelte';
-            if (deps.express) return 'Express.js';
-            if (deps.fastify) return 'Fastify';
-            if (deps.koa) return 'Koa.js';
-            if (deps.electron) return 'Electron';
-            if (deps.gatsby) return 'Gatsby';
+            if (deps.angular || deps['@angular/core']) {return 'Angular';}
+            if (deps.svelte) {return 'Svelte';}
+            if (deps.express) {return 'Express.js';}
+            if (deps.fastify) {return 'Fastify';}
+            if (deps.koa) {return 'Koa.js';}
+            if (deps.electron) {return 'Electron';}
+            if (deps.gatsby) {return 'Gatsby';}
 
             console.log(`   Dependencies: ${analysis.dependencies.length}`);
             return 'Node.js';
@@ -367,7 +367,7 @@ class LocalWorkspaceAnalyzer {
      */
     _detectPythonProject(workspacePath, analysis) {
         const requirementsPath = path.join(workspacePath, 'requirements.txt');
-        if (!fs.existsSync(requirementsPath)) return null;
+        if (!fs.existsSync(requirementsPath)) {return null;}
 
         try {
             const requirements = fs.readFileSync(requirementsPath, 'utf8');
@@ -382,11 +382,11 @@ class LocalWorkspaceAnalyzer {
             analysis.configFiles.push('requirements.txt');
 
             // Check for specific frameworks
-            if (deps.includes('django')) return 'Django';
-            if (deps.includes('flask')) return 'Flask';
-            if (deps.includes('fastapi')) return 'FastAPI';
-            if (deps.includes('tornado')) return 'Tornado';
-            if (deps.includes('pyramid')) return 'Pyramid';
+            if (deps.includes('django')) {return 'Django';}
+            if (deps.includes('flask')) {return 'Flask';}
+            if (deps.includes('fastapi')) {return 'FastAPI';}
+            if (deps.includes('tornado')) {return 'Tornado';}
+            if (deps.includes('pyramid')) {return 'Pyramid';}
 
             console.log(`   Python dependencies: ${dependencies.length}`);
             return 'Python';
@@ -570,7 +570,7 @@ class LocalWorkspaceAnalyzer {
                 const parts = relativePath.split(path.sep);
                 const ext = path.extname(file.fsPath);
 
-                if (ext) extensions.add(ext);
+                if (ext) {extensions.add(ext);}
 
                 // Build directory tree (first 2 levels only)
                 if (parts.length > 0) {
@@ -702,7 +702,7 @@ class LocalWorkspaceAnalyzer {
 
         (analysis.extensions || []).forEach(ext => {
             const lang = extensionMap[ext];
-            if (lang) languages.add(lang);
+            if (lang) {languages.add(lang);}
         });
 
         analysis.languages = Array.from(languages);
@@ -713,7 +713,7 @@ class LocalWorkspaceAnalyzer {
      * @private
      */
     _isCacheValid() {
-        if (!this._cache || !this._cacheTimestamp) return false;
+        if (!this._cache || !this._cacheTimestamp) {return false;}
         return (Date.now() - this._cacheTimestamp) < this._cacheDuration;
     }
 

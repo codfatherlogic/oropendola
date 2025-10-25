@@ -25,7 +25,7 @@ class ApiClient {
 
         this.client = axios.create({
             baseURL: baseUrl,
-            timeout: timeout,
+            timeout,
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
@@ -34,7 +34,7 @@ class ApiClient {
 
         // Request interceptor - add authentication
         this.client.interceptors.request.use(
-            (config) => {
+            config => {
                 console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
 
                 // Add authentication headers
@@ -48,16 +48,16 @@ class ApiClient {
 
                 return config;
             },
-            (error) => Promise.reject(error)
+            error => Promise.reject(error)
         );
 
         // Response interceptor with retry logic
         this.client.interceptors.response.use(
-            (response) => {
+            response => {
                 this.retryCount = 0; // Reset on success
                 return response;
             },
-            async (error) => {
+            async error => {
                 return this.handleError(error);
             }
         );
@@ -71,9 +71,9 @@ class ApiClient {
      * @param {string} [credentials.sessionCookies] - Session cookies
      */
     updateCredentials({ apiKey, apiSecret, sessionCookies }) {
-        if (apiKey) this.apiKey = apiKey;
-        if (apiSecret) this.apiSecret = apiSecret;
-        if (sessionCookies) this.sessionCookies = sessionCookies;
+        if (apiKey) {this.apiKey = apiKey;}
+        if (apiSecret) {this.apiSecret = apiSecret;}
+        if (sessionCookies) {this.sessionCookies = sessionCookies;}
     }
 
     /**
@@ -93,10 +93,10 @@ class ApiClient {
         ) {
             this.retryCount++;
             console.log(`[API] Retry ${this.retryCount}/${this.maxRetries}`);
-            
+
             // Exponential backoff
             await this.sleep(Math.pow(2, this.retryCount) * 1000);
-            
+
             return this.client.request(config);
         }
 
@@ -117,7 +117,7 @@ class ApiClient {
      * @returns {boolean}
      */
     shouldRetry(error) {
-        if (!error.response) return true; // Network error
+        if (!error.response) {return true;} // Network error
         const status = error.response.status;
         return status >= 500 && status < 600; // Server errors
     }
@@ -299,8 +299,8 @@ class ApiClient {
     async getTodos(status = null, priority = null, limit = 50) {
         const endpoint = '/api/method/ai_assistant.api.todo.get_todos';
         const params = { limit };
-        if (status) params.status = status;
-        if (priority) params.priority = priority;
+        if (status) {params.status = status;}
+        if (priority) {params.priority = priority;}
 
         const response = await this.get(endpoint, params);
         return response.message || response;

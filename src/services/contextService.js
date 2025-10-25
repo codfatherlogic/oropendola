@@ -164,10 +164,10 @@ class ContextService {
             return 'Python';
         }
 
-        if (files.includes('go.mod')) return 'Go';
-        if (files.includes('Cargo.toml')) return 'Rust';
-        if (files.includes('pom.xml') || files.includes('build.gradle')) return 'Java';
-        if (files.includes('Gemfile')) return 'Ruby';
+        if (files.includes('go.mod')) {return 'Go';}
+        if (files.includes('Cargo.toml')) {return 'Rust';}
+        if (files.includes('pom.xml') || files.includes('build.gradle')) {return 'Java';}
+        if (files.includes('Gemfile')) {return 'Ruby';}
 
         return 'Unknown';
     }
@@ -177,7 +177,7 @@ class ContextService {
      * @private
      */
     _getPrimaryLanguage(languages = []) {
-        if (!languages || languages.length === 0) return 'Unknown';
+        if (!languages || languages.length === 0) {return 'Unknown';}
 
         // Languages is typically [{name: 'JavaScript', percentage: 45}, ...]
         const sorted = [...languages].sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
@@ -236,7 +236,7 @@ class ContextService {
     async forceRefresh() {
         this.clearCache();
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
+        if (!workspaceFolders) {return;}
 
         await this.getEnrichedContext(true, true);
     }

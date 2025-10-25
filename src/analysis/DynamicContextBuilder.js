@@ -95,21 +95,21 @@ class DynamicContextBuilder {
             if (deps.includes('frappe') || deps.includes('erpnext')) {
                 keyLibs.push('Frappe framework');
             }
-            if (deps.includes('django')) keyLibs.push('Django web framework');
-            if (deps.includes('flask')) keyLibs.push('Flask web framework');
-            if (deps.includes('fastapi')) keyLibs.push('FastAPI framework');
-            if (deps.includes('pytest')) keyLibs.push('pytest testing');
-            if (deps.includes('sqlalchemy')) keyLibs.push('SQLAlchemy ORM');
+            if (deps.includes('django')) {keyLibs.push('Django web framework');}
+            if (deps.includes('flask')) {keyLibs.push('Flask web framework');}
+            if (deps.includes('fastapi')) {keyLibs.push('FastAPI framework');}
+            if (deps.includes('pytest')) {keyLibs.push('pytest testing');}
+            if (deps.includes('sqlalchemy')) {keyLibs.push('SQLAlchemy ORM');}
         }
 
         if (lang === 'javascript') {
-            if (deps.includes('react')) keyLibs.push('React');
-            if (deps.includes('vue')) keyLibs.push('Vue.js');
-            if (deps.includes('angular')) keyLibs.push('Angular');
-            if (deps.includes('express')) keyLibs.push('Express.js');
-            if (deps.includes('next')) keyLibs.push('Next.js');
-            if (deps.includes('electron')) keyLibs.push('Electron');
-            if (deps.includes('jest')) keyLibs.push('Jest testing');
+            if (deps.includes('react')) {keyLibs.push('React');}
+            if (deps.includes('vue')) {keyLibs.push('Vue.js');}
+            if (deps.includes('angular')) {keyLibs.push('Angular');}
+            if (deps.includes('express')) {keyLibs.push('Express.js');}
+            if (deps.includes('next')) {keyLibs.push('Next.js');}
+            if (deps.includes('electron')) {keyLibs.push('Electron');}
+            if (deps.includes('jest')) {keyLibs.push('Jest testing');}
         }
 
         return keyLibs;
@@ -210,7 +210,7 @@ class DynamicContextBuilder {
 
         commands.slice(0, 15).forEach(cmd => {
             context += `- \`${cmd.name}\``;
-            if (cmd.source) context += ` (${cmd.source})`;
+            if (cmd.source) {context += ` (${cmd.source})`;}
             context += '\n';
         });
 
@@ -307,10 +307,10 @@ class DynamicContextBuilder {
 
         // Main languages
         const langs = [];
-        if (patterns.dependencies?.python?.length > 0) langs.push('Python');
-        if (patterns.dependencies?.javascript?.length > 0) langs.push('JavaScript');
-        if (patterns.dependencies?.go?.length > 0) langs.push('Go');
-        if (patterns.dependencies?.rust?.length > 0) langs.push('Rust');
+        if (patterns.dependencies?.python?.length > 0) {langs.push('Python');}
+        if (patterns.dependencies?.javascript?.length > 0) {langs.push('JavaScript');}
+        if (patterns.dependencies?.go?.length > 0) {langs.push('Go');}
+        if (patterns.dependencies?.rust?.length > 0) {langs.push('Rust');}
 
         if (langs.length > 0) {
             summary.push(`Languages: ${langs.join(', ')}`);

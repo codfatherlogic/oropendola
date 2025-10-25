@@ -37,8 +37,8 @@ class StatusBarManager {
 
     updateFramework(framework, confidence) {
         if (!framework) {
-            this.frameworkItem.text = "$(question) No Framework";
-            this.frameworkItem.tooltip = "No framework detected\nClick to run detection";
+            this.frameworkItem.text = '$(question) No Framework';
+            this.frameworkItem.tooltip = 'No framework detected\nClick to run detection';
             this.frameworkItem.backgroundColor = undefined;
         } else {
             const icon = this._getFrameworkIcon(framework);
@@ -123,12 +123,12 @@ class StatusBarManager {
 
     updateConnection(connected) {
         if (connected) {
-            this.connectionItem.text = "$(check) Connected";
-            this.connectionItem.tooltip = "Backend connected\nServer: oropendola.ai";
+            this.connectionItem.text = '$(check) Connected';
+            this.connectionItem.tooltip = 'Backend connected\nServer: oropendola.ai';
             this.connectionItem.backgroundColor = undefined;
         } else {
-            this.connectionItem.text = "$(x) Disconnected";
-            this.connectionItem.tooltip = "Backend disconnected\nClick to test connection";
+            this.connectionItem.text = '$(x) Disconnected';
+            this.connectionItem.tooltip = 'Backend disconnected\nClick to test connection';
             this.connectionItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
         }
         this.connectionItem.show();

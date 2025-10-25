@@ -30,7 +30,6 @@ const extensionConfig = {
         // Keep these external as they have native dependencies
         'tree-sitter-wasms',
         'web-tree-sitter',
-        'keytar', // Native credential storage
         'fsevents' // macOS file system events
     ]
 };

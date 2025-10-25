@@ -13,14 +13,14 @@ class WorkspaceIndexer {
     }
 
     async indexWorkspace(workspaceFolder) {
-        if (this.indexingInProgress) return;
+        if (this.indexingInProgress) {return;}
         this.indexingInProgress = true;
         try {
             await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Indexing workspace for AI context...', cancellable: true }, async (progress, token) => {
                 const files = await this.findAllFiles(workspaceFolder.uri.fsPath);
                 const total = files.length;
                 for (let i = 0; i < files.length; i++) {
-                    if (token.isCancellationRequested) break;
+                    if (token.isCancellationRequested) {break;}
                     const file = files[i];
                     progress.report({ message: `${i + 1}/${total} files`, increment: (100 / total) });
                     await this.indexFile(file);
@@ -37,15 +37,14 @@ class WorkspaceIndexer {
         const files = [];
         const includePatterns = ['**/*.py','**/*.js','**/*.ts','**/*.jsx','**/*.tsx','**/*.java','**/*.go','**/*.rs'];
         const excludePatterns = ['**/node_modules/**','**/.git/**','**/__pycache__/**','**/dist/**','**/build/**','**/.venv/**','**/venv/**'];
-        const scanDirectory = (dir) => {
+        const scanDirectory = dir => {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
                 const fullPath = path.join(dir, entry.name);
                 const relativePath = path.relative(workspacePath, fullPath);
-                if (excludePatterns.some(pattern => minimatch(relativePath, pattern))) continue;
-                if (entry.isDirectory()) scanDirectory(fullPath);
-                else if (entry.isFile()) {
-                    if (includePatterns.some(pattern => minimatch(relativePath, pattern))) files.push(fullPath);
+                if (excludePatterns.some(pattern => minimatch(relativePath, pattern))) {continue;}
+                if (entry.isDirectory()) {scanDirectory(fullPath);} else if (entry.isFile()) {
+                    if (includePatterns.some(pattern => minimatch(relativePath, pattern))) {files.push(fullPath);}
                 }
             }
         };
@@ -57,7 +56,7 @@ class WorkspaceIndexer {
         try {
             const stats = fs.statSync(filePath);
             const language = this.detectLanguage(filePath);
-            if (stats.size > 1024 * 1024) return;
+            if (stats.size > 1024 * 1024) {return;}
             const content = fs.readFileSync(filePath, 'utf-8');
             const symbols = await this.extractSymbols(content, language);
             this.indexedFiles.set(filePath, { path: filePath, language, size: stats.size, lastModified: stats.mtimeMs, symbols });
@@ -200,11 +199,11 @@ class WorkspaceIndexer {
         const scored = [];
         for (const file of this.indexedFiles.values()) {
             let score = 0;
-            if (activeFile && file.path === activeFile) score += 100;
+            if (activeFile && file.path === activeFile) {score += 100;}
             const fileName = path.basename(file.path).toLowerCase();
-            for (const keyword of keywords) { if (fileName.includes(keyword)) score += 10; }
-            for (const symbol of file.symbols || []) { for (const keyword of keywords) { if (symbol.name.toLowerCase().includes(keyword)) score += 5; } }
-            if (score > 0) scored.push({ file, score });
+            for (const keyword of keywords) { if (fileName.includes(keyword)) {score += 10;} }
+            for (const symbol of file.symbols || []) { for (const keyword of keywords) { if (symbol.name.toLowerCase().includes(keyword)) {score += 5;} } }
+            if (score > 0) {scored.push({ file, score });}
         }
         scored.sort((a, b) => b.score - a.score);
         return scored.slice(0, 5).map(item => item.file);
@@ -228,7 +227,7 @@ class WorkspaceIndexer {
         const activeBasename = path.basename(filePath, path.extname(filePath));
 
         for (const [candidatePath, candidateData] of this.indexedFiles.entries()) {
-            if (candidatePath === filePath) continue; // Skip self
+            if (candidatePath === filePath) {continue;} // Skip self
 
             let score = 0;
             const candidateSymbols = candidateData.symbols || [];
@@ -312,8 +311,8 @@ class WorkspaceIndexer {
      * Determine relation type based on score
      */
     _getRelationType(score) {
-        if (score >= 50) return 'strong';
-        if (score >= 20) return 'moderate';
+        if (score >= 50) {return 'strong';}
+        if (score >= 20) {return 'moderate';}
         return 'weak';
     }
 
@@ -330,7 +329,7 @@ class WorkspaceIndexer {
         return langMap[ext] || 'unknown';
     }
 
-    dispose() { if (this.fileWatcher) this.fileWatcher.dispose(); }
+    dispose() { if (this.fileWatcher) {this.fileWatcher.dispose();} }
 }
 
 module.exports = { WorkspaceIndexer };

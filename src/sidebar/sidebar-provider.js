@@ -4,6 +4,10 @@ const ConversationTask = require('../core/ConversationTask');
 const URLAnalyzer = require('../analysis/url-analyzer');
 const TodoManager = require('../utils/todo-manager');
 
+// Week 6-8: New Feature Clients
+const TerminalManager = require('../services/terminal/TerminalManager');
+// Note: TypeScript clients will be loaded dynamically when needed
+
 /**
  * Oropendola Sidebar WebView Provider
  * Enhanced with KiloCode-inspired Task management pattern
@@ -33,6 +37,13 @@ class OropendolaSidebarProvider {
 
         // CSRF Token for Frappe authentication
         this._csrfToken = null;
+
+        // Week 6-8: New Feature Managers
+        this._terminalManager = TerminalManager; // Singleton instance
+        this._browserClient = null; // Lazy-loaded TypeScript client
+        this._marketplaceClient = null; // Lazy-loaded TypeScript client
+        this._vectorClient = null; // Lazy-loaded TypeScript client
+        this._i18nManager = null; // Lazy-loaded TypeScript client
     }
 
     /**
@@ -40,6 +51,14 @@ class OropendolaSidebarProvider {
      */
     setChatManager(chatManager) {
         this._chatManager = chatManager;
+    }
+
+    /**
+     * Set the task manager instance
+     * Sprint 1-2: Task Persistence Layer
+     */
+    setTaskManager(taskManager) {
+        this._taskManager = taskManager;
     }
 
     /**
@@ -93,7 +112,7 @@ class OropendolaSidebarProvider {
         console.log('✅ SidebarProvider: View shown');
 
         // Handle messages from the webview
-        webviewView.webview.onDidReceiveMessage(async (message) => {
+        webviewView.webview.onDidReceiveMessage(async message => {
             try {
                 switch (message.type) {
                     case 'login':
@@ -201,6 +220,114 @@ class OropendolaSidebarProvider {
                     case 'getFileWatcherStats':
                         await this._handleGetFileWatcherStats();
                         break;
+
+                    // Sprint 1-2: Task History View handlers
+                    case 'listTasks':
+                        await this._handleListTasks(message.filters);
+                        break;
+                    case 'getTaskStats':
+                        await this._handleGetTaskStats();
+                        break;
+                    case 'loadTask':
+                        await this._handleLoadTask(message.taskId);
+                        break;
+                    case 'deleteTask':
+                        await this._handleDeleteTask(message.taskId);
+                        break;
+                    case 'exportTask':
+                        await this._handleExportTask(message.taskId, message.format);
+                        break;
+
+                    // Week 7: Terminal View handlers
+                    case 'getTerminalHistory':
+                        await this._handleGetTerminalHistory();
+                        break;
+                    case 'getTerminalSuggestions':
+                        await this._handleGetTerminalSuggestions(message.prompt);
+                        break;
+                    case 'executeTerminalCommand':
+                        await this._handleExecuteTerminalCommand(message.command);
+                        break;
+                    case 'explainTerminalCommand':
+                        await this._handleExplainTerminalCommand(message.command);
+                        break;
+                    case 'fixTerminalCommand':
+                        await this._handleFixTerminalCommand(message.command, message.error);
+                        break;
+                    case 'analyzeTerminalOutput':
+                        await this._handleAnalyzeTerminalOutput(message.output);
+                        break;
+
+                    // Week 6: Browser Automation handlers
+                    case 'getBrowserSessions':
+                        await this._handleGetBrowserSessions();
+                        break;
+                    case 'createBrowserSession':
+                        await this._handleCreateBrowserSession(message.sessionName);
+                        break;
+                    case 'closeBrowserSession':
+                        await this._handleCloseBrowserSession(message.sessionId);
+                        break;
+                    case 'browserNavigate':
+                        await this._handleBrowserNavigate(message.sessionId, message.url);
+                        break;
+                    case 'browserExecuteAction':
+                        await this._handleBrowserExecuteAction(message.sessionId, message.prompt);
+                        break;
+                    case 'browserScreenshot':
+                        await this._handleBrowserScreenshot(message.sessionId);
+                        break;
+                    case 'browserClick':
+                        await this._handleBrowserClick(message.sessionId, message.selector);
+                        break;
+                    case 'browserType':
+                        await this._handleBrowserType(message.sessionId, message.selector, message.text);
+                        break;
+
+                    // Week 8: Marketplace handlers
+                    case 'searchMarketplace':
+                        await this._handleSearchMarketplace(message.query, message.category);
+                        break;
+                    case 'getInstalledExtensions':
+                        await this._handleGetInstalledExtensions();
+                        break;
+                    case 'installExtension':
+                        await this._handleInstallExtension(message.extensionId);
+                        break;
+                    case 'uninstallExtension':
+                        await this._handleUninstallExtension(message.extensionId);
+                        break;
+                    case 'getExtensionDetails':
+                        await this._handleGetExtensionDetails(message.extensionId);
+                        break;
+
+                    // Week 8: Vector Database handlers
+                    case 'vectorSearch':
+                        await this._handleVectorSearch(message.query, message.limit);
+                        break;
+                    case 'indexWorkspace':
+                        await this._handleIndexWorkspace();
+                        break;
+                    case 'getIndexedFiles':
+                        await this._handleGetIndexedFiles();
+                        break;
+                    case 'getIndexStats':
+                        await this._handleGetIndexStats();
+                        break;
+                    case 'deleteIndex':
+                        await this._handleDeleteIndex();
+                        break;
+
+                    // Settings & I18n handlers
+                    case 'changeLanguage':
+                        await this._handleChangeLanguage(message.language);
+                        break;
+                    case 'updateSettings':
+                        await this._handleUpdateSettings(message.settings);
+                        break;
+                    case 'getSettings':
+                        await this._handleGetSettings();
+                        break;
                 }
             } catch (error) {
                 console.error('❌ Message handler error:', error);
@@ -297,7 +424,7 @@ class OropendolaSidebarProvider {
                     const csrfResponse = await axios.get(`${apiUrl}/api/method/frappe.auth.get_logged_user`, {
                         headers: { 'Cookie': this._sessionCookies }
                     });
-                    
+
                     // Extract from headers or response data
                     if (csrfResponse.headers && csrfResponse.headers['x-frappe-csrf-token']) {
                         this._csrfToken = csrfResponse.headers['x-frappe-csrf-token'];
@@ -306,7 +433,7 @@ class OropendolaSidebarProvider {
                         this._csrfToken = csrfResponse.data.csrf_token;
                         console.log('✅ Extracted CSRF token from response data');
                     }
-                    
+
                     // Persist CSRF token to VS Code settings
                     if (this._csrfToken) {
                         await config.update('session.csrfToken', this._csrfToken, vscode.ConfigurationTarget.Global);
@@ -318,7 +445,7 @@ class OropendolaSidebarProvider {
 
                 // Store user info (extract from response or use email)
                 this._userInfo = {
-                    email: email,
+                    email,
                     full_name: email.split('@')[0]
                 };
 
@@ -372,7 +499,7 @@ class OropendolaSidebarProvider {
                     'Authorization': `token ${apiKey}`
                 },
                 params: {
-                    email: email
+                    email
                 }
             });
 
@@ -988,7 +1115,7 @@ class OropendolaSidebarProvider {
                     { pattern: /\bdb\b/gi, replacement: 'database' },
                     { pattern: /\bcrud\b/gi, replacement: 'CRUD' },
                     { pattern: /\s+/g, replacement: ' ' }, // Fix multiple spaces
-                    { pattern: /^(create|make|build)\s+/i, replacement: (match) => `${match.trim().charAt(0).toUpperCase() + match.trim().slice(1)} a ` }
+                    { pattern: /^(create|make|build)\s+/i, replacement: match => `${match.trim().charAt(0).toUpperCase() + match.trim().slice(1)} a ` }
                 ];
 
                 improvements.forEach(({ pattern, replacement }) => {
@@ -1148,7 +1275,7 @@ class OropendolaSidebarProvider {
                         `${apiUrl}/api/method/ai_assistant.api.todos.toggle_todo_doctype`,
                         { todo_id: todoId },
                         {
-                            headers: headers,
+                            headers,
                             timeout: 10000
                         }
                     );
@@ -1214,7 +1341,7 @@ class OropendolaSidebarProvider {
                 `${apiUrl}/api/method/ai_assistant.api.todos.clear_todos_doctype`,
                 { conversation_id: this._conversationId },
                 {
-                    headers: headers,
+                    headers,
                     timeout: 10000
                 }
             );
@@ -1284,7 +1411,7 @@ class OropendolaSidebarProvider {
                 `${apiUrl}/api/method/ai_assistant.api.todos.get_todos_doctype`,
                 {
                     params: { conversation_id: this._conversationId },
-                    headers: headers,
+                    headers,
                     timeout: 10000
                 }
             );
@@ -1325,7 +1452,7 @@ class OropendolaSidebarProvider {
                 {
                     conversation_id: this._conversationId,
                     todo_id: todoId,
-                    completed: completed
+                    completed
                 },
                 {
                     headers: {
@@ -1348,7 +1475,7 @@ class OropendolaSidebarProvider {
      * @private
      */
     async _loadTodosFromBackend() {
-        if (!this._conversationId || !this._sessionCookies) return;
+        if (!this._conversationId || !this._sessionCookies) {return;}
 
         try {
             const config = vscode.workspace.getConfiguration('oropendola');
@@ -1386,15 +1513,15 @@ class OropendolaSidebarProvider {
      * Update TODO display in webview
      */
     _updateTodoDisplay() {
-        if (!this._view) return;
+        if (!this._view) {return;}
 
         const todos = this._todoManager.getAllTodos();
         const stats = this._todoManager.getStats();
 
         this._view.webview.postMessage({
             type: 'updateTodos',
-            todos: todos,
-            stats: stats
+            todos,
+            stats
         });
     }
 
@@ -1402,7 +1529,7 @@ class OropendolaSidebarProvider {
      * Parse TODOs from AI response
      */
     async _parseTodosFromResponse(responseText) {
-        if (!responseText) return;
+        if (!responseText) {return;}
 
         try {
             const newTodos = this._todoManager.parseFromAIResponse(responseText);
@@ -1454,8 +1581,8 @@ class OropendolaSidebarProvider {
             // Send the plan back to AI for execution (silent mode - don't show instruction in UI)
             // NOTE: Only ask to create files, NOT run terminal commands (backend blocks those)
             await this._handleSendMessage(
-                'Execute the plan you just outlined. Create all the files with their complete implementation. Do NOT run any terminal commands like npm install, git init, or node commands - just create the files. The user will run commands manually.', 
-                [], 
+                'Execute the plan you just outlined. Create all the files with their complete implementation. Do NOT run any terminal commands like npm install, git init, or node commands - just create the files. The user will run commands manually.',
+                [],
                 { silent: true }
             );
 
@@ -1546,7 +1673,7 @@ class OropendolaSidebarProvider {
 
                 const fullRange = new vscode.Range(
                     0, 0,
-                    document.lineCount - 1, 
+                    document.lineCount - 1,
                     document.lineAt(document.lineCount - 1).text.length
                 );
 
@@ -1573,12 +1700,12 @@ class OropendolaSidebarProvider {
     async _handleKeepFileChange(filePath) {
         try {
             console.log('✅ Keeping file change:', filePath);
-            
+
             // In a full implementation, you might:
             // - Mark the change as accepted in a database
             // - Update version control metadata
             // - Track user preferences for AI changes
-            
+
             // For now, just log it
             vscode.window.showInformationMessage(`Kept changes to ${filePath}`, { modal: false });
 
@@ -1654,13 +1781,13 @@ class OropendolaSidebarProvider {
      */
     _setupTaskEventListeners(task) {
         // Task started
-        task.on('taskStarted', (taskId) => {
+        task.on('taskStarted', taskId => {
             console.log(`📋 Task ${taskId} started`);
             this._updateTaskStatus('running', 'Processing your request...');
         });
 
         // Task completed
-        task.on('taskCompleted', (taskId) => {
+        task.on('taskCompleted', taskId => {
             console.log(`✅ Task ${taskId} completed`);
             this._updateTaskStatus('idle', '');
 
@@ -1799,7 +1926,7 @@ class OropendolaSidebarProvider {
         });
 
         // Task aborted
-        task.on('taskAborted', (taskId) => {
+        task.on('taskAborted', taskId => {
             console.log(`⏹ Task ${taskId} aborted`);
             this._updateTaskStatus('idle', '');
 
@@ -1823,11 +1950,11 @@ class OropendolaSidebarProvider {
                 // Don't use TODOs to control execution flow - just display them
                 const backendTodos = extraData?.todos && Array.isArray(extraData.todos) && extraData.todos.length > 0;
                 const todosForDisplay = backendTodos ? extraData.todos : parsedTodos;
-                
+
                 // IMPORTANT: Don't set has_todos flag - this prevents "Confirm/Dismiss" buttons
                 // and allows natural conversation flow
-                
-                // Send message with file_changes if available
+
+                // Send message with file_changes and metrics if available
                 this._view.webview.postMessage({
                     type: 'addMessage',
                     message: {
@@ -1835,7 +1962,10 @@ class OropendolaSidebarProvider {
                         content: message,
                         file_changes: extraData?.file_changes,
                         has_todos: false,  // Always false to prevent plan interruption
-                        auto_execute: true  // Always true for continuous flow
+                        auto_execute: true,  // Always true for continuous flow
+                        ts: Date.now(),
+                        // Include API metrics if available from backend
+                        apiMetrics: extraData?.apiMetrics || extraData?.metrics || extraData?.usage
                     }
                 });
 
@@ -1848,7 +1978,7 @@ class OropendolaSidebarProvider {
                         pending: todosForDisplay.length,
                         in_progress: 0
                     };
-                    
+
                     this._view.webview.postMessage({
                         type: 'updateTodos',
                         todos: todosForDisplay,
@@ -1862,11 +1992,11 @@ class OropendolaSidebarProvider {
         // AI Progress events (GitHub Copilot-style + WebSocket real-time)
         task.on('aiProgress', (taskId, progressData) => {
             console.log(`📊 [Sidebar] AI Progress [${progressData.type}]:`, progressData.message || '');
-            
+
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'aiProgress',
-                    taskId: taskId,
+                    taskId,
                     data: progressData
                 });
             }
@@ -1886,12 +2016,12 @@ class OropendolaSidebarProvider {
         });
 
         // Realtime WebSocket connection established
-        task.on('realtimeConnected', (taskId) => {
+        task.on('realtimeConnected', taskId => {
             console.log(`✅ [Sidebar] Task ${taskId} realtime connected`);
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'realtimeStatus',
-                    taskId: taskId,
+                    taskId,
                     connected: true
                 });
             }
@@ -1903,9 +2033,9 @@ class OropendolaSidebarProvider {
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'realtimeStatus',
-                    taskId: taskId,
+                    taskId,
                     connected: false,
-                    reason: reason
+                    reason
                 });
             }
         });
@@ -1923,8 +2053,8 @@ class OropendolaSidebarProvider {
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'intentClassified',
-                    taskId: taskId,
-                    data: data
+                    taskId,
+                    data
                 });
             }
         });
@@ -1935,14 +2065,14 @@ class OropendolaSidebarProvider {
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'privacyFilter',
-                    taskId: taskId,
-                    data: data
+                    taskId,
+                    data
                 });
             }
         });
 
         // Task cleanup (ALWAYS hide typing indicator)
-        task.on('taskCleanup', (_taskId) => {
+        task.on('taskCleanup', _taskId => {
             console.log('🧹 Task cleanup event received');
             if (this._view) {
                 this._view.webview.postMessage({ type: 'hideTyping' });
@@ -1952,20 +2082,20 @@ class OropendolaSidebarProvider {
         // Tool execution events for TODO tracking
         task.on('toolExecutionStart', (taskId, tool, index, total) => {
             console.log(`🔧 [Sidebar] Tool execution started [${index + 1}/${total}]: ${tool.action}`);
-            
+
             // Extract todo_id from tool parameters if available
             const todoId = this._extractTodoId(tool);
-            
+
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'aiProgress',
-                    taskId: taskId,
+                    taskId,
                     data: {
                         type: 'toolExecutionStart',
                         tool_name: tool.action,
                         todo_id: todoId,
                         step: index + 1,
-                        total: total
+                        total
                     }
                 });
             }
@@ -1973,43 +2103,43 @@ class OropendolaSidebarProvider {
 
         task.on('toolExecutionComplete', (taskId, tool, result, index, total) => {
             console.log(`✅ [Sidebar] Tool execution completed [${index + 1}/${total}]: ${tool.action}`);
-            
+
             // Extract todo_id from tool parameters if available
             const todoId = this._extractTodoId(tool);
-            
+
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'aiProgress',
-                    taskId: taskId,
+                    taskId,
                     data: {
                         type: 'toolExecutionComplete',
                         tool_name: tool.action,
                         todo_id: todoId,
                         success: result.success !== false,
                         step: index + 1,
-                        total: total
+                        total
                     }
                 });
             }
         });
 
         // File change events (Qoder-style)
-        task.on('fileChangeAdded', (change) => {
+        task.on('fileChangeAdded', change => {
             console.log(`📄 File change added: ${change.filePath} (${change.status})`);
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'fileChangeAdded',
-                    change: change
+                    change
                 });
             }
         });
 
-        task.on('fileChangeUpdated', (change) => {
+        task.on('fileChangeUpdated', change => {
             console.log(`🔄 File change updated: ${change.filePath} (${change.status})`);
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'fileChangeUpdated',
-                    change: change
+                    change
                 });
             }
         });
@@ -2022,7 +2152,7 @@ class OropendolaSidebarProvider {
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'showTaskSummary',
-                    summary: summary
+                    summary
                 });
             }
         });
@@ -2037,8 +2167,8 @@ class OropendolaSidebarProvider {
         if (this._view) {
             this._view.webview.postMessage({
                 type: 'taskStatus',
-                status: status,
-                message: message
+                status,
+                message
             });
         }
     }
@@ -2170,12 +2300,14 @@ class OropendolaSidebarProvider {
                 const taskId = `task_${this._taskCounter}_${Date.now()}`;
 
                 this._currentTask = new ConversationTask(taskId, {
-                    apiUrl: apiUrl,
+                    apiUrl,
                     sessionCookies: this._sessionCookies,
                     mode: this._mode,
                     // eslint-disable-next-line no-undef
                     providerRef: new WeakRef(this),
-                    consecutiveMistakeLimit: 10  // Increased for progressive mode (was 3)
+                    consecutiveMistakeLimit: 10,  // Increased for progressive mode (was 3)
+                    // Sprint 1-2: Pass TaskManager for persistence
+                    taskManager: this._taskManager
                 });
 
                 // Set up all event listeners
@@ -2300,7 +2432,7 @@ class OropendolaSidebarProvider {
             while ((match = toolCallRegex.exec(responseText)) !== null) {
                 matchCount++;
                 console.log(`🔎 Found match #${matchCount}`);
-                let jsonStr = match[1].trim();
+                const jsonStr = match[1].trim();
                 console.log('🔎 Extracted JSON string (first 200 chars):', jsonStr.substring(0, 200));
 
                 try {
@@ -2682,9 +2814,9 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         const response = await axios.post(
             `${apiUrl}/api/method/ai_assistant.api.execute_tool_call`,
             {
-                action: action,
-                path: path,
-                content: content,
+                action,
+                path,
+                content,
                 // Pass any additional parameters
                 ...toolCall
             },
@@ -3266,7 +3398,7 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
             const response = await axios.get(
                 `${apiUrl}/api/method/ai_assistant.api.workspace.get_all_file_watcher_stats`,
                 {
-                    headers: headers,
+                    headers,
                     timeout: 5000
                 }
             );
@@ -3337,10 +3469,10 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none';
         style-src ${cspSource} 'unsafe-inline';
-        script-src ${cspSource};
+        script-src ${cspSource} 'wasm-unsafe-eval';
         img-src ${cspSource} data: https:;
-        font-src ${cspSource};
-        connect-src ${cspSource};
+        font-src ${cspSource} data:;
+        connect-src ${cspSource} https://oropendola.ai;
     ">
     <title>Oropendola AI Assistant</title>
     <link rel="stylesheet" href="${styleUri}">
@@ -3353,6 +3485,1234 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
 
         console.log('📄 React HTML loaded');
         return html;
+    }
+
+    // ==================== Sprint 1-2: Task History Handlers ====================
+
+    /**
+     * Handle listTasks request from history view
+     */
+    async _handleListTasks(filters = {}) {
+        try {
+            if (!this._taskManager) {
+                console.warn('⚠️  TaskManager not initialized');
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'taskList',
+                        tasks: []
+                    });
+                }
+                return;
+            }
+
+            console.log('📋 Listing tasks with filters:', filters);
+            const tasks = await this._taskManager.listTasks(filters);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskList',
+                    tasks: tasks
+                });
+            }
+
+            console.log(`✅ Sent ${tasks.length} tasks to webview`);
+        } catch (error) {
+            console.error('❌ Error listing tasks:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskList',
+                    tasks: [],
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle getTaskStats request from history view
+     */
+    async _handleGetTaskStats() {
+        try {
+            if (!this._taskManager) {
+                console.warn('⚠️  TaskManager not initialized');
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'taskStats',
+                        stats: {
+                            total: 0,
+                            active: 0,
+                            completed: 0,
+                            failed: 0,
+                            terminated: 0
+                        }
+                    });
+                }
+                return;
+            }
+
+            console.log('📊 Getting task statistics');
+            const stats = await this._taskManager.getStats();
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskStats',
+                    stats: stats
+                });
+            }
+
+            console.log('✅ Sent task stats to webview:', stats);
+        } catch (error) {
+            console.error('❌ Error getting task stats:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskStats',
+                    stats: {
+                        total: 0,
+                        active: 0,
+                        completed: 0,
+                        failed: 0,
+                        terminated: 0
+                    },
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle loadTask request from history view
+     */
+    async _handleLoadTask(taskId) {
+        try {
+            if (!this._taskManager) {
+                console.warn('⚠️  TaskManager not initialized');
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`📖 Loading task: ${taskId}`);
+            const task = await this._taskManager.loadTask(taskId);
+
+            // Sprint 1-2: Restore task conversation state
+            console.log(`🔄 Restoring ${task.messages.length} messages from task`);
+
+            // Clear current messages
+            this._messages = [];
+
+            // Create a new ConversationTask if needed (to store the loaded state)
+            if (this._currentTask) {
+                // Dispose of current task if exists
+                this._currentTask.dispose();
+            }
+
+            // Restore messages to UI
+            if (this._view && task.messages && task.messages.length > 0) {
+                // Send task loaded event
+                this._view.webview.postMessage({
+                    type: 'taskLoaded',
+                    task: task
+                });
+
+                // Clear chat UI
+                this._view.webview.postMessage({
+                    type: 'clearChat'
+                });
+
+                // Show restore notification
+                this._view.webview.postMessage({
+                    type: 'addMessage',
+                    message: {
+                        role: 'system',
+                        content: `📖 Restored task: ${task.text}\n\n**Status:** ${task.status}\n**Messages:** ${task.messages.length}\n**Created:** ${new Date(task.createdAt).toLocaleString()}\n\n*You can continue this conversation by sending a new message.*`
+                    }
+                });
+
+                // Restore each message to UI
+                for (const msg of task.messages) {
+                    // Convert ClineMessage to UI message format
+                    const role = msg.type === 'say' ? 'assistant' : msg.type === 'ask' ? 'user' : 'system';
+                    const content = msg.text || msg.say || msg.ask || '';
+
+                    if (content) {
+                        this._view.webview.postMessage({
+                            type: 'addMessage',
+                            message: {
+                                role: role,
+                                content: content
+                            }
+                        });
+
+                        // Also add to internal messages array
+                        this._messages.push({
+                            role: role,
+                            content: content
+                        });
+                    }
+                }
+
+                console.log(`✅ Restored ${task.messages.length} messages to UI`);
+            }
+
+            vscode.window.showInformationMessage(`Task loaded: ${task.text}`);
+            console.log('✅ Task loaded successfully');
+        } catch (error) {
+            console.error('❌ Error loading task:', error);
+            vscode.window.showErrorMessage(`Failed to load task: ${error.message}`);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskLoaded',
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle deleteTask request from history view
+     */
+    async _handleDeleteTask(taskId) {
+        try {
+            if (!this._taskManager) {
+                console.warn('⚠️  TaskManager not initialized');
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`🗑️  Deleting task: ${taskId}`);
+            await this._taskManager.deleteTask(taskId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskDeleted',
+                    taskId: taskId
+                });
+            }
+
+            vscode.window.showInformationMessage('Task deleted successfully');
+            console.log('✅ Task deleted successfully');
+        } catch (error) {
+            console.error('❌ Error deleting task:', error);
+            vscode.window.showErrorMessage(`Failed to delete task: ${error.message}`);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskDeleted',
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle exportTask request from history view
+     */
+    async _handleExportTask(taskId, format = 'json') {
+        try {
+            if (!this._taskManager) {
+                console.warn('⚠️  TaskManager not initialized');
+                vscode.window.showErrorMessage('Task Manager not initialized');
+                return;
+            }
+
+            console.log(`📤 Exporting task ${taskId} as ${format}`);
+            const exportedContent = await this._taskManager.exportTask(taskId, format);
+
+            // Show save dialog
+            const fileExtension = format === 'json' ? 'json' : format === 'md' ? 'md' : 'txt';
+            const fileName = `task_${taskId.substring(0, 8)}.${fileExtension}`;
+
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file(fileName),
+                filters: {
+                    [format.toUpperCase()]: [fileExtension]
+                }
+            });
+
+            if (uri) {
+                // Write file
+                const fs = require('fs').promises;
+                await fs.writeFile(uri.fsPath, exportedContent, 'utf-8');
+
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'taskExported',
+                        taskId: taskId,
+                        format: format,
+                        path: uri.fsPath
+                    });
+                }
+
+                vscode.window.showInformationMessage(`Task exported to ${uri.fsPath}`);
+                console.log('✅ Task exported successfully');
+            } else {
+                console.log('ℹ️  Export cancelled by user');
+            }
+        } catch (error) {
+            console.error('❌ Error exporting task:', error);
+            vscode.window.showErrorMessage(`Failed to export task: ${error.message}`);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'taskExported',
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    // ========================================================================
+    // TERMINAL VIEW HANDLERS (Week 7)
+    // ========================================================================
+
+    /**
+     * Get terminal command history
+     */
+    async _handleGetTerminalHistory() {
+        try {
+            const output = this._terminalManager.getActiveTerminalOutput(100);
+            const history = output ? output.filter(line => {
+                // Filter for commands (simple heuristic)
+                const text = line.text.trim();
+                return text.match(/^[$>%#]/) || text.includes('npm ') || text.includes('git ');
+            }).map(line => ({
+                command: line.text.trim(),
+                timestamp: line.timestamp
+            })) : [];
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalHistory',
+                    history
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting terminal history:', error);
+        }
+    }
+
+    /**
+     * Get AI-powered terminal command suggestions
+     */
+    async _handleGetTerminalSuggestions(prompt) {
+        try {
+            // Get terminal context for better suggestions
+            const terminalContext = this._terminalManager.getTerminalContext();
+
+            // Call AI backend for command suggestions
+            const response = await fetch('https://oropendola.ai/api/method/ai_assistant.api.terminal_suggest_command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frappe-CSRF-Token': this._csrfToken || ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    prompt,
+                    context: {
+                        recent_output: terminalContext.recentOutput?.slice(-10) || [],
+                        last_command: terminalContext.lastCommand || '',
+                        platform: process.platform,
+                        cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const suggestions = data.message?.suggestions || data.suggestions || [];
+
+            // Format suggestions for UI
+            const formattedSuggestions = suggestions.map(s => ({
+                command: s.command || s.cmd,
+                description: s.description || s.desc || 'AI-generated command',
+                confidence: s.confidence || s.score || 0.8,
+                explanation: s.explanation || ''
+            }));
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalSuggestions',
+                    suggestions: formattedSuggestions
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting terminal suggestions:', error);
+
+            // Fallback to basic suggestions on error
+            const fallbackSuggestions = [{
+                command: prompt.includes('install') ? 'npm install' : 'ls -la',
+                description: 'Basic suggestion (AI unavailable)',
+                confidence: 0.5
+            }];
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalSuggestions',
+                    suggestions: fallbackSuggestions
+                });
+            }
+        }
+    }
+
+    /**
+     * Execute terminal command
+     */
+    async _handleExecuteTerminalCommand(command) {
+        try {
+            const terminal = this._terminalManager.getOrCreateTerminal();
+            terminal.show();
+            terminal.sendText(command);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalCommandExecuted',
+                    command
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error executing terminal command:', error);
+        }
+    }
+
+    /**
+     * Explain terminal command
+     */
+    async _handleExplainTerminalCommand(command) {
+        try {
+            // Call AI backend for command explanation
+            const response = await fetch('https://oropendola.ai/api/method/ai_assistant.api.terminal_explain_command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frappe-CSRF-Token': this._csrfToken || ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    command,
+                    platform: process.platform
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const explanation = data.message?.explanation || data.explanation || `Command: ${command}`;
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalCommandExplanation',
+                    command,
+                    explanation,
+                    parts: data.message?.parts || data.parts || [],
+                    warnings: data.message?.warnings || data.warnings || []
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error explaining terminal command:', error);
+
+            // Fallback explanation
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalCommandExplanation',
+                    command,
+                    explanation: `Command: ${command}\n\nExplanation unavailable (AI service not connected)`,
+                    error: true
+                });
+            }
+        }
+    }
+
+    /**
+     * Fix failed terminal command
+     */
+    async _handleFixTerminalCommand(command, error) {
+        try {
+            // Call AI backend to fix the command
+            const response = await fetch('https://oropendola.ai/api/method/ai_assistant.api.terminal_fix_command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frappe-CSRF-Token': this._csrfToken || ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    command,
+                    error_message: error || '',
+                    platform: process.platform,
+                    context: {
+                        recent_output: this._terminalManager.getActiveTerminalOutput(5) || [],
+                        cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const result = data.message || data;
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalCommandFixed',
+                    original: command,
+                    fixed: result.fixed_command || result.command || command,
+                    explanation: result.explanation || result.reason || 'AI-suggested fix',
+                    confidence: result.confidence || 0.8,
+                    alternatives: result.alternatives || []
+                });
+            }
+        } catch (err) {
+            console.error('❌ Error fixing terminal command:', err);
+
+            // Fallback to basic fix
+            const basicFix = command.replace('npm i', 'npm install').replace('git co', 'git checkout');
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalCommandFixed',
+                    original: command,
+                    fixed: basicFix,
+                    explanation: 'Basic fix (AI unavailable)',
+                    error: true
+                });
+            }
+        }
+    }
+
+    /**
+     * Analyze terminal output
+     */
+    async _handleAnalyzeTerminalOutput(output) {
+        try {
+            // Call AI backend to analyze output
+            const response = await fetch('https://oropendola.ai/api/method/ai_assistant.api.terminal_analyze_output', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frappe-CSRF-Token': this._csrfToken || ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    output: typeof output === 'string' ? output : JSON.stringify(output),
+                    platform: process.platform
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const result = data.message || data;
+
+            const analysis = {
+                summary: result.summary || 'Output analysis',
+                errors: result.errors || [],
+                warnings: result.warnings || [],
+                suggestions: result.suggestions || [],
+                severity: result.severity || 'info',
+                next_steps: result.next_steps || []
+            };
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalOutputAnalysis',
+                    analysis
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error analyzing terminal output:', error);
+
+            // Fallback analysis
+            const fallbackAnalysis = {
+                summary: 'Basic analysis (AI unavailable)',
+                errors: typeof output === 'string' && output.toLowerCase().includes('error')
+                    ? ['Error detected in output'] : [],
+                suggestions: ['Check command syntax and arguments'],
+                severity: 'info'
+            };
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'terminalOutputAnalysis',
+                    analysis: fallbackAnalysis,
+                    error: true
+                });
+            }
+        }
+    }
+
+    // ========================================================================
+    // BROWSER AUTOMATION HANDLERS (Week 6)
+    // ========================================================================
+
+    /**
+     * Get browser sessions list
+     */
+    async _handleGetBrowserSessions() {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            const result = await this._browserClient.listSessions();
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserSessions',
+                    sessions: result.sessions || []
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting browser sessions:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserSessions',
+                    sessions: [],
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Create new browser session
+     */
+    async _handleCreateBrowserSession(sessionName) {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            const result = await this._browserClient.createSession({
+                sessionName: sessionName || 'Session ' + Date.now()
+            });
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserSessionCreated',
+                    success: result.success,
+                    sessionId: result.sessionId,
+                    message: result.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error creating browser session:', error);
+        }
+    }
+
+    /**
+     * Close browser session
+     */
+    async _handleCloseBrowserSession(sessionId) {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            const result = await this._browserClient.closeSession(sessionId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserSessionClosed',
+                    success: result.success,
+                    sessionId,
+                    message: result.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error closing browser session:', error);
+        }
+    }
+
+    /**
+     * Navigate browser to URL
+     */
+    async _handleBrowserNavigate(sessionId, url) {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            const result = await this._browserClient.navigate(sessionId, url);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserNavigated',
+                    success: result.success,
+                    url: result.url,
+                    title: result.title,
+                    message: result.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error navigating browser:', error);
+        }
+    }
+
+    /**
+     * Execute AI-powered browser action
+     */
+    async _handleBrowserExecuteAction(sessionId, prompt) {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            // Get current page context for better AI understanding
+            const pageInfo = await this._browserClient.getCurrentUrl(sessionId);
+
+            // Call AI backend to convert natural language to Playwright actions
+            const response = await fetch('https://oropendola.ai/api/method/ai_assistant.api.browser_execute_ai_action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frappe-CSRF-Token': this._csrfToken || ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    prompt,
+                    context: {
+                        current_url: pageInfo.url || '',
+                        current_title: pageInfo.title || ''
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const result = data.message || data;
+
+            // Execute the AI-generated actions
+            const actions = result.actions || [];
+            const results = [];
+
+            for (const action of actions) {
+                let actionResult;
+                switch (action.type) {
+                    case 'click':
+                        actionResult = await this._browserClient.click(sessionId, action.selector);
+                        break;
+                    case 'type':
+                        actionResult = await this._browserClient.type(sessionId, action.selector, action.text);
+                        break;
+                    case 'navigate':
+                        actionResult = await this._browserClient.navigate(sessionId, action.url);
+                        break;
+                    case 'select':
+                        actionResult = await this._browserClient.select(sessionId, action.selector, action.value);
+                        break;
+                    case 'scroll':
+                        actionResult = await this._browserClient.scroll(sessionId, action.options || {});
+                        break;
+                    case 'screenshot':
+                        actionResult = await this._browserClient.screenshot(sessionId);
+                        break;
+                    case 'evaluate':
+                        actionResult = await this._browserClient.evaluate(sessionId, action.script);
+                        break;
+                    default:
+                        actionResult = { success: false, message: `Unknown action type: ${action.type}` };
+                }
+
+                results.push({
+                    action: action.type,
+                    ...actionResult
+                });
+
+                // Stop on first failure if configured
+                if (!actionResult.success && result.stop_on_error) {
+                    break;
+                }
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserActionExecuted',
+                    success: true,
+                    action: prompt,
+                    result: result.description || 'AI actions executed',
+                    actions: actions.map(a => a.type),
+                    results,
+                    interpretation: result.interpretation || ''
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error executing browser action:', error);
+
+            // Fallback response
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserActionExecuted',
+                    success: false,
+                    action: prompt,
+                    result: 'AI action execution failed (AI service unavailable)',
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Take browser screenshot
+     */
+    async _handleBrowserScreenshot(sessionId) {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            const result = await this._browserClient.screenshot(sessionId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserScreenshot',
+                    success: result.success,
+                    fileId: result.fileId,
+                    filePath: result.filePath,
+                    message: result.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error taking browser screenshot:', error);
+        }
+    }
+
+    /**
+     * Click element in browser
+     */
+    async _handleBrowserClick(sessionId, selector) {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            const result = await this._browserClient.click(sessionId, selector);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserClicked',
+                    success: result.success,
+                    message: result.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error clicking browser element:', error);
+        }
+    }
+
+    /**
+     * Type text in browser
+     */
+    async _handleBrowserType(sessionId, selector, text) {
+        try {
+            if (!this._browserClient) {
+                const { BrowserAutomationClient } = await import('../browser/BrowserAutomationClient.ts');
+                this._browserClient = BrowserAutomationClient.getInstance();
+            }
+
+            const result = await this._browserClient.type(sessionId, selector, text);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'browserTyped',
+                    success: result.success,
+                    message: result.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error typing in browser:', error);
+        }
+    }
+
+    // ========================================================================
+    // MARKETPLACE HANDLERS (Week 8)
+    // ========================================================================
+
+    /**
+     * Search VS Code Marketplace
+     */
+    async _handleSearchMarketplace(query, category) {
+        try {
+            if (!this._marketplaceClient) {
+                const { MarketplaceClient } = await import('../marketplace/MarketplaceClient.ts');
+                this._marketplaceClient = MarketplaceClient.getInstance();
+            }
+
+            const result = await this._marketplaceClient.searchExtensions({
+                query,
+                category,
+                pageSize: 20
+            });
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'marketplaceSearchResults',
+                    extensions: result.extensions,
+                    total: result.total
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error searching marketplace:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'marketplaceSearchResults',
+                    extensions: [],
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Get installed VS Code extensions
+     */
+    async _handleGetInstalledExtensions() {
+        try {
+            const installed = vscode.extensions.all
+                .filter(ext => !ext.packageJSON.isBuiltin)
+                .map(ext => ({
+                    id: ext.id,
+                    name: ext.packageJSON.name,
+                    version: ext.packageJSON.version,
+                    enabled: true
+                }));
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'installedExtensions',
+                    extensions: installed
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting installed extensions:', error);
+        }
+    }
+
+    /**
+     * Install VS Code extension
+     */
+    async _handleInstallExtension(extensionId) {
+        try {
+            await vscode.commands.executeCommand('workbench.extensions.installExtension', extensionId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'extensionInstalled',
+                    extensionId,
+                    success: true
+                });
+            }
+
+            vscode.window.showInformationMessage(`Extension ${extensionId} installation started`);
+        } catch (error) {
+            console.error('❌ Error installing extension:', error);
+            vscode.window.showErrorMessage(`Failed to install ${extensionId}`);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'extensionInstalled',
+                    extensionId,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Uninstall VS Code extension
+     */
+    async _handleUninstallExtension(extensionId) {
+        try {
+            await vscode.commands.executeCommand('workbench.extensions.uninstallExtension', extensionId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'extensionUninstalled',
+                    extensionId,
+                    success: true
+                });
+            }
+
+            vscode.window.showInformationMessage(`Extension ${extensionId} uninstalled`);
+        } catch (error) {
+            console.error('❌ Error uninstalling extension:', error);
+            vscode.window.showErrorMessage(`Failed to uninstall ${extensionId}`);
+        }
+    }
+
+    /**
+     * Get extension details from marketplace
+     */
+    async _handleGetExtensionDetails(extensionId) {
+        try {
+            if (!this._marketplaceClient) {
+                const { MarketplaceClient } = await import('../marketplace/MarketplaceClient.ts');
+                this._marketplaceClient = MarketplaceClient.getInstance();
+            }
+
+            const extension = await this._marketplaceClient.getExtension(extensionId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'extensionDetails',
+                    extension
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting extension details:', error);
+        }
+    }
+
+    // ========================================================================
+    // VECTOR DATABASE HANDLERS (Week 8)
+    // ========================================================================
+
+    /**
+     * Perform semantic vector search
+     */
+    async _handleVectorSearch(query, limit = 50) {
+        try {
+            if (!this._vectorClient) {
+                const { VectorDBClient } = await import('../vector/VectorDBClient.ts');
+                this._vectorClient = new VectorDBClient();
+            }
+
+            const results = await this._vectorClient.search(query, {
+                limit,
+                minSimilarity: 0.5
+            });
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'vectorSearchResults',
+                    results
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error performing vector search:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'vectorSearchResults',
+                    results: [],
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Index entire workspace
+     */
+    async _handleIndexWorkspace() {
+        try {
+            if (!this._vectorClient) {
+                const { VectorDBClient } = await import('../vector/VectorDBClient.ts');
+                this._vectorClient = new VectorDBClient();
+            }
+
+            // Get all files in workspace
+            const files = await vscode.workspace.findFiles('**/*.{js,ts,jsx,tsx,py,java,cpp,c,go}', '**/node_modules/**', 1000);
+
+            let indexed = 0;
+            for (const file of files) {
+                try {
+                    const document = await vscode.workspace.openTextDocument(file);
+                    const content = document.getText();
+
+                    await this._vectorClient.indexContent(content, {
+                        filePath: file.fsPath,
+                        type: 'code'
+                    });
+                    indexed++;
+
+                    // Send progress update
+                    if (this._view && indexed % 10 === 0) {
+                        this._view.webview.postMessage({
+                            type: 'indexingProgress',
+                            indexed,
+                            total: files.length
+                        });
+                    }
+                } catch (err) {
+                    console.warn(`Failed to index ${file.fsPath}:`, err);
+                }
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'workspaceIndexed',
+                    success: true,
+                    filesIndexed: indexed
+                });
+            }
+
+            vscode.window.showInformationMessage(`Indexed ${indexed} files`);
+        } catch (error) {
+            console.error('❌ Error indexing workspace:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'workspaceIndexed',
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Get list of indexed files
+     */
+    async _handleGetIndexedFiles() {
+        try {
+            // Mock response - would query backend for indexed files
+            const indexedFiles = [];
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'indexedFiles',
+                    files: indexedFiles
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting indexed files:', error);
+        }
+    }
+
+    /**
+     * Get vector database statistics
+     */
+    async _handleGetIndexStats() {
+        try {
+            // Mock stats - would query backend
+            const stats = {
+                total: 0,
+                indexed: 0,
+                pending: 0
+            };
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'indexStats',
+                    stats
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting index stats:', error);
+        }
+    }
+
+    /**
+     * Delete vector database index
+     */
+    async _handleDeleteIndex() {
+        try {
+            // Mock deletion - would call backend API
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'indexDeleted',
+                    success: true
+                });
+            }
+
+            vscode.window.showInformationMessage('Vector database index deleted');
+        } catch (error) {
+            console.error('❌ Error deleting index:', error);
+        }
+    }
+
+    // ========================================================================
+    // SETTINGS & I18N HANDLERS
+    // ========================================================================
+
+    /**
+     * Change UI language
+     */
+    async _handleChangeLanguage(language) {
+        try {
+            if (!this._i18nManager) {
+                const { I18nManager } = await import('../i18n/I18nManager.ts');
+                this._i18nManager = new I18nManager();
+            }
+
+            // Save language preference
+            const config = vscode.workspace.getConfiguration('oropendola');
+            await config.update('language', language, vscode.ConfigurationTarget.Global);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'languageChanged',
+                    language,
+                    success: true
+                });
+            }
+
+            vscode.window.showInformationMessage(`Language changed to ${language}`);
+        } catch (error) {
+            console.error('❌ Error changing language:', error);
+        }
+    }
+
+    /**
+     * Update application settings
+     */
+    async _handleUpdateSettings(settings) {
+        try {
+            const config = vscode.workspace.getConfiguration('oropendola');
+
+            for (const [key, value] of Object.entries(settings)) {
+                await config.update(key, value, vscode.ConfigurationTarget.Global);
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'settingsUpdated',
+                    success: true
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error updating settings:', error);
+        }
+    }
+
+    /**
+     * Get current application settings
+     */
+    async _handleGetSettings() {
+        try {
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const settings = {
+                language: config.get('language', 'en'),
+                theme: config.get('theme', 'dark'),
+                autoSave: config.get('autoSave', true),
+                notifications: config.get('notifications', true),
+                telemetry: config.get('telemetry', false)
+            };
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'settings',
+                    settings
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting settings:', error);
+        }
     }
 }
 

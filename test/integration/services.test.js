@@ -8,10 +8,10 @@ const { conversationHistoryService } = require('../../src/services/conversationH
 const { backendTodoService } = require('../../src/services/backendTodoService');
 const vscode = require('vscode');
 
-describe('Backend Services Integration Tests', function() {
+describe('Backend Services Integration Tests', function () {
     this.timeout(30000);
 
-    before(function() {
+    before(function () {
         // Check if credentials are configured
         const config = vscode.workspace.getConfiguration('oropendola');
         const hasApiKey = config.get('api.key') && config.get('api.secret');
@@ -26,11 +26,11 @@ describe('Backend Services Integration Tests', function() {
     // ========================================
     // Conversation History Service Tests
     // ========================================
-    describe('ConversationHistoryService', function() {
+    describe('ConversationHistoryService', () => {
 
         let testConversationId;
 
-        before(async function() {
+        before(async () => {
             // Get a recent conversation to test with
             const recent = await conversationHistoryService.getRecentConversations(1);
             if (recent.length > 0) {
@@ -38,7 +38,7 @@ describe('Backend Services Integration Tests', function() {
             }
         });
 
-        it('should get recent conversations', async function() {
+        it('should get recent conversations', async () => {
             const conversations = await conversationHistoryService.getRecentConversations(5);
 
             assert.ok(Array.isArray(conversations), 'Should return array');
@@ -52,7 +52,7 @@ describe('Backend Services Integration Tests', function() {
             }
         });
 
-        it('should list conversations with pagination', async function() {
+        it('should list conversations with pagination', async () => {
             const result = await conversationHistoryService.listConversations({
                 limit: 10,
                 offset: 0,
@@ -64,7 +64,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Listed', result.conversations.length, 'conversations');
         });
 
-        it('should get specific conversation', async function() {
+        it('should get specific conversation', async function () {
             if (!testConversationId) {
                 console.log('⚠️ No conversation to test, skipping');
                 this.skip();
@@ -78,7 +78,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('   Messages:', conv.messages.length);
         });
 
-        it('should cache conversations', async function() {
+        it('should cache conversations', async function () {
             if (!testConversationId) {
                 this.skip();
             }
@@ -97,14 +97,14 @@ describe('Backend Services Integration Tests', function() {
             assert.ok(time2 < time1, 'Cached call should be faster');
         });
 
-        it('should search conversations', async function() {
+        it('should search conversations', async () => {
             const results = await conversationHistoryService.searchConversations('test', 5);
 
             assert.ok(Array.isArray(results), 'Should return array');
             console.log('✅ Found', results.length, 'matching conversations');
         });
 
-        it('should get conversation metadata', async function() {
+        it('should get conversation metadata', async function () {
             if (!testConversationId) {
                 this.skip();
             }
@@ -117,7 +117,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Metadata:', metadata.title);
         });
 
-        it('should export conversation to markdown', async function() {
+        it('should export conversation to markdown', async function () {
             if (!testConversationId) {
                 this.skip();
             }
@@ -130,7 +130,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Exported', markdown.length, 'characters');
         });
 
-        it('should get conversation statistics', async function() {
+        it('should get conversation statistics', async function () {
             if (!testConversationId) {
                 this.skip();
             }
@@ -142,7 +142,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Stats:', stats.total_messages, 'messages,', stats.total_tokens, 'tokens');
         });
 
-        it('should clear cache', function() {
+        it('should clear cache', () => {
             conversationHistoryService.clearCache();
             console.log('✅ Cache cleared');
         });
@@ -151,11 +151,11 @@ describe('Backend Services Integration Tests', function() {
     // ========================================
     // Backend Todo Service Tests
     // ========================================
-    describe('BackendTodoService', function() {
+    describe('BackendTodoService', () => {
 
         let testTodoId;
 
-        it('should extract todos from text', async function() {
+        it('should extract todos from text', async () => {
             const text = `
                 Here's what we need to do:
                 1. Fix the authentication bug in login.js
@@ -176,28 +176,28 @@ describe('Backend Services Integration Tests', function() {
             }
         });
 
-        it('should get open todos', async function() {
+        it('should get open todos', async () => {
             const todos = await backendTodoService.getOpenTodos(20);
 
             assert.ok(Array.isArray(todos), 'Should return array');
             console.log('✅ Found', todos.length, 'open todos');
         });
 
-        it('should get completed todos', async function() {
+        it('should get completed todos', async () => {
             const todos = await backendTodoService.getCompletedTodos(20);
 
             assert.ok(Array.isArray(todos), 'Should return array');
             console.log('✅ Found', todos.length, 'completed todos');
         });
 
-        it('should get high priority todos', async function() {
+        it('should get high priority todos', async () => {
             const todos = await backendTodoService.getHighPriorityTodos(20);
 
             assert.ok(Array.isArray(todos), 'Should return array');
             console.log('✅ Found', todos.length, 'high priority todos');
         });
 
-        it('should get todos with filters', async function() {
+        it('should get todos with filters', async () => {
             const todos = await backendTodoService.getTodos({
                 status: 'Open',
                 priority: 'Medium',
@@ -208,7 +208,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Filtered:', todos.length, 'medium priority open todos');
         });
 
-        it('should update todo status', async function() {
+        it('should update todo status', async function () {
             if (!testTodoId) {
                 // Get any open todo
                 const todos = await backendTodoService.getOpenTodos(1);
@@ -225,7 +225,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Updated todo status to Working');
         });
 
-        it('should complete todo', async function() {
+        it('should complete todo', async function () {
             if (!testTodoId) {
                 this.skip();
             }
@@ -236,7 +236,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Marked todo as completed');
         });
 
-        it('should update todo priority', async function() {
+        it('should update todo priority', async function () {
             if (!testTodoId) {
                 this.skip();
             }
@@ -247,7 +247,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Updated todo priority to High');
         });
 
-        it('should get todo statistics', async function() {
+        it('should get todo statistics', async () => {
             const stats = await backendTodoService.getTodoStats();
 
             assert.ok(stats, 'Should return stats');
@@ -256,7 +256,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Todo stats:', stats.total, 'total,', stats.completion_rate + '% complete');
         });
 
-        it('should auto-extract todos from AI response', async function() {
+        it('should auto-extract todos from AI response', async () => {
             const aiResponse = `
                 I've analyzed the code. Here's what needs to be done:
                 - [ ] Refactor the authentication module
@@ -273,7 +273,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Auto-extracted', todos.length, 'todos from AI response');
         });
 
-        it('should format todos as markdown', function() {
+        it('should format todos as markdown', () => {
             const todos = [
                 { status: 'Open', priority: 'High', description: 'Fix bug', name: 'TODO-001' },
                 { status: 'Working', priority: 'Medium', description: 'Add tests', name: 'TODO-002' },
@@ -288,7 +288,7 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Formatted todos as markdown');
         });
 
-        it('should enable/disable auto-extraction', function() {
+        it('should enable/disable auto-extraction', () => {
             backendTodoService.setAutoExtraction(false);
             assert.strictEqual(backendTodoService.autoExtraction, false);
 
@@ -298,8 +298,8 @@ describe('Backend Services Integration Tests', function() {
             console.log('✅ Auto-extraction toggle working');
         });
 
-        it('should emit events on updates', function(done) {
-            backendTodoService.once('todoUpdated', (data) => {
+        it('should emit events on updates', done => {
+            backendTodoService.once('todoUpdated', data => {
                 assert.ok(data, 'Should receive event data');
                 console.log('✅ Event emitted:', data);
                 done();
@@ -316,7 +316,7 @@ describe('Backend Services Integration Tests', function() {
             }
         });
 
-        it('should clear cache', function() {
+        it('should clear cache', () => {
             backendTodoService.clearCache();
             console.log('✅ Todo cache cleared');
         });

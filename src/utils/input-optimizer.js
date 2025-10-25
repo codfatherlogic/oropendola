@@ -17,17 +17,17 @@ class InputOptimizer {
             contextual: [
                 {
                     trigger: /^(fix|improve|optimize|refactor)/i,
-                    enhance: (text) => `Please ${text.toLowerCase()} the following code. Provide specific suggestions and explain the changes.`,
+                    enhance: text => `Please ${text.toLowerCase()} the following code. Provide specific suggestions and explain the changes.`,
                     description: 'Add explicit instruction'
                 },
                 {
                     trigger: /^(what|how|why|when|where)/i,
-                    enhance: (text) => `${text}? Please provide a detailed explanation with examples.`,
+                    enhance: text => `${text}? Please provide a detailed explanation with examples.`,
                     description: 'Convert to question format'
                 },
                 {
                     trigger: /\b(error|bug|issue|problem)\b/i,
-                    enhance: (text) => `Help me resolve this: ${text}. Include debugging steps and potential solutions.`,
+                    enhance: text => `Help me resolve this: ${text}. Include debugging steps and potential solutions.`,
                     description: 'Add debugging context'
                 }
             ],
@@ -35,18 +35,18 @@ class InputOptimizer {
             // Level 3: Smart structuring
             structure: [
                 {
-                    condition: (text) => text.split(/\s+/).length < 5,
-                    enhance: (text) => `Please help me with: ${text}. Provide step-by-step guidance.`,
+                    condition: text => text.split(/\s+/).length < 5,
+                    enhance: text => `Please help me with: ${text}. Provide step-by-step guidance.`,
                     description: 'Expand brief inputs'
                 },
                 {
-                    condition: (text) => /^[a-z]/.test(text),
-                    enhance: (text) => text.charAt(0).toUpperCase() + text.slice(1),
+                    condition: text => /^[a-z]/.test(text),
+                    enhance: text => text.charAt(0).toUpperCase() + text.slice(1),
                     description: 'Capitalize first letter'
                 },
                 {
-                    condition: (text) => !/[.!?]$/.test(text),
-                    enhance: (text) => text + '.',
+                    condition: text => !/[.!?]$/.test(text),
+                    enhance: text => text + '.',
                     description: 'Add ending punctuation'
                 }
             ]

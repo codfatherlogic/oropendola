@@ -326,7 +326,7 @@ class PromptFrameworkDetector {
             // If we found matches, add to results
             if (maxConfidence > 0) {
                 detectedFrameworks.push({
-                    framework: framework,
+                    framework,
                     confidence: maxConfidence,
                     priority: config.priority,
                     keywords: matchedKeywords,
@@ -413,7 +413,7 @@ class PromptFrameworkDetector {
      */
     getFrameworkHints(framework, prompt) {
         const hints = {
-            framework: framework,
+            framework,
             fileTypes: [],
             conventions: [],
             suggestedStructure: null

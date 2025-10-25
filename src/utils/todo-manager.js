@@ -50,7 +50,7 @@ class TodoManager {
             const trimmedLine = line.trim();
 
             // Skip empty lines
-            if (!trimmedLine) continue;
+            if (!trimmedLine) {continue;}
 
             // Calculate indent level for hierarchical tasks
             const indentLevel = line.length - line.trimStart().length;
@@ -61,7 +61,7 @@ class TodoManager {
             if (numberedMatch) {
                 console.log('🔍 [TodoManager] Found numbered todo:', numberedMatch[2]);
                 const todo = this._createTodo(numberedMatch[2], 'numbered', numberedMatch[1]);
-                
+
                 // If indented, mark as sub-task
                 if (isIndented && currentParent) {
                     todo.parentId = currentParent.id;
@@ -70,7 +70,7 @@ class TodoManager {
                     currentParent = todo;
                     todo.level = 0;
                 }
-                
+
                 newTodos.push(todo);
                 lastIndentLevel = indentLevel;
                 continue;
@@ -80,7 +80,7 @@ class TodoManager {
             const bulletMatch = trimmedLine.match(/^[-*+]\s+(.+)$/);
             if (bulletMatch) {
                 const todo = this._createTodo(bulletMatch[1], 'bullet');
-                
+
                 if (isIndented && currentParent) {
                     todo.parentId = currentParent.id;
                     todo.level = 1;
@@ -88,7 +88,7 @@ class TodoManager {
                     currentParent = todo;
                     todo.level = 0;
                 }
-                
+
                 newTodos.push(todo);
                 lastIndentLevel = indentLevel;
                 continue;
@@ -155,10 +155,10 @@ class TodoManager {
             id: `todo_${Date.now()}_${this.idCounter}`,
             text: summarizedText,
             fullText: text.trim(), // Keep original for reference
-            type: type,
+            type,
             order: order ? parseInt(order) : null,
             status: completed ? 'completed' : 'pending', // 'pending' | 'in_progress' | 'completed' | 'failed'
-            completed: completed,
+            completed,
             createdAt: new Date().toISOString(),
             completedAt: null,
             startedAt: null,
@@ -209,7 +209,7 @@ class TodoManager {
     _extractContext(aiResponse) {
         // Look for a paragraph before the numbered list or bullet points
         const contextMatch = aiResponse.match(/^(.+?)(?=\n\s*\d+\.|\n\s*[-*+]\s)/s);
-        
+
         if (contextMatch) {
             // Get first 2-3 sentences
             const sentences = contextMatch[1].match(/[^.!?]+[.!?]+/g);
@@ -259,7 +259,7 @@ class TodoManager {
      * @param {Array} todos - Array of TODO items
      */
     addTodos(todos) {
-        if (!Array.isArray(todos)) return;
+        if (!Array.isArray(todos)) {return;}
 
         todos.forEach(todo => {
             // Check if similar TODO already exists
@@ -278,7 +278,7 @@ class TodoManager {
      * @private
      */
     _isSimilar(text1, text2) {
-        const normalize = (text) => text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+        const normalize = text => text.toLowerCase().replace(/[^\w\s]/g, '').trim();
         return normalize(text1) === normalize(text2);
     }
 
@@ -302,7 +302,7 @@ class TodoManager {
      */
     updateStatus(todoId, status) {
         const todo = this.todos.find(t => t.id === todoId);
-        if (!todo) return;
+        if (!todo) {return;}
 
         const validStatuses = ['pending', 'in_progress', 'completed', 'failed'];
         if (!validStatuses.includes(status)) {
@@ -418,7 +418,7 @@ class TodoManager {
      */
     getHierarchicalTodos() {
         const rootTodos = this.todos.filter(t => !t.parentId);
-        
+
         return rootTodos.map(root => ({
             ...root,
             children: this.todos.filter(t => t.parentId === root.id)

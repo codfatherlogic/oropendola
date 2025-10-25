@@ -145,7 +145,7 @@ class GitHubManager {
                 location: vscode.ProgressLocation.Notification,
                 title: `Cloning ${repoName}...`,
                 cancellable: false
-            }, async (progress) => {
+            }, async progress => {
                 progress.report({ increment: 0, message: 'Initializing...' });
 
                 await this.git.clone(cloneUrl, fullPath, {

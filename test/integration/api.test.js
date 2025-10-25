@@ -7,14 +7,14 @@ const assert = require('assert');
 const { ApiClient } = require('../../src/api/client');
 const vscode = require('vscode');
 
-describe('Oropendola Backend API Integration Tests', function() {
+describe('Oropendola Backend API Integration Tests', function () {
     // Increase timeout for network requests
     this.timeout(60000);
 
     let client;
     let testConversationId;
 
-    before(async function() {
+    before(async function () {
         console.log('🧪 Starting integration tests...');
 
         // Check if credentials are configured
@@ -28,7 +28,7 @@ describe('Oropendola Backend API Integration Tests', function() {
         }
     });
 
-    beforeEach(function() {
+    beforeEach(() => {
         // Create fresh client for each test
         client = new ApiClient();
     });
@@ -36,9 +36,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Authentication Tests
     // ========================================
-    describe('Authentication', function() {
+    describe('Authentication', () => {
 
-        it('should authenticate with API Key/Secret', async function() {
+        it('should authenticate with API Key/Secret', async function () {
             const config = vscode.workspace.getConfiguration('oropendola');
             const apiKey = config.get('api.key');
             const apiSecret = config.get('api.secret');
@@ -65,7 +65,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             }
         });
 
-        it('should authenticate with Session Cookies', async function() {
+        it('should authenticate with Session Cookies', async function () {
             const config = vscode.workspace.getConfiguration('oropendola');
             const sessionCookies = config.get('session.cookies');
 
@@ -90,7 +90,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             }
         });
 
-        it('should fail with invalid credentials', async function() {
+        it('should fail with invalid credentials', async () => {
             client.updateCredentials({
                 apiKey: 'invalid_key',
                 apiSecret: 'invalid_secret'
@@ -112,9 +112,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Chat Mode Tests
     // ========================================
-    describe('Chat Modes', function() {
+    describe('Chat Modes', () => {
 
-        it('should work in CHAT mode (no tools)', async function() {
+        it('should work in CHAT mode (no tools)', async () => {
             const result = await client.chatCompletion({
                 messages: [
                     { role: 'user', content: 'What is 2+2? Just answer the number.' }
@@ -131,7 +131,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('   Response:', result.response.substring(0, 100));
         });
 
-        it('should work in CODE mode (optimized for code)', async function() {
+        it('should work in CODE mode (optimized for code)', async () => {
             const result = await client.chatCompletion({
                 messages: [
                     { role: 'system', content: 'You are a code generator. Output only code.' },
@@ -150,7 +150,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('   Model:', result.model);
         });
 
-        it('should work in AGENT mode (with tools)', async function() {
+        it('should work in AGENT mode (with tools)', async () => {
             // Agent mode may use tools - we just test it returns valid response
             const result = await client.chatCompletion({
                 messages: [
@@ -170,9 +170,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Model Selection Tests
     // ========================================
-    describe('Model Selection', function() {
+    describe('Model Selection', () => {
 
-        it('should use AUTO model selection', async function() {
+        it('should use AUTO model selection', async () => {
             const result = await client.chatCompletion({
                 messages: [{ role: 'user', content: 'Hello' }],
                 model: 'auto',
@@ -184,7 +184,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('✅ Auto selection:', result.model, '(' + result.provider + ')');
         });
 
-        it('should use specific model: Claude', async function() {
+        it('should use specific model: Claude', async function () {
             try {
                 const result = await client.chatCompletion({
                     messages: [{ role: 'user', content: 'Hi' }],
@@ -204,7 +204,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             }
         });
 
-        it('should use specific model: DeepSeek', async function() {
+        it('should use specific model: DeepSeek', async function () {
             try {
                 const result = await client.chatCompletion({
                     messages: [{ role: 'user', content: 'Hi' }],
@@ -224,7 +224,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             }
         });
 
-        it('should fallback when model unavailable', async function() {
+        it('should fallback when model unavailable', async () => {
             try {
                 const result = await client.chatCompletion({
                     messages: [{ role: 'user', content: 'Hi' }],
@@ -245,9 +245,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Response Format Tests
     // ========================================
-    describe('Response Format', function() {
+    describe('Response Format', () => {
 
-        it('should include usage statistics', async function() {
+        it('should include usage statistics', async () => {
             const result = await client.chatCompletion({
                 messages: [{ role: 'user', content: 'Hello' }],
                 max_tokens: 50
@@ -259,7 +259,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('✅ Usage:', result.usage);
         });
 
-        it('should include cost information', async function() {
+        it('should include cost information', async () => {
             const result = await client.chatCompletion({
                 messages: [{ role: 'user', content: 'Hello' }],
                 max_tokens: 50
@@ -269,7 +269,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('✅ Cost: $' + result.cost.toFixed(6));
         });
 
-        it('should include conversation_id', async function() {
+        it('should include conversation_id', async () => {
             const result = await client.chatCompletion({
                 messages: [{ role: 'user', content: 'Start conversation' }],
                 max_tokens: 50
@@ -284,9 +284,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Conversation Management Tests
     // ========================================
-    describe('Conversation Management', function() {
+    describe('Conversation Management', () => {
 
-        before(async function() {
+        before(async () => {
             // Create a test conversation
             if (!testConversationId) {
                 const result = await client.chatCompletion({
@@ -297,7 +297,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             }
         });
 
-        it('should retrieve conversation history', async function() {
+        it('should retrieve conversation history', async function () {
             if (!testConversationId) {
                 this.skip();
             }
@@ -309,7 +309,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('✅ Retrieved', result.messages.length, 'messages');
         });
 
-        it('should list conversations', async function() {
+        it('should list conversations', async () => {
             const result = await client.listConversations(10, 0, 'active');
 
             assert.ok(Array.isArray(result.conversations), 'Should have conversations array');
@@ -320,9 +320,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Todo Management Tests
     // ========================================
-    describe('Todo Management', function() {
+    describe('Todo Management', () => {
 
-        it('should extract todos from text', async function() {
+        it('should extract todos from text', async () => {
             const result = await client.extractTodos(
                 'We need to: 1. Fix the login bug 2. Add unit tests 3. Update documentation',
                 'Test context',
@@ -334,14 +334,14 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('✅ Extracted', result.todos.length, 'todos');
         });
 
-        it('should retrieve todos with filters', async function() {
+        it('should retrieve todos with filters', async () => {
             const result = await client.getTodos('Open', null, 50);
 
             assert.ok(Array.isArray(result.todos), 'Should have todos array');
             console.log('✅ Found', result.todos.length, 'open todos');
         });
 
-        it('should update todo status', async function() {
+        it('should update todo status', async function () {
             // First get a todo
             const todos = await client.getTodos('Open', null, 1);
 
@@ -361,9 +361,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Analytics Tests
     // ========================================
-    describe('Analytics', function() {
+    describe('Analytics', () => {
 
-        it('should retrieve usage statistics', async function() {
+        it('should retrieve usage statistics', async () => {
             const result = await client.getUsageStats(7, 'all');
 
             assert.ok(typeof result.total_requests === 'number', 'Should have total_requests');
@@ -371,7 +371,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('✅ Usage stats:', result.total_requests, 'requests, $' + result.total_cost.toFixed(2));
         });
 
-        it('should filter statistics by provider', async function() {
+        it('should filter statistics by provider', async () => {
             const result = await client.getUsageStats(7, 'claude');
 
             if (result.by_provider && result.by_provider.claude) {
@@ -385,15 +385,15 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Error Handling Tests
     // ========================================
-    describe('Error Handling', function() {
+    describe('Error Handling', () => {
 
-        it('should handle rate limit errors gracefully', async function() {
+        it('should handle rate limit errors gracefully', async function () {
             // Note: This test won't actually trigger rate limit unless we spam requests
             // Just testing that the error format is handled
             this.skip(); // Skip by default to avoid rate limits
         });
 
-        it('should handle network errors', async function() {
+        it('should handle network errors', async () => {
             const badClient = new ApiClient();
             badClient.client.defaults.baseURL = 'https://invalid-domain-xyz-123.com';
 
@@ -408,10 +408,10 @@ describe('Oropendola Backend API Integration Tests', function() {
             }
         });
 
-        it('should handle malformed requests', async function() {
+        it('should handle malformed requests', async () => {
             try {
                 await client.chatCompletion({
-                    messages: 'invalid', // Should be array
+                    messages: 'invalid' // Should be array
                 });
                 assert.fail('Should have thrown validation error');
             } catch (error) {
@@ -423,9 +423,9 @@ describe('Oropendola Backend API Integration Tests', function() {
     // ========================================
     // Performance Tests
     // ========================================
-    describe('Performance', function() {
+    describe('Performance', () => {
 
-        it('should respond within timeout (2 minutes)', async function() {
+        it('should respond within timeout (2 minutes)', async function () {
             this.timeout(120000);
 
             const start = Date.now();
@@ -439,7 +439,7 @@ describe('Oropendola Backend API Integration Tests', function() {
             console.log('✅ Response time:', (duration / 1000).toFixed(2), 'seconds');
         });
 
-        it('should cache responses appropriately', async function() {
+        it('should cache responses appropriately', async () => {
             // Two identical requests - second should be faster (if caching enabled)
             const message = 'Test caching ' + Date.now();
 

@@ -1,0 +1,117 @@
+/**
+ * ChatRow Styles
+ *
+ * VSCode-native styling for chat message rows
+ */
+
+.chat-row {
+  padding: 10px 15px;
+  color: var(--vscode-foreground);
+}
+
+.chat-row-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.chat-row-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.chat-row-header-text {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.chat-row-cost {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 2px 6px;
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 4px;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+}
+
+.chat-row-content {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.chat-row-content-indented {
+  padding-left: 26px;
+}
+
+.chat-row-tool-path {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-row-tool-data {
+  margin: 0;
+  padding: 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  color: var(--vscode-foreground);
+  overflow-x: auto;
+}
+
+.chat-row-command {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--vscode-terminal-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  color: var(--vscode-terminal-foreground, var(--vscode-foreground));
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.chat-row-user-feedback {
+  margin-left: 26px;
+  padding: 8px 12px;
+  background: rgba(var(--vscode-editor-foreground-rgb, 255, 255, 255), 0.1);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.chat-row-completion-border {
+  margin-left: 26px;
+  padding-left: 12px;
+  border-left: 3px solid var(--vscode-charts-green);
+}
+
+/* Icon codicons */
+.chat-row .codicon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .chat-row {
+    padding: 8px 10px;
+  }
+
+  .chat-row-content-indented {
+    padding-left: 20px;
+  }
+}

@@ -13,7 +13,7 @@ class OropendolaInlineCompletionProvider {
 
     async provideInlineCompletionItems(document, position, context, token) {
         // Debounce to avoid excessive API calls
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
             if (this.debounceTimer) {
                 clearTimeout(this.debounceTimer);
             }
@@ -31,11 +31,11 @@ class OropendolaInlineCompletionProvider {
     }
 
     async fetchCompletions(document, position, token) {
-        if (token.isCancellationRequested) return null;
+        if (token.isCancellationRequested) {return null;}
 
         const line = document.lineAt(position.line);
         const prefix = document.getText(new vscode.Range(new vscode.Position(position.line, 0), position));
-        
+
         // Check cache
         const cacheKey = `${document.uri.fsPath}:${position.line}:${prefix}`;
         const cached = this.cache.get(cacheKey);
@@ -73,7 +73,7 @@ class OropendolaInlineCompletionProvider {
             setTimeout(() => this.statusBarItem.hide(), 2000);
 
             if (response.data?.message?.completions && Array.isArray(response.data.message.completions)) {
-                const completions = response.data.message.completions.map((text) => {
+                const completions = response.data.message.completions.map(text => {
                     const item = new vscode.InlineCompletionItem(text);
                     item.range = new vscode.Range(position, position);
                     return item;

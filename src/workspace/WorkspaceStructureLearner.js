@@ -38,7 +38,7 @@ class WorkspaceStructureLearner {
         }
 
         const structure = {
-            framework: framework,
+            framework,
             detectedPatterns: [],
             fileLocations: {},
             namingConventions: {},
@@ -187,8 +187,8 @@ class WorkspaceStructureLearner {
                     const hasUnderscores = docTypes.some(dt => dt.includes('_'));
 
                     structure.namingConventions.doctype = hasSpaces ? 'Title Case with Spaces' :
-                                                         hasUnderscores ? 'snake_case' :
-                                                         'lowercase';
+                        hasUnderscores ? 'snake_case' :
+                            'lowercase';
                     console.log(`✓ DocType naming: ${structure.namingConventions.doctype}`);
                 }
             } else {
@@ -415,8 +415,8 @@ class WorkspaceStructureLearner {
      * @private
      */
     _isCacheValid(framework) {
-        if (!this._cache || !this._cacheTimestamp) return false;
-        if (this._cacheFramework !== framework) return false;
+        if (!this._cache || !this._cacheTimestamp) {return false;}
+        if (this._cacheFramework !== framework) {return false;}
         return (Date.now() - this._cacheTimestamp) < this._cacheDuration;
     }
 

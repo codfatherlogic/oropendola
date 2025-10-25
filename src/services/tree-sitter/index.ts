@@ -1,6 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import { loadRequiredLanguageParsers, LanguageParser } from "./languageParser"
+import { loadRequiredLanguageParsers } from "./languageParser"
 
 const supportedExtensions = [
 	"js",

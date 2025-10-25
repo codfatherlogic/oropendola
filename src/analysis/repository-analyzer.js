@@ -187,7 +187,7 @@ class RepositoryAnalyzer {
     async detectLanguages(repoPath) {
         const languages = {};
 
-        const analyzeDir = async (dir) => {
+        const analyzeDir = async dir => {
             try {
                 const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -250,7 +250,7 @@ class RepositoryAnalyzer {
     async findTests(repoPath) {
         const testFiles = [];
 
-        const findTestsInDir = async (dir) => {
+        const findTestsInDir = async dir => {
             try {
                 const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -470,8 +470,8 @@ class RepositoryAnalyzer {
             hasTests: analysis.tests.length > 0,
             hasDocumentation: analysis.documentation.length > 0,
             dependencyCount: Object.values(analysis.dependencies).reduce((sum, deps) => {
-                if (Array.isArray(deps)) return sum + deps.length;
-                if (typeof deps === 'object') return sum + Object.keys(deps).length;
+                if (Array.isArray(deps)) {return sum + deps.length;}
+                if (typeof deps === 'object') {return sum + Object.keys(deps).length;}
                 return sum;
             }, 0)
         };

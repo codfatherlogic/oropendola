@@ -1,7 +1,5 @@
 import { useCallback } from 'react';
-
-// Get VS Code API instance (singleton)
-const vscode = acquireVsCodeApi();
+import vscode from '../vscode-api';
 
 export interface MessageHandler {
   (message: any): void;

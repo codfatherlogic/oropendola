@@ -1,299 +1,207 @@
-import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { MessageList } from './components/MessageList';
-import { InputArea } from './components/InputArea';
-import { EnhancedTodoPanel } from './components/EnhancedTodoPanel';
-import { FileChangesPanel } from './components/FileChangesPanel';
-import { useVSCode } from './hooks/useVSCode';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { Message, TodoItem, FileChange, MessageType } from './types';
+/**
+ * App Component - Integrated Roo-Code Style Interface
+ *
+ * Complete Roo-Code UI with ChatView, TaskHeader, auto-approval, and SSE streaming.
+ * Communicates directly with backend at https://oropendola.ai
+ *
+ * Now includes Navigation between Chat and History views (Sprint 1-2 Task Persistence)
+ */
 
-const App: React.FC = () => {
-  const { postMessage, onMessage } = useVSCode();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [todos, setTodos] = useState<TodoItem[]>([]);
-  const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [mode, setMode] = useState<'ask' | 'agent'>('agent');
-  const [thinkingStatus, setThinkingStatus] = useState<string | undefined>();
-  const [currentFile, setCurrentFile] = useState<string | undefined>();
-  const [pendingCommand, setPendingCommand] = useState<{command: string, riskLevel: string} | null>(null);
+import React, { useState, useEffect, useMemo } from 'react'
+import { ChatProvider, useChatContext } from './context/ChatContext'
+import { ChatView } from './components/Chat/ChatView'
+import { HistoryView } from './components/History/HistoryView'
+import { TerminalView } from './components/Terminal/TerminalView'
+import { BrowserView } from './components/Browser/BrowserView'
+import { MarketplaceView } from './components/Marketplace/MarketplaceView'
+import { VectorView } from './components/Vector/VectorView'
+import { SettingsView } from './components/Settings/SettingsView'
+import { ViewNavigation, ViewType } from './components/Navigation/ViewNavigation'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import vscode from './vscode-api'
+import './AppIntegrated.css'
 
+/**
+ * Main interface with navigation between Chat and History views
+ * Sprint 1-2: Added view switching for Task Persistence feature
+ */
+const ChatInterface: React.FC = () => {
+  const {
+    messages,
+    taskMessage,
+    todos,
+    isLoading,
+    error,
+    autoApprovalEnabled,
+    autoApproveToggles,
+    sendMessage,
+    approveMessage,
+    rejectMessage,
+    setAutoApprovalEnabled,
+    setAutoApproveToggle,
+    clearError,
+  } = useChatContext()
+
+  // View state management - Sprint 1-2: Navigation between Chat and History
+  const [currentView, setCurrentView] = useState<ViewType>('chat')
+
+  // Task statistics for badge
+  const [taskStats, setTaskStats] = useState<{ total: number }>({ total: 0 })
+
+  // Request task stats on mount
   useEffect(() => {
-    const cleanup = onMessage((message) => {
-      console.log('Received message from extension:', message);
+    // Request stats from extension
+    vscode.postMessage({ type: 'getTaskStats' })
 
-      switch (message.type as MessageType) {
-        case 'addMessage':
-          setMessages((prev) => [...prev, message.message]);
-          setIsGenerating(false);
-          break;
-
-        case 'showTyping':
-          setIsTyping(true);
-          setIsGenerating(true);
-          setThinkingStatus(message.status || 'Thinking...');
-          setCurrentFile(message.currentFile);
-          break;
-
-        case 'hideTyping':
-          setIsTyping(false);
-          setIsGenerating(false);
-          setThinkingStatus(undefined);
-          setCurrentFile(undefined);
-          break;
-
-        case 'updateTodos':
-          setTodos(message.todos || []);
-          break;
-
-        case 'fileChangeAdded':
-          if (message.fileChange) {
-            setFileChanges((prev) => [...prev, message.fileChange]);
-          }
-          break;
-
-        case 'fileChangeUpdated':
-          if (message.fileChange) {
-            setFileChanges((prev) =>
-              prev.map((fc) => (fc.path === message.fileChange.path ? message.fileChange : fc))
-            );
-          }
-          break;
-
-        case 'requestCommandConfirmation':
-          setPendingCommand({
-            command: message.command,
-            riskLevel: message.riskLevel
-          });
-          break;
-
-        case 'loginSuccess':
-          // Handle login success
-          break;
-
-        case 'loginError':
-          // Handle login error
-          break;
+    // Listen for stats response
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data
+      if (message.type === 'taskStats') {
+        setTaskStats(message.stats)
       }
-    });
-
-    return cleanup;
-  }, [onMessage]);
-
-  const handleSendMessage = (text: string) => {
-    // Add user message immediately
-    const userMessage: Message = {
-      role: 'user',
-      content: text,
-      timestamp: Date.now()
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsTyping(true);
-    setIsGenerating(true);
-
-    // Send to extension
-    postMessage({
-      type: 'sendMessage',
-      text
-    });
-  };
-
-  const handleStopGeneration = () => {
-    postMessage({ type: 'stopGeneration' });
-    setIsTyping(false);
-    setIsGenerating(false);
-  };
-
-  const handleNewChat = () => {
-    postMessage({ type: 'newChat' });
-    setMessages([]);
-    setTodos([]);
-  };
-
-  const handleSettings = () => {
-    postMessage({ type: 'openSettings' });
-  };
-
-  const handleSignOut = () => {
-    postMessage({ type: 'logout' });
-  };
-
-  const handleModeChange = (newMode: 'ask' | 'agent') => {
-    setMode(newMode);
-    postMessage({
-      type: 'switchMode',
-      mode: newMode
-    });
-  };
-
-  const handleAcceptPlan = (content: string) => {
-    postMessage({
-      type: 'acceptPlan',
-      messageContent: content
-    });
-  };
-
-  const handleRejectPlan = (content: string) => {
-    postMessage({
-      type: 'rejectPlan',
-      messageContent: content
-    });
-  };
-
-  const handleToggleTodo = (id: string) => {
-    postMessage({
-      type: 'toggleTodo',
-      todoId: id
-    });
-  };
-
-  const handleDeleteTodo = (id: string) => {
-    postMessage({
-      type: 'deleteTodo',
-      todoId: id
-    });
-  };
-
-  const handleClearTodos = () => {
-    if (confirm('Clear all TODOs?')) {
-      postMessage({ type: 'clearTodos' });
     }
-  };
 
-  const handleSyncTodos = () => {
-    postMessage({ type: 'syncTodos' });
-  };
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
 
-  const handleAcceptFileChange = (path: string) => {
-    postMessage({
-      type: 'acceptFileChange',
-      filePath: path
-    });
-  };
-
-  const handleRejectFileChange = (path: string) => {
-    postMessage({
-      type: 'rejectFileChange',
-      filePath: path
-    });
-  };
-
-  const handleAddContext = () => {
-    postMessage({ type: 'addContext' });
-  };
-
-  const handleConfirmCommand = () => {
-    postMessage({
-      type: 'commandConfirmationResponse',
-      confirmed: true
-    });
-    setPendingCommand(null);
-  };
-
-  const handleCancelCommand = () => {
-    postMessage({
-      type: 'commandConfirmationResponse',
-      confirmed: false
-    });
-    setPendingCommand(null);
-  };
-
-  // Keyboard shortcuts
-  useKeyboardShortcuts([
+  // Keyboard shortcuts for view switching
+  const shortcuts = useMemo(() => [
     {
-      key: 'n',
-      meta: true,
-      handler: handleNewChat,
-      description: 'New chat'
+      key: '1',
+      ctrl: true,
+      description: 'Switch to Chat view',
+      handler: () => setCurrentView('chat')
     },
     {
-      key: 'Escape',
-      handler: () => {
-        if (isGenerating) {
-          handleStopGeneration();
-        } else if (pendingCommand) {
-          handleCancelCommand();
-        }
-      },
-      description: 'Stop generation or cancel command'
+      key: '2',
+      ctrl: true,
+      description: 'Switch to History view',
+      handler: () => setCurrentView('history')
     },
     {
-      key: 'k',
-      meta: true,
-      handler: () => {
-        if (confirm('Clear all messages?')) {
-          setMessages([]);
-        }
-      },
-      description: 'Clear messages'
+      key: '3',
+      ctrl: true,
+      description: 'Switch to Terminal view',
+      handler: () => setCurrentView('terminal')
+    },
+    {
+      key: '4',
+      ctrl: true,
+      description: 'Switch to Browser view',
+      handler: () => setCurrentView('browser')
+    },
+    {
+      key: '5',
+      ctrl: true,
+      description: 'Switch to Marketplace view',
+      handler: () => setCurrentView('marketplace')
+    },
+    {
+      key: '6',
+      ctrl: true,
+      description: 'Switch to Vector view',
+      handler: () => setCurrentView('vector')
+    },
+    {
+      key: '7',
+      ctrl: true,
+      description: 'Switch to Settings view',
+      handler: () => setCurrentView('settings')
+    },
+    {
+      key: 'h',
+      ctrl: true,
+      shift: true,
+      description: 'Toggle between Chat and History',
+      handler: () => setCurrentView(prev => prev === 'chat' ? 'history' : 'chat')
     }
-  ]);
+  ], [])
+
+  useKeyboardShortcuts(shortcuts)
 
   return (
     <div className="app-container">
-      <Header
-        onNewChat={handleNewChat}
-        onSettings={handleSettings}
-        onSignOut={handleSignOut}
+      {/* Navigation tabs - Sprint 1-2 */}
+      <ViewNavigation
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        taskCount={taskStats.total}
       />
-      <MessageList
-        messages={messages}
-        isTyping={isTyping}
-        showEmptyState={messages.length === 0 && !isTyping}
-        onAcceptPlan={handleAcceptPlan}
-        onRejectPlan={handleRejectPlan}
-        mode={mode}
-      />
-      {pendingCommand && (
-        <div className="command-confirmation-panel">
-          <div className="command-confirmation-header">
-            <span className="command-icon">▶</span>
-            <span className="command-title">Run in terminal</span>
-            {pendingCommand.riskLevel === 'high' && (
-              <span className="risk-badge risk-high">Potential risks detected</span>
-            )}
-          </div>
-          <div className="command-preview">
-            <code>{pendingCommand.command}</code>
-          </div>
-          <div className="command-actions">
-            <button className="command-btn command-run" onClick={handleConfirmCommand}>
-              Run ⌘↵
-            </button>
-            <button className="command-btn command-cancel" onClick={handleCancelCommand}>
-              Cancel ⌘⌫
-            </button>
-          </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="error-banner">
+          <span className="error-banner-message">{error}</span>
+          <button className="error-banner-close" onClick={clearError}>
+            ✕
+          </button>
         </div>
       )}
-      <FileChangesPanel
-        fileChanges={fileChanges}
-        visible={fileChanges.length > 0}
-        onAccept={handleAcceptFileChange}
-        onReject={handleRejectFileChange}
-      />
-      <EnhancedTodoPanel
-        todos={todos}
-        visible={todos.length > 0}
-        onToggle={handleToggleTodo}
-        onDelete={handleDeleteTodo}
-        onClear={handleClearTodos}
-        onSync={handleSyncTodos}
-        thinkingStatus={thinkingStatus}
-      />
-      <InputArea
-        onSend={handleSendMessage}
-        onStop={handleStopGeneration}
-        isGenerating={isGenerating}
-        mode={mode}
-        onModeChange={handleModeChange}
-        onAddContext={handleAddContext}
-        currentFile={currentFile}
-      />
-    </div>
-  );
-};
 
-export default App;
+      {/* Loading overlay (only for chat view) */}
+      {isLoading && messages.length === 0 && currentView === 'chat' && (
+        <div className="loading-overlay">
+          <div className="loading-spinner" />
+          <p>Connecting to Oropendola AI...</p>
+        </div>
+      )}
+
+      {/* View switcher - Sprint 1-2 + Week 6 + Week 7 */}
+      <div className="view-container">
+        {currentView === 'chat' && (
+          /* Chat view */
+          <ChatView
+            messages={messages}
+            taskMessage={taskMessage || undefined}
+            todos={todos}
+            autoApprovalEnabled={autoApprovalEnabled}
+            autoApproveToggles={autoApproveToggles}
+            onSendMessage={sendMessage}
+            onApproveMessage={approveMessage}
+            onRejectMessage={rejectMessage}
+            onAutoApprovalEnabledChange={setAutoApprovalEnabled}
+            onAutoApproveToggleChange={setAutoApproveToggle}
+          />
+        )}
+        {currentView === 'history' && (
+          /* History view - Sprint 1-2: Task Persistence */
+          <HistoryView />
+        )}
+        {currentView === 'terminal' && (
+          /* Terminal view - Week 7: Enhanced Terminal */
+          <TerminalView />
+        )}
+        {currentView === 'browser' && (
+          /* Browser view - Week 6: Browser Automation */
+          <BrowserView />
+        )}
+        {currentView === 'marketplace' && (
+          /* Marketplace view - Week 8: Extension Marketplace */
+          <MarketplaceView />
+        )}
+        {currentView === 'vector' && (
+          /* Vector view - Week 8: Semantic Search */
+          <VectorView />
+        )}
+        {currentView === 'settings' && (
+          /* Settings view - I18n & App Settings */
+          <SettingsView />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * App root component with providers
+ */
+const App: React.FC = () => {
+  return (
+    <ChatProvider>
+      <ChatInterface />
+    </ChatProvider>
+  )
+}
+
+export default App

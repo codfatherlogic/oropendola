@@ -18,22 +18,33 @@ class SystemPromptBuilder {
      * Load all prompt modules from the modules directory
      */
     loadModules() {
-        const modulesDir = path.join(__dirname, '../modules');
-        const moduleFiles = fs.readdirSync(modulesDir).filter(f => f.endsWith('.js'));
+        try {
+            const modulesDir = path.join(__dirname, '../modules');
 
-        for (const file of moduleFiles) {
-            try {
-                const module = require(path.join(modulesDir, file));
-                this.modules.push(module);
-            } catch (error) {
-                console.warn(`⚠️ Failed to load prompt module ${file}:`, error.message);
+            // Check if directory exists before trying to read it
+            if (!fs.existsSync(modulesDir)) {
+                console.log('ℹ️  Prompt modules directory not found, using default system prompt');
+                return;
             }
+
+            const moduleFiles = fs.readdirSync(modulesDir).filter(f => f.endsWith('.js'));
+
+            for (const file of moduleFiles) {
+                try {
+                    const module = require(path.join(modulesDir, file));
+                    this.modules.push(module);
+                } catch (error) {
+                    console.warn(`⚠️ Failed to load prompt module ${file}:`, error.message);
+                }
+            }
+
+            // Sort modules by priority
+            this.modules.sort((a, b) => a.priority - b.priority);
+
+            console.log(`✅ Loaded ${this.modules.length} prompt modules`);
+        } catch (error) {
+            console.warn('⚠️  Failed to load prompt modules:', error.message);
         }
-
-        // Sort modules by priority
-        this.modules.sort((a, b) => a.priority - b.priority);
-
-        console.log(`✅ Loaded ${this.modules.length} prompt modules`);
     }
 
     /**

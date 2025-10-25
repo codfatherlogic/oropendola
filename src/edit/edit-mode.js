@@ -35,7 +35,7 @@ class EditMode {
         const instruction = await vscode.window.showInputBox({
             prompt: '✨ What would you like to do with this code?',
             placeHolder: 'e.g., Add error handling, Refactor to use async/await, Add comments',
-            validateInput: (text) => {
+            validateInput: text => {
                 return text.trim().length === 0 ? 'Please enter an instruction' : null;
             }
         });
@@ -66,7 +66,7 @@ class EditMode {
 
                 // Get AI response with streaming
                 let modifiedCode = '';
-                const onToken = (chunk) => {
+                const onToken = chunk => {
                     modifiedCode += chunk;
                 };
 
@@ -74,7 +74,7 @@ class EditMode {
                     await this.provider.chat(prompt, {
                         activeFile: {
                             path: editor.document.fileName,
-                            language: language
+                            language
                         }
                     }, onToken);
                 } catch (error) {

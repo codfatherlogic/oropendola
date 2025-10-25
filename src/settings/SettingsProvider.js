@@ -3,7 +3,7 @@ const vscode = require('vscode');
 class SettingsProvider {
     constructor() {
         this.config = vscode.workspace.getConfiguration('oropendola');
-        
+
         // Watch for configuration changes
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('oropendola')) {

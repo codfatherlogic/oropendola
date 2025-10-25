@@ -74,7 +74,7 @@ class OropendolaProvider {
                 timeout: 60000
             }).then(response => {
 
-                response.data.on('data', (chunk) => {
+                response.data.on('data', chunk => {
                     const chunkStr = chunk.toString();
                     const lines = chunkStr.split('\n').filter(line => line.trim());
 
@@ -121,7 +121,7 @@ class OropendolaProvider {
                     resolve(fullResponse);
                 });
 
-                response.data.on('error', (error) => {
+                response.data.on('error', error => {
                     reject(error);
                 });
 
@@ -153,7 +153,7 @@ class OropendolaProvider {
             {
                 headers: this.getHeaders(),
                 timeout: 60000,
-                validateStatus: (status) => status < 500
+                validateStatus: status => status < 500
             }
         );
 
@@ -249,8 +249,8 @@ ${context.selection}
                     `${this.apiUrl}/api/method/ai_assistant.api.subscription_status`,
                     {
                         headers: this.getHeaders(),
-                        timeout: timeout,
-                        validateStatus: (status) => status < 500 // Don't throw on 4xx errors
+                        timeout,
+                        validateStatus: status => status < 500 // Don't throw on 4xx errors
                     }
                 );
 

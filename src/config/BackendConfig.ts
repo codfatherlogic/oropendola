@@ -247,6 +247,16 @@ export class BackendConfig {
       endpoints: Object.keys(this.endpoints).length
     };
   }
+
+  /**
+   * Get CSRF token from backend
+   * @returns CSRF token string
+   */
+  async getCsrfToken(): Promise<string> {
+    // For now, return empty string - CSRF token will be fetched from backend headers
+    // This can be enhanced to fetch from backend if needed
+    return '';
+  }
 }
 
 // Singleton instance

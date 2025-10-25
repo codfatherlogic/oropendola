@@ -92,7 +92,7 @@ class DynamicFileGenerator {
             'nextjs_page_page': this._generateNextJsPage,
             'nextjs_page_layout': this._generateNextJsLayout,
             'nextjs_page_loading': this._generateNextJsLoading,
-            'nextjs_page_error': this._generateNextJsError,
+            'nextjs_page_error': this._generateNextJsError
 
             // Add more generators as needed
         };
@@ -139,7 +139,7 @@ class DynamicFileGenerator {
             fields: fieldDefinitions,
             modified: new Date().toISOString().replace('T', ' ').substring(0, 19),
             modified_by: 'Administrator',
-            module: module,
+            module,
             name: docTypeName,
             naming_rule: spec.naming_rule || 'Autoincrement',
             owner: 'Administrator',
@@ -633,7 +633,7 @@ Copyright (c) ${new Date().getFullYear()}, [Your Organization]
      * @private
      */
     _generateFrappeFieldHandler(field) {
-        if (!field.onChange && !field.depends_on) return null;
+        if (!field.onChange && !field.depends_on) {return null;}
 
         return `frappe.ui.form.on('${this.docTypeName}', {
 \t${this._toSnakeCase(field.name)}: function(frm) {
@@ -669,7 +669,7 @@ Copyright (c) ${new Date().getFullYear()}, [Your Organization]
      * @private
      */
     _toSnakeCase(str) {
-        if (!str) return '';
+        if (!str) {return '';}
         return str
             .replace(/([A-Z])/g, '_$1')
             .replace(/\s+/g, '_')
@@ -682,7 +682,7 @@ Copyright (c) ${new Date().getFullYear()}, [Your Organization]
      * @private
      */
     _toPascalCase(str) {
-        if (!str) return '';
+        if (!str) {return '';}
         return str
             .replace(/[_\s]+(.)?/g, (_, c) => c ? c.toUpperCase() : '')
             .replace(/^(.)/, (_, c) => c.toUpperCase());

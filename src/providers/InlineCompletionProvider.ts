@@ -23,7 +23,7 @@ export class OropendolaInlineCompletionProvider implements vscode.InlineCompleti
     async provideInlineCompletionItems(
         document: vscode.TextDocument,
         position: vscode.Position,
-        context: vscode.InlineCompletionContext,
+        _context: vscode.InlineCompletionContext,
         token: vscode.CancellationToken
     ): Promise<vscode.InlineCompletionItem[] | vscode.InlineCompletionList | null> {
         // Debounce to avoid excessive API calls
@@ -51,7 +51,6 @@ export class OropendolaInlineCompletionProvider implements vscode.InlineCompleti
     ): Promise<vscode.InlineCompletionItem[] | null> {
         if (token.isCancellationRequested) return null;
 
-        const line = document.lineAt(position.line);
         const prefix = document.getText(new vscode.Range(new vscode.Position(position.line, 0), position));
         
         // Check cache

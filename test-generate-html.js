@@ -3,7 +3,7 @@ const fs = require('fs');
 
 // Mock VS Code API
 const mockWebview = {
-    asWebviewUri: (uri) => 'https://file%2B.vscode-resource.vscode-cdn.net' + uri.path,
+    asWebviewUri: uri => 'https://file%2B.vscode-resource.vscode-cdn.net' + uri.path,
     cspSource: 'https://*.vscode-cdn.net'
 };
 
@@ -27,7 +27,7 @@ try {
     console.log('✅ HTML generated successfully!');
     console.log('📄 Saved to test-generated.html');
     console.log('📊 Size:', html.length, 'characters');
-    
+
     // Try to validate JavaScript
     const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
     if (scriptMatch) {

@@ -1,0 +1,61 @@
+/**
+ * ToggleSwitch Styles
+ *
+ * VSCode-native styling for toggle switches
+ */
+
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-contrastBorder));
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  outline: none;
+}
+
+.toggle-switch:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.toggle-switch-checked {
+  background-color: var(--vscode-button-background);
+  border-color: var(--vscode-button-background);
+}
+
+.toggle-switch-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle-switch-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background-color: var(--vscode-foreground);
+  border-radius: 50%;
+  left: 2px;
+  transition: all 150ms ease;
+}
+
+.toggle-switch-checked .toggle-switch-thumb {
+  left: calc(100% - 16px);
+  background-color: var(--vscode-button-foreground);
+}
+
+.toggle-switch:hover:not(.toggle-switch-disabled) {
+  opacity: 0.9;
+}
+
+.toggle-switch:active:not(.toggle-switch-disabled) .toggle-switch-thumb {
+  width: 18px;
+}
+
+.toggle-switch-checked:active:not(.toggle-switch-disabled) .toggle-switch-thumb {
+  left: calc(100% - 20px);
+}

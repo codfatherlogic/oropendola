@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.4.4: Accessible tooltips, keyboard shortcuts, enhanced UX",
-  "version": "3.4.4",
+  "description": "AI-powered assistant - v3.5.0: Production deployment with 77 APIs, 6 cron jobs, enterprise features",
+  "version": "3.5.0",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -13,7 +13,7 @@
   },
   "homepage": "https://oropendola.ai",
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "AI",
@@ -1105,7 +1105,9 @@
     "pdf-parse": "^2.4.5",
     "simple-git": "^3.21.0",
     "socket.io-client": "^4.8.1",
+    "sqlite3": "^5.1.7",
     "tree-sitter-wasms": "^0.1.13",
+    "uuid": "^13.0.0",
     "web-tree-sitter": "^0.25.10",
     "xlsx": "^0.18.5"
   },

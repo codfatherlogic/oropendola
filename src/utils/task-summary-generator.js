@@ -50,9 +50,9 @@ class TaskSummaryGenerator {
             fileChanges: this._summarizeFileChanges(fileChanges),
             todos: this._summarizeTodos(todos),
             toolExecution: this._summarizeTools(toolResults),
-            commands: commands,
+            commands,
             chat: this._summarizeChat(messages),
-            memoryRefs: memoryRefs,
+            memoryRefs,
             conclusion: conclusion || this._generateConclusion(fileChanges, todos, errors),
             validation: this._generateValidation(fileChanges, errors),
             recommendations: this._generateRecommendations(fileChanges, errors)
@@ -295,7 +295,7 @@ class TaskSummaryGenerator {
      * @private
      */
     static _countLines(content) {
-        if (!content) return 0;
+        if (!content) {return 0;}
         return content.split('\n').length;
     }
 
@@ -327,7 +327,7 @@ class TaskSummaryGenerator {
      * @private
      */
     static _truncateMessage(text, maxLength) {
-        if (!text || text.length <= maxLength) return text;
+        if (!text || text.length <= maxLength) {return text;}
         return text.substring(0, maxLength) + '...';
     }
 

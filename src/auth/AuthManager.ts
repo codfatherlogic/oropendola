@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import * as keytar from 'keytar';
 import axios from 'axios';
 
 export class EnhancedAuthManager implements vscode.Disposable {
     private static readonly SERVICE_NAME = 'oropendola-vscode';
     private static readonly ACCOUNT_NAME = 'api-token';
+    private static readonly SECRETS_KEY = `${EnhancedAuthManager.SERVICE_NAME}.${EnhancedAuthManager.ACCOUNT_NAME}`;
+
     private context: vscode.ExtensionContext;
     private statusBarItem: vscode.StatusBarItem;
     private refreshTimer?: ReturnType<typeof setInterval>;
@@ -40,7 +41,7 @@ export class EnhancedAuthManager implements vscode.Disposable {
             }, { timeout: 10000, withCredentials: true });
 
             if (response.data && response.data.success) {
-                await keytar.setPassword(EnhancedAuthManager.SERVICE_NAME, EnhancedAuthManager.ACCOUNT_NAME, JSON.stringify({
+                await this.context.secrets.store(EnhancedAuthManager.SECRETS_KEY, JSON.stringify({
                     serverUrl,
                     sessionId: response.data.session_id,
                     user: response.data.user,
@@ -67,7 +68,7 @@ export class EnhancedAuthManager implements vscode.Disposable {
 
     async getAuthToken(): Promise<string | null> {
         try {
-            const stored = await keytar.getPassword(EnhancedAuthManager.SERVICE_NAME, EnhancedAuthManager.ACCOUNT_NAME);
+            const stored = await this.context.secrets.get(EnhancedAuthManager.SECRETS_KEY);
             if (!stored) return null;
             const credentials = JSON.parse(stored);
 
@@ -91,12 +92,12 @@ export class EnhancedAuthManager implements vscode.Disposable {
         try {
             const response = await axios.post(`${serverUrl}/api/method/ai_assistant.api.endpoints.refresh_session`, { session_id: oldToken }, { timeout: 5000 });
             if (response.data && response.data.success) {
-                const stored = await keytar.getPassword(EnhancedAuthManager.SERVICE_NAME, EnhancedAuthManager.ACCOUNT_NAME);
+                const stored = await this.context.secrets.get(EnhancedAuthManager.SECRETS_KEY);
                 if (stored) {
                     const credentials = JSON.parse(stored);
                     credentials.sessionId = response.data.new_session_id;
                     credentials.timestamp = Date.now();
-                    await keytar.setPassword(EnhancedAuthManager.SERVICE_NAME, EnhancedAuthManager.ACCOUNT_NAME, JSON.stringify(credentials));
+                    await this.context.secrets.store(EnhancedAuthManager.SECRETS_KEY, JSON.stringify(credentials));
                 }
                 return true;
             }
@@ -122,7 +123,7 @@ export class EnhancedAuthManager implements vscode.Disposable {
 
     async logout(): Promise<void> {
         try {
-            await keytar.deletePassword(EnhancedAuthManager.SERVICE_NAME, EnhancedAuthManager.ACCOUNT_NAME);
+            await this.context.secrets.delete(EnhancedAuthManager.SECRETS_KEY);
             await this.context.globalState.update('serverUrl', undefined);
             await this.context.globalState.update('currentUser', undefined);
         if (this.refreshTimer) { clearInterval(this.refreshTimer as unknown as number); }

@@ -39,8 +39,8 @@ async function resumeTaskFromHistory(taskId, storageDir, askUserCallback) {
             throw new Error(`No metadata found for task ${taskId}`);
         }
 
-        let apiMessages = await loadApiMessages(taskId, storageDir);
-        let taskMessages = await loadTaskMessages(taskId, storageDir);
+        const apiMessages = await loadApiMessages(taskId, storageDir);
+        const taskMessages = await loadTaskMessages(taskId, storageDir);
 
         console.log(`✅ [Phase 1/4] Loaded state:`);
         console.log(`   - API messages: ${apiMessages.length}`);

@@ -90,7 +90,7 @@ class ConversationCondenser {
             // Store in condensed history
             this.condensedHistory.push({
                 originalMessages: olderMessages,
-                summary: summary,
+                summary,
                 condensedAt: new Date()
             });
 

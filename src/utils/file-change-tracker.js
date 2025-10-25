@@ -47,7 +47,7 @@ class FileChangeTracker {
      */
     updateStatus(filePath, status, data = {}) {
         const change = this.changes.get(filePath);
-        if (!change) return;
+        if (!change) {return;}
 
         change.status = status;
 

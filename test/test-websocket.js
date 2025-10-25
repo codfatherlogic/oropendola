@@ -29,7 +29,7 @@ const rtm = new RealtimeManager('https://oropendola.ai', sessionCookies);
 
 // Track connection state
 let isConnected = false;
-let startTime = Date.now();
+const startTime = Date.now();
 
 // Connection successful
 rtm.on('connected', () => {
@@ -51,13 +51,13 @@ rtm.on('connected', () => {
 });
 
 // Connection lost
-rtm.on('disconnected', (reason) => {
+rtm.on('disconnected', reason => {
     console.log(`⚠️  WebSocket disconnected: ${reason}`);
     isConnected = false;
 });
 
 // Connection error
-rtm.on('error', (error) => {
+rtm.on('error', error => {
     console.error('❌ TEST FAILED: Connection error');
     console.error(`   Error: ${error.message}`);
     console.error('');
@@ -71,7 +71,7 @@ rtm.on('error', (error) => {
 });
 
 // AI Progress events
-rtm.on('ai_progress', (data) => {
+rtm.on('ai_progress', data => {
     console.log('📊 AI Progress Event Received:');
     console.log(`   Type: ${data.type}`);
     console.log(`   Message: ${data.message || '(no message)'}`);
@@ -82,7 +82,7 @@ rtm.on('ai_progress', (data) => {
 });
 
 // Frappe msgprint events
-rtm.on('msgprint', (data) => {
+rtm.on('msgprint', data => {
     console.log('📢 Msgprint Event:', data);
 });
 

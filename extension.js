@@ -26,6 +26,9 @@ const TodoPanel = require('./src/panels/TodoPanel');
 const WorkspaceMemoryService = require('./src/memory/WorkspaceMemoryService');
 const StatusBarManager = require('./src/ui/StatusBarManager');
 
+// Sprint 1-2: Task Persistence Layer
+const TaskManager = require('./src/services/tasks/TaskManager');
+
 let gitHubManager;
 let chatManager;
 let repositoryAnalyzer;
@@ -58,6 +61,9 @@ let statusBarManager;
 
 // Week 3.1: Internationalization
 let i18nManager;
+
+// Sprint 1-2: Task Manager
+let taskManager;
 
 /**
  * Extension activation
@@ -139,6 +145,42 @@ function activate(context) {
         console.log('✅ Plugin Manager initialized');
     } catch (error) {
         console.error('❌ Plugin Manager error:', error);
+    }
+
+    // Sprint 1-2: Initialize Task Manager
+    try {
+        const path = require('path');
+        const os = require('os');
+        const storagePath = path.join(os.homedir(), '.oropendola');
+        taskManager = new TaskManager(storagePath);
+
+        // Initialize TaskManager (async, but don't block extension activation)
+        taskManager.initialize().then(() => {
+            console.log('✅ Task Manager initialized');
+
+            // Connect task manager to sidebar provider
+            if (sidebarProvider) {
+                sidebarProvider.setTaskManager(taskManager);
+                console.log('✅ TaskManager connected to sidebar');
+            }
+
+            // Set up event listeners
+            taskManager.on('taskCreated', task => {
+                console.log(`📝 Task created: ${task.id}`);
+            });
+
+            taskManager.on('taskCompleted', task => {
+                console.log(`✅ Task completed: ${task.id}`);
+            });
+
+            taskManager.on('taskFailed', (task, error) => {
+                console.error(`❌ Task failed: ${task.id}`, error);
+            });
+        }).catch(err => {
+            console.error('⚠️  Task Manager initialization error:', err);
+        });
+    } catch (error) {
+        console.error('❌ Task Manager error:', error);
     }
 
     // Initialize managers with error handling
@@ -298,7 +340,7 @@ function initializeOropendolaProvider() {
             apiSecret: apiSecret || sessionCookies, // Pass cookies as secret if no API secret
             temperature: config.get('ai.temperature', 0.7),
             maxTokens: config.get('ai.maxTokens', 4096),
-            sessionCookies: sessionCookies // Pass cookies explicitly
+            sessionCookies // Pass cookies explicitly
         });
 
         oropendolaProvider.setStatusBarItem(statusBarItem);
@@ -445,12 +487,12 @@ function registerCommands(context) {
         })
     );
 
-    // Explain Code
-    context.subscriptions.push(
-        vscode.commands.registerCommand('oropendola.explainCode', async () => {
-            await explainCode();
-        })
-    );
+    // Explain Code (DISABLED - duplicate registration, see line 2104 for active version)
+    // context.subscriptions.push(
+    //     vscode.commands.registerCommand('oropendola.explainCode', async () => {
+    //         await explainCode();
+    //     })
+    // );
 
     // Fix Code
     context.subscriptions.push(
@@ -559,7 +601,7 @@ function registerCommands(context) {
             const appName = await vscode.window.showInputBox({
                 prompt: 'Enter your preferred Frappe app name',
                 placeHolder: 'e.g., erpnext, custom_app',
-                validateInput: (value) => {
+                validateInput: value => {
                     return value.trim() ? null : 'App name cannot be empty';
                 }
             });
@@ -706,7 +748,7 @@ function registerCommands(context) {
 
     // Oropendola: Analyze Document
     context.subscriptions.push(
-        vscode.commands.registerCommand('oropendola.analyzeDocument', async (uri) => {
+        vscode.commands.registerCommand('oropendola.analyzeDocument', async uri => {
             try {
                 const { getInstance } = require('./src/documents/DocumentProcessor');
                 const documentProcessor = getInstance();
@@ -764,7 +806,7 @@ function registerCommands(context) {
 
     // Oropendola: Process Document
     context.subscriptions.push(
-        vscode.commands.registerCommand('oropendola.processDocument', async (uri) => {
+        vscode.commands.registerCommand('oropendola.processDocument', async uri => {
             try {
                 const { getInstance } = require('./src/documents/DocumentProcessor');
                 const documentProcessor = getInstance();
@@ -810,7 +852,7 @@ function registerCommands(context) {
 
     // Oropendola: Upload Document to Backend
     context.subscriptions.push(
-        vscode.commands.registerCommand('oropendola.uploadDocument', async (uri) => {
+        vscode.commands.registerCommand('oropendola.uploadDocument', async uri => {
             try {
                 if (!authManager || !authManager.isAuthenticated) {
                     vscode.window.showWarningMessage('Please login first to upload documents.');
@@ -881,20 +923,20 @@ function registerCommands(context) {
     );
     console.log('✅ oropendola.indexCurrentFile command registered');
 
-    // Oropendola: Index Workspace
-    context.subscriptions.push(
-        vscode.commands.registerCommand('oropendola.indexWorkspace', async () => {
-            try {
-                const { getInstance } = require('./src/vector/SemanticSearchProvider');
-                const searchProvider = getInstance();
-                await searchProvider.indexWorkspace();
-            } catch (error) {
-                console.error('❌ Index workspace error:', error);
-                vscode.window.showErrorMessage(`Index workspace failed: ${error.message}`);
-            }
-        })
-    );
-    console.log('✅ oropendola.indexWorkspace command registered');
+    // Oropendola: Index Workspace (DISABLED - duplicate registration, see line 2926 for active enterprise version)
+    // context.subscriptions.push(
+    //     vscode.commands.registerCommand('oropendola.indexWorkspace', async () => {
+    //         try {
+    //             const { getInstance } = require('./src/vector/SemanticSearchProvider');
+    //             const searchProvider = getInstance();
+    //             await searchProvider.indexWorkspace();
+    //         } catch (error) {
+    //             console.error('❌ Index workspace error:', error);
+    //             vscode.window.showErrorMessage(`Index workspace failed: ${error.message}`);
+    //         }
+    //     })
+    // );
+    // console.log('✅ oropendola.indexWorkspace command registered');
 
     // Oropendola: Semantic Search
     context.subscriptions.push(
@@ -1380,7 +1422,7 @@ Avg Duration: ${stats.averageDuration ? stats.averageDuration.toFixed(0) + 'ms' 
                 const extensionId = await vscode.window.showInputBox({
                     prompt: 'Enter extension ID (publisher.name)',
                     placeHolder: 'e.g., ms-python.python',
-                    validateInput: (value) => {
+                    validateInput: value => {
                         if (!value || !value.includes('.')) {
                             return 'Invalid format. Use publisher.name';
                         }
@@ -1584,7 +1626,7 @@ function registerBrowserAutomationCommands(context) {
                 const url = await vscode.window.showInputBox({
                     prompt: 'Enter URL to navigate to',
                     placeHolder: 'https://example.com',
-                    validateInput: (value) => {
+                    validateInput: value => {
                         if (!value || value.trim().length === 0) {
                             return 'URL is required';
                         }
@@ -1729,7 +1771,7 @@ function registerBrowserAutomationCommands(context) {
 
                 // Generate PDF
                 const result = await client.generatePdf(selectedSession.sessionId, {
-                    format: format,
+                    format,
                     printBackground: true
                 });
 
@@ -1921,7 +1963,7 @@ function registerCodeActionsCommands(context) {
                     location: vscode.ProgressLocation.Notification,
                     title: 'Analyzing code...',
                     cancellable: false
-                }, async (progress) => {
+                }, async progress => {
                     const { getInstance } = require('./src/code-actions/CodeActionsClient');
                     const client = getInstance();
 
@@ -1993,7 +2035,7 @@ function registerCodeActionsCommands(context) {
                     location: vscode.ProgressLocation.Notification,
                     title: 'Scanning for security vulnerabilities...',
                     cancellable: false
-                }, async (progress) => {
+                }, async progress => {
                     const { getInstance } = require('./src/code-actions/CodeActionsClient');
                     const client = getInstance();
 
@@ -2011,8 +2053,8 @@ function registerCodeActionsCommands(context) {
                             if (action === 'View Details') {
                                 const details = result.vulnerabilities.map((vuln, index) => {
                                     let info = `${index + 1}. [${vuln.severity.toUpperCase()}] ${vuln.title}`;
-                                    if (vuln.cve_id) info += ` (${vuln.cve_id})`;
-                                    if (vuln.cvss_score) info += ` - CVSS: ${vuln.cvss_score}`;
+                                    if (vuln.cve_id) {info += ` (${vuln.cve_id})`;}
+                                    if (vuln.cvss_score) {info += ` - CVSS: ${vuln.cvss_score}`;}
                                     info += `\n   ${vuln.description}`;
                                     return info;
                                 }).join('\n\n');
@@ -2053,7 +2095,7 @@ function registerCodeActionsCommands(context) {
                     location: vscode.ProgressLocation.Notification,
                     title: 'Generating refactoring suggestions...',
                     cancellable: false
-                }, async (progress) => {
+                }, async progress => {
                     const { getInstance } = require('./src/code-actions/CodeActionsClient');
                     const client = getInstance();
 
@@ -2122,7 +2164,7 @@ function registerCodeActionsCommands(context) {
                     location: vscode.ProgressLocation.Notification,
                     title: 'Generating code explanation...',
                     cancellable: false
-                }, async (progress) => {
+                }, async progress => {
                     const { getInstance } = require('./src/code-actions/CodeActionsClient');
                     const client = getInstance();
 
@@ -2202,7 +2244,7 @@ function registerCodeActionsCommands(context) {
                         placeHolder: 'Select package file to scan'
                     });
 
-                    if (!selected) return;
+                    if (!selected) {return;}
                     selectedFile = selected.file;
                 }
 
@@ -2210,7 +2252,7 @@ function registerCodeActionsCommands(context) {
                     location: vscode.ProgressLocation.Notification,
                     title: 'Scanning dependencies for vulnerabilities...',
                     cancellable: false
-                }, async (progress) => {
+                }, async progress => {
                     const { getInstance } = require('./src/code-actions/CodeActionsClient');
                     const client = getInstance();
 
@@ -2431,21 +2473,21 @@ async function forkRepository() {
     const repoUrl = await vscode.window.showInputBox({
         prompt: 'Enter GitHub repository URL to fork',
         placeHolder: 'https://github.com/owner/repo',
-        validateInput: (value) => {
-            if (!value) return 'URL is required';
-            if (!value.includes('github.com')) return 'Must be a GitHub URL';
+        validateInput: value => {
+            if (!value) {return 'URL is required';}
+            if (!value.includes('github.com')) {return 'Must be a GitHub URL';}
             return null;
         }
     });
 
-    if (!repoUrl) return;
+    if (!repoUrl) {return;}
 
     try {
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: 'Forking repository...',
             cancellable: false
-        }, async (progress) => {
+        }, async progress => {
             progress.report({ increment: 0, message: 'Authenticating with GitHub...' });
 
             const forkedRepo = await gitHubManager.forkRepository(repoUrl);
@@ -2579,7 +2621,7 @@ ${code}
  */
 async function fixCode() {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) return;
+    if (!editor) {return;}
 
     const selection = editor.selection;
     if (selection.isEmpty) {
@@ -2610,7 +2652,7 @@ Provide the corrected code and explain what was fixed.`;
  */
 async function improveCode() {
     const editor = vscode.window.activeTextEditor;
-    if (!editor) return;
+    if (!editor) {return;}
 
     const selection = editor.selection;
     if (selection.isEmpty) {
@@ -2833,7 +2875,7 @@ function initializeEnterpriseFeatures(context) {
                 serverUrl,
                 inlineCompletionStatusBar
             );
-            
+
             const inlineDisposable = vscode.languages.registerInlineCompletionItemProvider(
                 { pattern: '**' },
                 inlineCompletionProvider
@@ -2868,7 +2910,7 @@ function initializeEnterpriseFeatures(context) {
         // Initialize Code Action Provider
         if (OropendolaCodeActionProvider && settingsProvider.getCodeActionsEnabled()) {
             codeActionProvider = new OropendolaCodeActionProvider(serverUrl);
-            
+
             const codeActionDisposable = vscode.languages.registerCodeActionsProvider(
                 { pattern: '**' },
                 codeActionProvider,
