@@ -1110,8 +1110,7 @@
     "sqlite3": "^5.1.7",
     "tree-sitter-wasms": "^0.1.13",
     "uuid": "^13.0.0",
-    "web-tree-sitter": "^0.25.10",
-    "xlsx": "^0.18.5"
+    "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
     "@types/exceljs": "^0.5.3",
