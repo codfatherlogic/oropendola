@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.4.3: Workspace memory, auto task reports, status bar indicators",
-  "version": "3.4.3",
+  "description": "AI-powered assistant - v3.4.4: Accessible tooltips, keyboard shortcuts, enhanced UX",
+  "version": "3.4.4",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -34,7 +34,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -288,6 +288,210 @@
         "title": "Toggle Chat Mode",
         "category": "Oropendola",
         "icon": "$(sync)"
+      },
+      {
+        "command": "oropendola.analyzeDocument",
+        "title": "Analyze Document",
+        "category": "Oropendola",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "oropendola.processDocument",
+        "title": "Process Document",
+        "category": "Oropendola",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "oropendola.uploadDocument",
+        "title": "Upload Document to Backend",
+        "category": "Oropendola",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "oropendola.indexCurrentFile",
+        "title": "Index Current File (Semantic Search)",
+        "category": "Oropendola",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "oropendola.semanticSearch",
+        "title": "Semantic Code Search",
+        "category": "Oropendola",
+        "icon": "$(search)"
+      },
+      {
+        "command": "oropendola.showVectorStats",
+        "title": "Show Vector Database Stats",
+        "category": "Oropendola",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "oropendola.terminalSuggestCommand",
+        "title": "Terminal: AI Suggest Command",
+        "category": "Oropendola",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "oropendola.terminalBuildCommand",
+        "title": "Terminal: Build Command",
+        "category": "Oropendola",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "oropendola.explainTerminalCommand",
+        "title": "Terminal: Explain Command",
+        "category": "Oropendola",
+        "icon": "$(question)"
+      },
+      {
+        "command": "oropendola.terminalHistory",
+        "title": "Terminal: Show Command History",
+        "category": "Oropendola",
+        "icon": "$(history)"
+      },
+      {
+        "command": "oropendola.terminalClearHistory",
+        "title": "Terminal: Clear History",
+        "category": "Oropendola",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "oropendola.terminalStatistics",
+        "title": "Terminal: Show Statistics",
+        "category": "Oropendola",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "oropendola.terminalExportHistory",
+        "title": "Terminal: Export History",
+        "category": "Oropendola",
+        "icon": "$(export)"
+      },
+      {
+        "command": "oropendola.searchExtensions",
+        "title": "Marketplace: Search Extensions",
+        "category": "Oropendola",
+        "icon": "$(search)"
+      },
+      {
+        "command": "oropendola.browseFeatured",
+        "title": "Marketplace: Browse Featured",
+        "category": "Oropendola",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "oropendola.viewInstalledPlugins",
+        "title": "Marketplace: View Installed Plugins",
+        "category": "Oropendola",
+        "icon": "$(extensions)"
+      },
+      {
+        "command": "oropendola.installExtension",
+        "title": "Marketplace: Install Extension",
+        "category": "Oropendola",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "oropendola.pluginStatistics",
+        "title": "Marketplace: Show Statistics",
+        "category": "Oropendola",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "oropendola.exportPluginList",
+        "title": "Marketplace: Export Plugin List",
+        "category": "Oropendola",
+        "icon": "$(export)"
+      },
+      {
+        "command": "oropendola.importPluginList",
+        "title": "Marketplace: Import Plugin List",
+        "category": "Oropendola",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "oropendola.browserCreateSession",
+        "title": "Browser: Create Session",
+        "category": "Oropendola",
+        "icon": "$(browser)"
+      },
+      {
+        "command": "oropendola.browserNavigate",
+        "title": "Browser: Navigate to URL",
+        "category": "Oropendola",
+        "icon": "$(link)"
+      },
+      {
+        "command": "oropendola.browserScreenshot",
+        "title": "Browser: Take Screenshot",
+        "category": "Oropendola",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "oropendola.browserGeneratePdf",
+        "title": "Browser: Generate PDF",
+        "category": "Oropendola",
+        "icon": "$(file-pdf)"
+      },
+      {
+        "command": "oropendola.browserListSessions",
+        "title": "Browser: List Sessions",
+        "category": "Oropendola",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "oropendola.browserCloseSession",
+        "title": "Browser: Close Session",
+        "category": "Oropendola",
+        "icon": "$(close)"
+      },
+      {
+        "command": "oropendola.analyzeCurrentFile",
+        "title": "Code: Analyze Current File",
+        "category": "Oropendola",
+        "icon": "$(search)"
+      },
+      {
+        "command": "oropendola.scanSecurity",
+        "title": "Code: Scan for Security Issues",
+        "category": "Oropendola",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "oropendola.suggestRefactoring",
+        "title": "Code: Suggest Refactorings",
+        "category": "Oropendola",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "oropendola.explainCode",
+        "title": "Code: Explain Selected Code",
+        "category": "Oropendola",
+        "icon": "$(question)"
+      },
+      {
+        "command": "oropendola.scanDependencies",
+        "title": "Code: Scan Dependencies for Vulnerabilities",
+        "category": "Oropendola",
+        "icon": "$(package)"
+      },
+      {
+        "command": "oropendola.quickCodeCheck",
+        "title": "Code: Quick Check (Selection)",
+        "category": "Oropendola",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "oropendola.codeAnalysisStats",
+        "title": "Code: View Analysis Statistics",
+        "category": "Oropendola",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "oropendola.clearCodeAnalysisCache",
+        "title": "Code: Clear Analysis Cache",
+        "category": "Oropendola",
+        "icon": "$(trash)"
       }
     ],
     "views": {
@@ -422,7 +626,11 @@
         },
         "oropendola.approval.mode": {
           "type": "string",
-          "enum": ["manual", "auto-safe", "auto-all"],
+          "enum": [
+            "manual",
+            "auto-safe",
+            "auto-all"
+          ],
           "default": "manual",
           "description": "Approval mode for AI code changes",
           "enumDescriptions": [
@@ -433,7 +641,9 @@
         },
         "oropendola.approval.autoAcceptPatterns": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": {
+            "type": "string"
+          },
           "default": [
             "*.test.js",
             "*.test.ts",
@@ -448,7 +658,9 @@
         },
         "oropendola.approval.requireManualPatterns": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": {
+            "type": "string"
+          },
           "default": [
             "package.json",
             "package-lock.json",
@@ -589,6 +801,25 @@
           "default": false,
           "description": "Enable debug logging"
         },
+        "oropendola.language": {
+          "type": "string",
+          "default": "en",
+          "enum": [
+            "en",
+            "es",
+            "fr",
+            "de",
+            "ar"
+          ],
+          "enumDescriptions": [
+            "English",
+            "Español (Spanish)",
+            "Français (French)",
+            "Deutsch (German)",
+            "العربية (Arabic)"
+          ],
+          "markdownDescription": "User interface language (Week 3.1 Feature)"
+        },
         "oropendola.chat.mode": {
           "type": "string",
           "default": "agent",
@@ -628,6 +859,78 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically save conversations to backend"
+        },
+        "oropendola.allowedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "git log",
+            "git diff",
+            "git show",
+            "git status",
+            "npm list",
+            "npm --version",
+            "node --version",
+            "ls",
+            "pwd",
+            "cat",
+            "echo"
+          ],
+          "description": "Commands that can run without user approval"
+        },
+        "oropendola.deniedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "rm -rf",
+            "sudo",
+            "shutdown",
+            "reboot",
+            "mkfs",
+            "dd",
+            "chmod 777",
+            "chown",
+            "kill -9",
+            "killall"
+          ],
+          "description": "Commands that are always blocked"
+        },
+        "oropendola.commandExecutionTimeout": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 600,
+          "description": "Command timeout in seconds (0 = no timeout)"
+        },
+        "oropendola.commandRequireConfirmation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require user confirmation for unknown commands"
+        },
+        "oropendola.apiRequestTimeout": {
+          "type": "number",
+          "default": 600,
+          "minimum": 30,
+          "maximum": 3600,
+          "description": "API request timeout in seconds"
+        },
+        "oropendola.maxReconnectAttempts": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 50,
+          "description": "Maximum reconnection attempts before giving up"
+        },
+        "oropendola.reconnectInterval": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 500,
+          "maximum": 30000,
+          "description": "Initial reconnect interval in milliseconds (uses exponential backoff)"
         }
       }
     },
@@ -778,27 +1081,48 @@
   "scripts": {
     "lint": "eslint .",
     "pretest": "npm run lint",
-    "test": "node ./test/runTest.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && node esbuild.config.js",
+    "build:production": "npm run typecheck && NODE_ENV=production node esbuild.config.js",
     "build:webview": "cd webview-ui && npm run build",
-    "vscode:prepublish": "npm run build:webview && echo 'Webview built successfully'",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "watch": "node esbuild.config.js --watch",
+    "clean": "rimraf dist out",
+    "vscode:prepublish": "npm run clean && npm run build:webview && npm run build:production",
+    "package": "npm run vscode:prepublish && vsce package",
+    "publish": "npm run vscode:prepublish && vsce publish"
   },
   "dependencies": {
     "@octokit/rest": "^20.0.2",
     "axios": "^1.6.2",
+    "cheerio": "^1.1.2",
+    "i18next": "^25.6.0",
+    "i18next-browser-languagedetector": "^8.2.0",
+    "mammoth": "^1.11.0",
     "minimatch": "^9.0.5",
+    "pdf-parse": "^2.4.5",
     "simple-git": "^3.21.0",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.25.10",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "@types/vscode": "^1.74.0",
+    "@types/node": "^20.19.23",
+    "@types/socket.io-client": "^1.4.36",
+    "@types/vscode": "^1.105.0",
+    "@vitest/coverage-v8": "^3.2.3",
     "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^2.22.0",
+    "esbuild": "^0.25.0",
     "eslint": "^8.55.0",
     "prettier": "^3.1.0",
-    "sharp": "^0.34.4"
+    "rimraf": "^6.0.1",
+    "sharp": "^0.34.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.3"
   },
   "icon": "media/icon.png",
   "license": "MIT"

@@ -1,0 +1,122 @@
+{
+  "common": {
+    "yes": "Ja",
+    "no": "Nein",
+    "ok": "OK",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "close": "Schließen",
+    "loading": "Laden...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "warning": "Warnung",
+    "info": "Information"
+  },
+  "actions": {
+    "send": "Senden",
+    "upload": "Hochladen",
+    "download": "Herunterladen",
+    "copy": "Kopieren",
+    "paste": "Einfügen",
+    "cut": "Ausschneiden",
+    "undo": "Rückgängig",
+    "redo": "Wiederholen",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "sort": "Sortieren",
+    "refresh": "Aktualisieren"
+  },
+  "chat": {
+    "title": "Chat",
+    "placeholder": "Geben Sie Ihre Nachricht ein...",
+    "send": "Senden",
+    "clear": "Chat löschen",
+    "new": "Neuer Chat",
+    "history": "Chat-Verlauf",
+    "noMessages": "Noch keine Nachrichten",
+    "thinking": "Nachdenken...",
+    "typing": "Tippen...",
+    "connected": "Verbunden",
+    "disconnected": "Getrennt",
+    "reconnecting": "Wiederverbinden..."
+  },
+  "document": {
+    "upload": "Dokument hochladen",
+    "analyze": "Dokument analysieren",
+    "process": "Dokument verarbeiten",
+    "processing": "Dokument wird verarbeitet...",
+    "error": "Fehler beim Verarbeiten des Dokuments",
+    "success": "Dokument erfolgreich verarbeitet",
+    "selectFile": "Datei auswählen",
+    "dragDrop": "Ziehen Sie eine Datei hierher",
+    "supportedTypes": "Unterstützte Typen: PDF, Word, Excel, PowerPoint, HTML",
+    "maxSize": "Maximale Größe: 50MB",
+    "pages": "Seiten",
+    "words": "Wörter"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "theme": "Design",
+    "preferences": "Einstellungen",
+    "account": "Konto",
+    "about": "Über",
+    "save": "Einstellungen speichern",
+    "reset": "Auf Standard zurücksetzen"
+  },
+  "language": {
+    "english": "Englisch",
+    "spanish": "Spanisch",
+    "french": "Französisch",
+    "german": "Deutsch",
+    "arabic": "Arabisch",
+    "select": "Sprache auswählen",
+    "current": "Aktuelle Sprache"
+  },
+  "auth": {
+    "login": "Anmelden",
+    "logout": "Abmelden",
+    "signup": "Registrieren",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "rememberMe": "Angemeldet bleiben",
+    "loginSuccess": "Erfolgreich angemeldet",
+    "logoutSuccess": "Erfolgreich abgemeldet",
+    "loginError": "Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten."
+  },
+  "errors": {
+    "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
+    "server": "Serverfehler. Bitte versuchen Sie es später erneut.",
+    "unauthorized": "Bitte melden Sie sich an, um fortzufahren.",
+    "forbidden": "Sie haben keine Berechtigung, auf diese Ressource zuzugreifen.",
+    "notFound": "Ressource nicht gefunden.",
+    "timeout": "Zeitüberschreitung. Bitte versuchen Sie es erneut.",
+    "unknown": "Ein unbekannter Fehler ist aufgetreten.",
+    "validation": "Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut."
+  },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich",
+    "email": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
+    "minLength": "Die Mindestlänge beträgt {{min}} Zeichen",
+    "maxLength": "Die maximale Länge beträgt {{max}} Zeichen",
+    "numeric": "Bitte geben Sie eine gültige Nummer ein",
+    "url": "Bitte geben Sie eine gültige URL ein"
+  },
+  "notifications": {
+    "title": "Benachrichtigungen",
+    "noNotifications": "Keine Benachrichtigungen",
+    "markAllRead": "Alle als gelesen markieren",
+    "new": "Neue Benachrichtigung"
+  },
+  "search": {
+    "placeholder": "Suchen...",
+    "noResults": "Keine Ergebnisse gefunden",
+    "searching": "Suche...",
+    "results": "{{count}} Ergebnisse gefunden",
+    "semantic": "Semantische Suche",
+    "exact": "Genaue Übereinstimmung"
+  }
+}

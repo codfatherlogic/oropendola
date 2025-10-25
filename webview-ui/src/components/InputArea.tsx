@@ -1,4 +1,6 @@
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import React, { useState, KeyboardEvent } from 'react';
+import TextareaAutosize from 'react-textarea-autosize';
+import { Tooltip } from './ui';
 
 interface InputAreaProps {
   onSend: (message: string) => void;
@@ -20,7 +22,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
   currentFile
 }) => {
   const [message, setMessage] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = () => {
     if (isGenerating) {
@@ -28,9 +29,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
     } else if (message.trim()) {
       onSend(message);
       setMessage('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
     }
   };
 
@@ -38,13 +36,6 @@ export const InputArea: React.FC<InputAreaProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    }
-  };
-
-  const handleInput = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
     }
   };
 
@@ -60,16 +51,15 @@ export const InputArea: React.FC<InputAreaProps> = ({
         ＋ Add Context
       </button>
 
-      {/* Large textarea */}
-      <textarea
-        ref={textareaRef}
+      {/* Auto-resizing textarea */}
+      <TextareaAutosize
         className="input-field-large"
         placeholder="Plan and build autonomously..."
-        rows={3}
+        minRows={3}
+        maxRows={10}
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
-        onInput={handleInput}
         disabled={isGenerating}
       />
 
@@ -97,21 +87,23 @@ export const InputArea: React.FC<InputAreaProps> = ({
             </span>
           )}
           <span className="token-usage">44.0%</span>
-          <button
-            className="icon-button-compact"
-            title="Attach file"
-            disabled={isGenerating}
-          >
-            📎
-          </button>
-          <button
-            className="send-button-compact"
-            onClick={handleSend}
-            disabled={!isGenerating && !message.trim()}
-            title={isGenerating ? 'Stop generation' : 'Send message'}
-          >
-            {isGenerating ? '◼' : '↑'}
-          </button>
+          <Tooltip content="Attach file" side="top">
+            <button
+              className="icon-button-compact"
+              disabled={isGenerating}
+            >
+              📎
+            </button>
+          </Tooltip>
+          <Tooltip content={isGenerating ? 'Stop generation (Esc)' : 'Send message (⌘↵)'} side="top">
+            <button
+              className="send-button-compact"
+              onClick={handleSend}
+              disabled={!isGenerating && !message.trim()}
+            >
+              {isGenerating ? '◼' : '↑'}
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>

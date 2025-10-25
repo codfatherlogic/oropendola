@@ -1,7 +1,13 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import rehypeHighlight from 'rehype-highlight';
+import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
+import rehypeKatex from 'rehype-katex';
 import { Message } from '../types';
+import { CodeBlock } from './CodeBlock';
+import { MermaidBlock } from './MermaidBlock';
+import { ImageBlock } from './ImageBlock';
+import 'katex/dist/katex.min.css';
 
 interface ChatMessageProps {
   message: Message;
@@ -62,7 +68,36 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         </button>
       </div>
       <div className="message-content">
-        <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+        <ReactMarkdown
+          remarkPlugins={[remarkMath, remarkGfm]}
+          rehypePlugins={[rehypeKatex]}
+          components={{
+            code(props) {
+              const { className, children, ...rest } = props;
+              const match = /language-(\w+)/.exec(className || '');
+              const language = match ? match[1] : 'plaintext';
+              const codeString = String(children).replace(/\n$/, '');
+              const isInline = !match;
+
+              // Special handling for Mermaid diagrams
+              if (!isInline && language === 'mermaid') {
+                return <MermaidBlock code={codeString} />;
+              }
+
+              return !isInline ? (
+                <CodeBlock code={codeString} language={language} />
+              ) : (
+                <code className={className} {...rest}>
+                  {children}
+                </code>
+              );
+            },
+            img(props) {
+              const { src, alt } = props;
+              return <ImageBlock src={src || ''} alt={alt} />;
+            }
+          }}
+        >
           {message.content}
         </ReactMarkdown>
       </div>

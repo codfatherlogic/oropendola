@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import { Virtuoso } from 'react-virtuoso';
 import { ChatMessage } from './ChatMessage';
 import { Message } from '../types';
 
@@ -19,18 +20,9 @@ export const MessageList: React.FC<MessageListProps> = ({
   onRejectPlan,
   mode
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Auto-scroll to bottom when new messages arrive
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [messages, isTyping]);
-
   if (showEmptyState) {
     return (
-      <div className="messages-container" ref={containerRef}>
+      <div className="messages-container">
         <div className="empty-state">
           <div className="empty-icon">💬</div>
           <div className="empty-title">Build with {mode === 'ask' ? 'ask' : 'agent'} mode</div>
@@ -56,8 +48,12 @@ export const MessageList: React.FC<MessageListProps> = ({
   }
 
   return (
-    <div className="messages-container" ref={containerRef}>
-      {messages.map((message, index) => (
+    <Virtuoso
+      className="messages-container"
+      data={messages}
+      followOutput="smooth"
+      alignToBottom
+      itemContent={(index, message) => (
         <ChatMessage
           key={index}
           message={message}
@@ -65,17 +61,22 @@ export const MessageList: React.FC<MessageListProps> = ({
           onRejectPlan={onRejectPlan}
           showPlanActions={mode === 'ask' && index === messages.length - 1}
         />
-      ))}
-      {isTyping && (
-        <div className="typing-indicator">
-          <span>AI is thinking</span>
-          <div className="typing-dots">
-            <div className="typing-dot"></div>
-            <div className="typing-dot"></div>
-            <div className="typing-dot"></div>
-          </div>
-        </div>
       )}
-    </div>
+      components={{
+        Footer: () => {
+          if (!isTyping) return null;
+          return (
+            <div className="typing-indicator">
+              <span>AI is thinking</span>
+              <div className="typing-dots">
+                <div className="typing-dot"></div>
+                <div className="typing-dot"></div>
+                <div className="typing-dot"></div>
+              </div>
+            </div>
+          );
+        }
+      }}
+    />
   );
 };

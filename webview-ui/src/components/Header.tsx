@@ -1,4 +1,5 @@
 import React from 'react';
+import { Tooltip } from './ui';
 
 interface HeaderProps {
   onNewChat: () => void;
@@ -14,15 +15,21 @@ export const Header: React.FC<HeaderProps> = ({ onNewChat, onSettings, onSignOut
         <span>AI Assistant</span>
       </div>
       <div className="header-actions">
-        <button className="icon-button" onClick={onNewChat} title="New Chat">
-          ✚
-        </button>
-        <button className="icon-button" onClick={onSettings} title="Settings">
-          ⚙
-        </button>
-        <button className="icon-button" onClick={onSignOut} title="Sign Out">
-          ⎋
-        </button>
+        <Tooltip content="New Chat (⌘N)" side="bottom">
+          <button className="icon-button" onClick={onNewChat}>
+            ✚
+          </button>
+        </Tooltip>
+        <Tooltip content="Settings" side="bottom">
+          <button className="icon-button" onClick={onSettings}>
+            ⚙
+          </button>
+        </Tooltip>
+        <Tooltip content="Sign Out" side="bottom">
+          <button className="icon-button" onClick={onSignOut}>
+            ⎋
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

@@ -56,6 +56,9 @@ let todoPanel;
 let workspaceMemory;
 let statusBarManager;
 
+// Week 3.1: Internationalization
+let i18nManager;
+
 /**
  * Extension activation
  * @param {vscode.ExtensionContext} context
@@ -109,6 +112,35 @@ function activate(context) {
         console.error('❌ Workspace Memory Service error:', error);
     }
 
+    // Week 3.1: Initialize I18n Manager
+    try {
+        const { getInstance: getI18nManager } = require('./src/i18n/I18nManager');
+        i18nManager = getI18nManager();
+
+        // Get saved language or detect from browser
+        const config = vscode.workspace.getConfiguration('oropendola');
+        const savedLanguage = config.get('language', 'en');
+
+        // Initialize i18n (async, don't block extension activation)
+        i18nManager.initialize(savedLanguage).then(() => {
+            console.log('✅ I18n Manager initialized with language:', savedLanguage);
+        }).catch(err => {
+            console.warn('⚠️  I18n initialization warning:', err);
+        });
+    } catch (error) {
+        console.error('❌ I18n Manager error:', error);
+    }
+
+    // Week 8: Initialize Plugin Manager (Phase 1)
+    try {
+        const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+        const pluginManager = getPluginManager();
+        pluginManager.initialize(context);
+        console.log('✅ Plugin Manager initialized');
+    } catch (error) {
+        console.error('❌ Plugin Manager error:', error);
+    }
+
     // Initialize managers with error handling
     try {
         authManager = new AuthManager();
@@ -146,6 +178,12 @@ function activate(context) {
     console.log('🔧 Registering commands...');
     registerCommands(context);
     console.log('✅ Commands registered successfully');
+
+    // Register browser automation commands (Week 6)
+    registerBrowserAutomationCommands(context);
+
+    // Register code actions commands (Week 11)
+    registerCodeActionsCommands(context);
 
     // Now initialize managers with error handling
     try {
@@ -662,6 +700,1666 @@ function registerCommands(context) {
             );
         })
     );
+
+    // Document Processing Commands (Week 2.2)
+    console.log('🔧 Registering document processing commands...');
+
+    // Oropendola: Analyze Document
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.analyzeDocument', async (uri) => {
+            try {
+                const { getInstance } = require('./src/documents/DocumentProcessor');
+                const documentProcessor = getInstance();
+
+                // Get file URI from context or file explorer
+                const fileUri = uri || await vscode.window.showOpenDialog({
+                    canSelectFiles: true,
+                    canSelectFolders: false,
+                    canSelectMany: false,
+                    filters: {
+                        'Documents': ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'html', 'htm', 'txt', 'md'],
+                        'All Files': ['*']
+                    },
+                    title: 'Select Document to Analyze'
+                }).then(uris => uris && uris[0]);
+
+                if (!fileUri) {
+                    return; // User cancelled
+                }
+
+                const filePath = fileUri.fsPath || fileUri.path;
+                console.log(`📄 Analyzing document: ${filePath}`);
+
+                // Process document
+                const result = await documentProcessor.processDocument(filePath, {
+                    analyzeWithAI: true,
+                    analysisType: 'comprehensive'
+                });
+
+                // Show result in sidebar or output
+                if (sidebarProvider) {
+                    const summary = `📄 **${result.metadata.fileName}**\n\n` +
+                        `**Type:** ${result.metadata.documentType}\n` +
+                        `**Pages:** ${result.metadata.pageCount || 'N/A'}\n` +
+                        `**Words:** ${result.metadata.wordCount || 'N/A'}\n\n` +
+                        `**Content Preview:**\n${result.content.substring(0, 500)}${result.content.length > 500 ? '...' : ''}`;
+
+                    // Send to chat for AI analysis
+                    await sidebarProvider.sendMessage(
+                        `Analyze this document:\n\n${summary}`,
+                        'system'
+                    );
+                }
+
+                vscode.window.showInformationMessage(
+                    `✅ Document analyzed: ${result.metadata.wordCount} words, ${result.metadata.pageCount} pages`
+                );
+            } catch (error) {
+                console.error('❌ Document analysis error:', error);
+                vscode.window.showErrorMessage(`Document analysis failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.analyzeDocument command registered');
+
+    // Oropendola: Process Document
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.processDocument', async (uri) => {
+            try {
+                const { getInstance } = require('./src/documents/DocumentProcessor');
+                const documentProcessor = getInstance();
+
+                // Get file URI
+                const fileUri = uri || await vscode.window.showOpenDialog({
+                    canSelectFiles: true,
+                    canSelectFolders: false,
+                    canSelectMany: false,
+                    filters: {
+                        'Documents': ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'html', 'htm', 'txt', 'md']
+                    },
+                    title: 'Select Document to Process'
+                }).then(uris => uris && uris[0]);
+
+                if (!fileUri) {
+                    return;
+                }
+
+                const filePath = fileUri.fsPath || fileUri.path;
+                console.log(`📄 Processing document: ${filePath}`);
+
+                // Process document
+                const result = await documentProcessor.processDocument(filePath);
+
+                // Create new document with extracted content
+                const doc = await vscode.workspace.openTextDocument({
+                    content: result.content,
+                    language: 'markdown'
+                });
+                await vscode.window.showTextDocument(doc);
+
+                vscode.window.showInformationMessage(
+                    `✅ Document processed: ${result.metadata.wordCount} words extracted`
+                );
+            } catch (error) {
+                console.error('❌ Document processing error:', error);
+                vscode.window.showErrorMessage(`Document processing failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.processDocument command registered');
+
+    // Oropendola: Upload Document to Backend
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.uploadDocument', async (uri) => {
+            try {
+                if (!authManager || !authManager.isAuthenticated) {
+                    vscode.window.showWarningMessage('Please login first to upload documents.');
+                    return;
+                }
+
+                const { getInstance } = require('./src/documents/DocumentProcessor');
+                const documentProcessor = getInstance();
+
+                // Get file URI
+                const fileUri = uri || await vscode.window.showOpenDialog({
+                    canSelectFiles: true,
+                    canSelectFolders: false,
+                    canSelectMany: false,
+                    filters: {
+                        'Documents': ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'html', 'htm']
+                    },
+                    title: 'Select Document to Upload'
+                }).then(uris => uris && uris[0]);
+
+                if (!fileUri) {
+                    return;
+                }
+
+                const filePath = fileUri.fsPath || fileUri.path;
+                console.log(`📤 Uploading document: ${filePath}`);
+
+                // Upload to backend
+                const result = await documentProcessor.uploadToBackend(filePath, {
+                    extractImages: true,
+                    extractTables: true,
+                    ocr: false
+                });
+
+                vscode.window.showInformationMessage(
+                    `✅ Document uploaded successfully! ID: ${result.documentId}`,
+                    'Check Status'
+                ).then(selection => {
+                    if (selection === 'Check Status') {
+                        vscode.commands.executeCommand('oropendola.checkDocumentStatus', result.documentId);
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Document upload error:', error);
+                vscode.window.showErrorMessage(`Document upload failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.uploadDocument command registered');
+
+    console.log('✅ All document processing commands registered');
+
+    // Semantic Search Commands (Week 3.2)
+    console.log('🔧 Registering semantic search commands...');
+
+    // Oropendola: Index Current File
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.indexCurrentFile', async () => {
+            try {
+                const { getInstance } = require('./src/vector/SemanticSearchProvider');
+                const searchProvider = getInstance();
+                await searchProvider.indexCurrentFile();
+            } catch (error) {
+                console.error('❌ Index file error:', error);
+                vscode.window.showErrorMessage(`Index file failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.indexCurrentFile command registered');
+
+    // Oropendola: Index Workspace
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.indexWorkspace', async () => {
+            try {
+                const { getInstance } = require('./src/vector/SemanticSearchProvider');
+                const searchProvider = getInstance();
+                await searchProvider.indexWorkspace();
+            } catch (error) {
+                console.error('❌ Index workspace error:', error);
+                vscode.window.showErrorMessage(`Index workspace failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.indexWorkspace command registered');
+
+    // Oropendola: Semantic Search
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.semanticSearch', async () => {
+            try {
+                const query = await vscode.window.showInputBox({
+                    prompt: 'Enter your search query',
+                    placeHolder: 'e.g., "function that handles authentication"'
+                });
+
+                if (!query) {
+                    return;
+                }
+
+                const { getInstance } = require('./src/vector/SemanticSearchProvider');
+                const searchProvider = getInstance();
+
+                const { codeContext } = await searchProvider.searchContext(query, {
+                    includeCode: true,
+                    includeMemories: false,
+                    maxResults: 10
+                });
+
+                if (codeContext.length === 0) {
+                    vscode.window.showInformationMessage('No results found. Try indexing your workspace first.');
+                    return;
+                }
+
+                // Show results in quick pick
+                const items = codeContext.map(result => ({
+                    label: result.filePath ? `$(file) ${result.filePath}` : '$(code) Code snippet',
+                    description: `Similarity: ${(result.similarity * 100).toFixed(1)}%`,
+                    detail: result.content.substring(0, 100) + '...',
+                    result
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: `Found ${codeContext.length} results`,
+                    matchOnDescription: true,
+                    matchOnDetail: true
+                });
+
+                if (selected && selected.result.filePath) {
+                    // Open file at location
+                    const uri = vscode.Uri.file(selected.result.filePath);
+                    const document = await vscode.workspace.openTextDocument(uri);
+                    const editor = await vscode.window.showTextDocument(document);
+
+                    if (selected.result.lineNumber) {
+                        const position = new vscode.Position(selected.result.lineNumber - 1, 0);
+                        editor.selection = new vscode.Selection(position, position);
+                        editor.revealRange(new vscode.Range(position, position));
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Semantic search error:', error);
+                vscode.window.showErrorMessage(`Semantic search failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.semanticSearch command registered');
+
+    // Oropendola: Show Vector Stats
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showVectorStats', async () => {
+            try {
+                const { getInstance } = require('./src/vector/SemanticSearchProvider');
+                const searchProvider = getInstance();
+                const stats = await searchProvider.getStats();
+
+                const message = `Vector Database Statistics:
+
+Total Vectors: ${stats.totalVectors}
+Total Memories: ${stats.totalMemories}
+Vectors by Type: ${JSON.stringify(stats.vectorsByType, null, 2)}
+Avg Embedding Time: ${stats.averageEmbeddingTime}ms
+Last Indexed: ${stats.lastIndexed || 'Never'}`;
+
+                vscode.window.showInformationMessage(message, { modal: true });
+            } catch (error) {
+                console.error('❌ Vector stats error:', error);
+                vscode.window.showErrorMessage(`Failed to get stats: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.showVectorStats command registered');
+
+    console.log('✅ All semantic search commands registered');
+
+    // ========================================================================
+    // TERMINAL COMMANDS (Week 7)
+    // ========================================================================
+    console.log('🔧 Registering enhanced terminal commands...');
+
+    // Oropendola: Terminal AI Suggest Command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.terminalSuggestCommand', async () => {
+            try {
+                const { getInstance } = require('./src/terminal/TerminalAIAssistant');
+                const aiAssistant = getInstance();
+                const command = await aiAssistant.naturalLanguageCommand();
+
+                if (command) {
+                    // Send to active terminal
+                    const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Oropendola');
+                    terminal.show();
+                    terminal.sendText(command, false); // Don't execute, let user review
+                }
+            } catch (error) {
+                console.error('❌ Terminal suggest error:', error);
+                vscode.window.showErrorMessage(`Terminal suggest failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.terminalSuggestCommand registered');
+
+    // Oropendola: Terminal Build Command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.terminalBuildCommand', async () => {
+            try {
+                const { getInstance } = require('./src/terminal/TerminalAIAssistant');
+                const aiAssistant = getInstance();
+                const command = await aiAssistant.buildCommand();
+
+                if (command) {
+                    const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Oropendola');
+                    terminal.show();
+                    terminal.sendText(command, false);
+                }
+            } catch (error) {
+                console.error('❌ Terminal build error:', error);
+                vscode.window.showErrorMessage(`Terminal build failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.terminalBuildCommand registered');
+
+    // Oropendola: Explain Terminal Command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.explainTerminalCommand', async () => {
+            try {
+                const command = await vscode.window.showInputBox({
+                    prompt: 'Enter command to explain',
+                    placeHolder: 'e.g., tar -xzvf archive.tar.gz'
+                });
+
+                if (!command) {
+                    return;
+                }
+
+                const { getInstance } = require('./src/terminal/TerminalAIAssistant');
+                const aiAssistant = getInstance();
+                await aiAssistant.showCommandExplanation(command);
+            } catch (error) {
+                console.error('❌ Explain command error:', error);
+                vscode.window.showErrorMessage(`Explain command failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.explainTerminalCommand registered');
+
+    // Oropendola: Terminal Command History
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.terminalHistory', async () => {
+            try {
+                const { getInstance } = require('./src/terminal/TerminalHistoryProvider');
+                const historyProvider = getInstance();
+                const history = await historyProvider.getHistory({ limit: 50 });
+
+                if (history.length === 0) {
+                    vscode.window.showInformationMessage('No command history available');
+                    return;
+                }
+
+                const items = history.map(cmd => ({
+                    label: cmd.command,
+                    description: cmd.exitCode === 0 ? '✅ Success' : `❌ Error (${cmd.exitCode})`,
+                    detail: `${cmd.shell} • ${cmd.cwd} • ${cmd.timestamp?.toLocaleString()}`,
+                    command: cmd
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: 'Select a command from history',
+                    matchOnDescription: true,
+                    matchOnDetail: true
+                });
+
+                if (selected) {
+                    const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Oropendola');
+                    terminal.show();
+                    terminal.sendText(selected.command.command, false);
+                }
+            } catch (error) {
+                console.error('❌ Terminal history error:', error);
+                vscode.window.showErrorMessage(`Terminal history failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.terminalHistory registered');
+
+    // Oropendola: Terminal Clear History
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.terminalClearHistory', async () => {
+            try {
+                const confirm = await vscode.window.showWarningMessage(
+                    'Are you sure you want to clear command history?',
+                    { modal: true },
+                    'Clear Local Only',
+                    'Clear Cloud History',
+                    'Cancel'
+                );
+
+                if (!confirm || confirm === 'Cancel') {
+                    return;
+                }
+
+                const { getInstance } = require('./src/terminal/TerminalHistoryProvider');
+                const historyProvider = getInstance();
+
+                if (confirm === 'Clear Local Only') {
+                    historyProvider.clearLocalHistory();
+                    vscode.window.showInformationMessage('Local command history cleared');
+                } else {
+                    const count = await historyProvider.clearCloudHistory();
+                    vscode.window.showInformationMessage(`Cleared ${count} commands from cloud history`);
+                }
+            } catch (error) {
+                console.error('❌ Clear history error:', error);
+                vscode.window.showErrorMessage(`Clear history failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.terminalClearHistory registered');
+
+    // Oropendola: Terminal Statistics
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.terminalStatistics', async () => {
+            try {
+                const { getInstance } = require('./src/terminal/TerminalHistoryProvider');
+                const historyProvider = getInstance();
+                const stats = historyProvider.getStatistics();
+
+                const message = `Terminal Statistics:
+
+Total Commands: ${stats.totalCommands}
+Successful: ${stats.successfulCommands}
+Failed: ${stats.failedCommands}
+Unique Commands: ${stats.uniqueCommands}
+Most Used: ${stats.mostUsedCommand || 'N/A'}
+Avg Duration: ${stats.averageDuration ? stats.averageDuration.toFixed(0) + 'ms' : 'N/A'}`;
+
+                vscode.window.showInformationMessage(message, { modal: true });
+            } catch (error) {
+                console.error('❌ Terminal stats error:', error);
+                vscode.window.showErrorMessage(`Terminal stats failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.terminalStatistics registered');
+
+    // Oropendola: Export Terminal History
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.terminalExportHistory', async () => {
+            try {
+                const format = await vscode.window.showQuickPick(['JSON', 'CSV'], {
+                    placeHolder: 'Select export format'
+                });
+
+                if (!format) {
+                    return;
+                }
+
+                const { getInstance } = require('./src/terminal/TerminalHistoryProvider');
+                const historyProvider = getInstance();
+                const data = historyProvider.exportHistory({ format: format.toLowerCase() });
+
+                // Save to file
+                const uri = await vscode.window.showSaveDialog({
+                    filters: {
+                        [format]: [format.toLowerCase()]
+                    },
+                    defaultUri: vscode.Uri.file(`terminal-history.${format.toLowerCase()}`)
+                });
+
+                if (uri) {
+                    const fs = require('fs');
+                    fs.writeFileSync(uri.fsPath, data);
+                    vscode.window.showInformationMessage(`History exported to ${uri.fsPath}`);
+                }
+            } catch (error) {
+                console.error('❌ Export history error:', error);
+                vscode.window.showErrorMessage(`Export failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.terminalExportHistory registered');
+
+    console.log('✅ All enhanced terminal commands registered');
+
+    // ========================================================================
+    // MARKETPLACE COMMANDS (Week 8 - Phase 1)
+    // ========================================================================
+    console.log('🔧 Registering marketplace commands...');
+
+    // Oropendola: Search Extensions
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.searchExtensions', async () => {
+            try {
+                const query = await vscode.window.showInputBox({
+                    prompt: 'Search VS Code Marketplace',
+                    placeHolder: 'e.g., python, theme, snippets'
+                });
+
+                if (!query) {
+                    return;
+                }
+
+                const { getInstance: getMarketplaceClient } = require('./src/marketplace/MarketplaceClient');
+                const client = getMarketplaceClient();
+
+                const result = await client.searchExtensions({ query, pageSize: 20 });
+
+                if (result.extensions.length === 0) {
+                    vscode.window.showInformationMessage('No extensions found');
+                    return;
+                }
+
+                // Show results in Quick Pick
+                const items = result.extensions.map(ext => ({
+                    label: `$(extensions) ${ext.displayName}`,
+                    description: `${ext.publisher} • ${ext.installs.toLocaleString()} installs • ⭐ ${ext.rating.toFixed(1)}`,
+                    detail: ext.shortDescription,
+                    extension: ext
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: `Found ${result.total.toLocaleString()} extensions`,
+                    matchOnDescription: true,
+                    matchOnDetail: true
+                });
+
+                if (selected) {
+                    // Show extension details and install option
+                    const action = await vscode.window.showInformationMessage(
+                        `${selected.extension.displayName}\n\n${selected.extension.description}\n\nVersion: ${selected.extension.version}\nInstalls: ${selected.extension.installs.toLocaleString()}`,
+                        { modal: true },
+                        'Install',
+                        'View in Marketplace'
+                    );
+
+                    if (action === 'Install') {
+                        const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+                        const pluginManager = getPluginManager();
+                        const installResult = await pluginManager.installPlugin(selected.extension.extensionId);
+
+                        if (installResult.success) {
+                            vscode.window.showInformationMessage(installResult.message || 'Extension installed successfully');
+                        } else {
+                            vscode.window.showErrorMessage(installResult.message || 'Installation failed');
+                        }
+                    } else if (action === 'View in Marketplace') {
+                        vscode.env.openExternal(vscode.Uri.parse(`https://marketplace.visualstudio.com/items?itemName=${selected.extension.extensionId}`));
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Search extensions error:', error);
+                vscode.window.showErrorMessage(`Search failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.searchExtensions registered');
+
+    // Oropendola: Browse Featured Extensions
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.browseFeatured', async () => {
+            try {
+                const { getInstance: getMarketplaceClient } = require('./src/marketplace/MarketplaceClient');
+                const client = getMarketplaceClient();
+
+                const featured = await client.getFeatured();
+
+                if (featured.length === 0) {
+                    vscode.window.showInformationMessage('No featured extensions available');
+                    return;
+                }
+
+                const items = featured.map(ext => ({
+                    label: `$(star-full) ${ext.displayName}`,
+                    description: `${ext.publisher} • ${ext.installs.toLocaleString()} installs`,
+                    detail: ext.shortDescription,
+                    extension: ext
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: 'Featured Extensions',
+                    matchOnDescription: true,
+                    matchOnDetail: true
+                });
+
+                if (selected) {
+                    const action = await vscode.window.showInformationMessage(
+                        `${selected.extension.displayName}\n\n${selected.extension.description}`,
+                        { modal: true },
+                        'Install',
+                        'View in Marketplace'
+                    );
+
+                    if (action === 'Install') {
+                        const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+                        const pluginManager = getPluginManager();
+                        await pluginManager.installPlugin(selected.extension.extensionId);
+                    } else if (action === 'View in Marketplace') {
+                        vscode.env.openExternal(vscode.Uri.parse(`https://marketplace.visualstudio.com/items?itemName=${selected.extension.extensionId}`));
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Browse featured error:', error);
+                vscode.window.showErrorMessage(`Browse failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.browseFeatured registered');
+
+    // Oropendola: View Installed Plugins
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.viewInstalledPlugins', async () => {
+            try {
+                const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+                const pluginManager = getPluginManager();
+
+                const installed = pluginManager.getInstalledPlugins();
+
+                if (installed.length === 0) {
+                    vscode.window.showInformationMessage('No plugins installed');
+                    return;
+                }
+
+                const items = installed.map(plugin => ({
+                    label: plugin.enabled ? `$(check) ${plugin.displayName}` : `$(circle-outline) ${plugin.displayName}`,
+                    description: `v${plugin.version} • ${plugin.publisher}`,
+                    detail: plugin.enabled ? 'Enabled' : 'Disabled',
+                    plugin
+                }));
+
+                const selected = await vscode.window.showQuickPick(items, {
+                    placeHolder: `${installed.length} plugins installed`,
+                    matchOnDescription: true
+                });
+
+                if (selected) {
+                    const actions = selected.plugin.enabled
+                        ? ['Disable', 'Uninstall', 'Open']
+                        : ['Enable', 'Uninstall', 'Open'];
+
+                    const action = await vscode.window.showQuickPick(actions, {
+                        placeHolder: `What do you want to do with ${selected.plugin.displayName}?`
+                    });
+
+                    if (action === 'Enable') {
+                        await pluginManager.enablePlugin(selected.plugin.id);
+                        vscode.window.showInformationMessage(`Enabled ${selected.plugin.displayName}`);
+                    } else if (action === 'Disable') {
+                        await pluginManager.disablePlugin(selected.plugin.id);
+                        vscode.window.showInformationMessage(`Disabled ${selected.plugin.displayName}`);
+                    } else if (action === 'Uninstall') {
+                        await pluginManager.uninstallPlugin(selected.plugin.id);
+                    } else if (action === 'Open') {
+                        await pluginManager.openExtension(selected.plugin.id);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ View installed error:', error);
+                vscode.window.showErrorMessage(`View installed failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.viewInstalledPlugins registered');
+
+    // Oropendola: Install Extension by ID
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.installExtension', async () => {
+            try {
+                const extensionId = await vscode.window.showInputBox({
+                    prompt: 'Enter extension ID (publisher.name)',
+                    placeHolder: 'e.g., ms-python.python',
+                    validateInput: (value) => {
+                        if (!value || !value.includes('.')) {
+                            return 'Invalid format. Use publisher.name';
+                        }
+                        return null;
+                    }
+                });
+
+                if (!extensionId) {
+                    return;
+                }
+
+                const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+                const pluginManager = getPluginManager();
+
+                const result = await pluginManager.installPlugin(extensionId);
+
+                if (result.success) {
+                    vscode.window.showInformationMessage(result.message || 'Extension installed');
+                } else {
+                    vscode.window.showErrorMessage(result.message || 'Installation failed');
+                }
+            } catch (error) {
+                console.error('❌ Install extension error:', error);
+                vscode.window.showErrorMessage(`Install failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.installExtension registered');
+
+    // Oropendola: Plugin Statistics
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.pluginStatistics', async () => {
+            try {
+                const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+                const pluginManager = getPluginManager();
+
+                const stats = pluginManager.getPluginStats();
+
+                const message = `Plugin Statistics:
+
+Total Installed: ${stats.total}
+Enabled: ${stats.enabled}
+Disabled: ${stats.disabled}`;
+
+                vscode.window.showInformationMessage(message, { modal: true });
+            } catch (error) {
+                console.error('❌ Plugin stats error:', error);
+                vscode.window.showErrorMessage(`Stats failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.pluginStatistics registered');
+
+    // Oropendola: Export Plugin List
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.exportPluginList', async () => {
+            try {
+                const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+                const pluginManager = getPluginManager();
+
+                const data = pluginManager.exportPluginList();
+
+                const uri = await vscode.window.showSaveDialog({
+                    filters: { 'JSON': ['json'] },
+                    defaultUri: vscode.Uri.file('plugins.json')
+                });
+
+                if (uri) {
+                    const fs = require('fs');
+                    fs.writeFileSync(uri.fsPath, data);
+                    vscode.window.showInformationMessage(`Plugin list exported to ${uri.fsPath}`);
+                }
+            } catch (error) {
+                console.error('❌ Export error:', error);
+                vscode.window.showErrorMessage(`Export failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.exportPluginList registered');
+
+    // Oropendola: Import Plugin List
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.importPluginList', async () => {
+            try {
+                const uri = await vscode.window.showOpenDialog({
+                    filters: { 'JSON': ['json'] },
+                    canSelectMany: false
+                });
+
+                if (!uri || uri.length === 0) {
+                    return;
+                }
+
+                const fs = require('fs');
+                const data = fs.readFileSync(uri[0].fsPath, 'utf8');
+
+                const { getInstance: getPluginManager } = require('./src/marketplace/PluginManager');
+                const pluginManager = getPluginManager();
+
+                const result = await pluginManager.importPluginList(data);
+
+                const message = `Import Results:
+Installed: ${result.installed}
+Failed: ${result.failed}
+${result.errors.length > 0 ? '\nErrors:\n' + result.errors.join('\n') : ''}`;
+
+                vscode.window.showInformationMessage(message, { modal: true });
+            } catch (error) {
+                console.error('❌ Import error:', error);
+                vscode.window.showErrorMessage(`Import failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.importPluginList registered');
+
+    console.log('✅ All marketplace commands registered');
+}
+
+/**
+ * Register browser automation commands
+ * Week 6: Browser Automation
+ */
+function registerBrowserAutomationCommands(context) {
+    console.log('🌐 Registering browser automation commands...');
+
+    // Command: Create Browser Session
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.browserCreateSession', async () => {
+            try {
+                const BrowserAutomationClient = require('./src/browser/BrowserAutomationClient');
+                const client = BrowserAutomationClient.getInstance();
+
+                // Prompt for session name (optional)
+                const sessionName = await vscode.window.showInputBox({
+                    prompt: 'Enter session name (optional)',
+                    placeHolder: 'My Browser Session'
+                });
+
+                // Create session
+                const result = await client.createSession({
+                    sessionName: sessionName || undefined,
+                    headless: true,
+                    viewportWidth: 1920,
+                    viewportHeight: 1080
+                });
+
+                if (result.success && result.sessionId) {
+                    vscode.window.showInformationMessage(
+                        `✅ Browser session created: ${result.sessionId}`
+                    );
+                } else {
+                    vscode.window.showErrorMessage(
+                        `❌ Failed to create session: ${result.message || 'Unknown error'}`
+                    );
+                }
+            } catch (error) {
+                console.error('❌ Create session error:', error);
+                vscode.window.showErrorMessage(`Failed to create browser session: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.browserCreateSession registered');
+
+    // Command: Navigate to URL
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.browserNavigate', async () => {
+            try {
+                const BrowserAutomationClient = require('./src/browser/BrowserAutomationClient');
+                const client = BrowserAutomationClient.getInstance();
+
+                // Get active sessions
+                const sessionsResult = await client.listSessions({ status: 'active' });
+                if (!sessionsResult.success || !sessionsResult.sessions || sessionsResult.sessions.length === 0) {
+                    const create = await vscode.window.showInformationMessage(
+                        'No active browser sessions found. Create one?',
+                        'Create Session',
+                        'Cancel'
+                    );
+                    if (create === 'Create Session') {
+                        await vscode.commands.executeCommand('oropendola.browserCreateSession');
+                    }
+                    return;
+                }
+
+                // Select session
+                const sessionItems = sessionsResult.sessions.map(s => ({
+                    label: s.sessionName || s.id,
+                    description: s.currentUrl || 'No URL',
+                    sessionId: s.id
+                }));
+
+                const selectedSession = await vscode.window.showQuickPick(sessionItems, {
+                    placeHolder: 'Select browser session'
+                });
+
+                if (!selectedSession) {
+                    return;
+                }
+
+                // Prompt for URL
+                const url = await vscode.window.showInputBox({
+                    prompt: 'Enter URL to navigate to',
+                    placeHolder: 'https://example.com',
+                    validateInput: (value) => {
+                        if (!value || value.trim().length === 0) {
+                            return 'URL is required';
+                        }
+                        if (!value.startsWith('http://') && !value.startsWith('https://')) {
+                            return 'URL must start with http:// or https://';
+                        }
+                        return null;
+                    }
+                });
+
+                if (!url) {
+                    return;
+                }
+
+                // Navigate
+                const result = await client.navigate(selectedSession.sessionId, url, {
+                    waitUntil: 'load',
+                    timeout: 30000
+                });
+
+                if (result.success) {
+                    vscode.window.showInformationMessage(
+                        `✅ Navigated to: ${result.title || result.url}`
+                    );
+                } else {
+                    vscode.window.showErrorMessage(
+                        `❌ Navigation failed: ${result.message || 'Unknown error'}`
+                    );
+                }
+            } catch (error) {
+                console.error('❌ Navigate error:', error);
+                vscode.window.showErrorMessage(`Navigation failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.browserNavigate registered');
+
+    // Command: Take Screenshot
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.browserScreenshot', async () => {
+            try {
+                const BrowserAutomationClient = require('./src/browser/BrowserAutomationClient');
+                const client = BrowserAutomationClient.getInstance();
+
+                // Get active sessions
+                const sessionsResult = await client.listSessions({ status: 'active' });
+                if (!sessionsResult.success || !sessionsResult.sessions || sessionsResult.sessions.length === 0) {
+                    vscode.window.showWarningMessage('No active browser sessions found.');
+                    return;
+                }
+
+                // Select session
+                const sessionItems = sessionsResult.sessions.map(s => ({
+                    label: s.sessionName || s.id,
+                    description: s.currentUrl || 'No URL',
+                    sessionId: s.id
+                }));
+
+                const selectedSession = await vscode.window.showQuickPick(sessionItems, {
+                    placeHolder: 'Select browser session for screenshot'
+                });
+
+                if (!selectedSession) {
+                    return;
+                }
+
+                // Screenshot options
+                const fullPage = await vscode.window.showQuickPick(
+                    [
+                        { label: 'Full Page', value: true },
+                        { label: 'Viewport Only', value: false }
+                    ],
+                    { placeHolder: 'Screenshot type' }
+                );
+
+                if (!fullPage) {
+                    return;
+                }
+
+                // Take screenshot
+                const result = await client.screenshot(selectedSession.sessionId, {
+                    fullPage: fullPage.value,
+                    format: 'png'
+                });
+
+                if (result.success && result.filePath) {
+                    const size = (result.fileSize / 1024).toFixed(2);
+                    vscode.window.showInformationMessage(
+                        `✅ Screenshot saved: ${result.filePath} (${size} KB)`
+                    );
+                } else {
+                    vscode.window.showErrorMessage(
+                        `❌ Screenshot failed: ${result.message || 'Unknown error'}`
+                    );
+                }
+            } catch (error) {
+                console.error('❌ Screenshot error:', error);
+                vscode.window.showErrorMessage(`Screenshot failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.browserScreenshot registered');
+
+    // Command: Generate PDF
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.browserGeneratePdf', async () => {
+            try {
+                const BrowserAutomationClient = require('./src/browser/BrowserAutomationClient');
+                const client = BrowserAutomationClient.getInstance();
+
+                // Get active sessions
+                const sessionsResult = await client.listSessions({ status: 'active' });
+                if (!sessionsResult.success || !sessionsResult.sessions || sessionsResult.sessions.length === 0) {
+                    vscode.window.showWarningMessage('No active browser sessions found.');
+                    return;
+                }
+
+                // Select session
+                const sessionItems = sessionsResult.sessions.map(s => ({
+                    label: s.sessionName || s.id,
+                    description: s.currentUrl || 'No URL',
+                    sessionId: s.id
+                }));
+
+                const selectedSession = await vscode.window.showQuickPick(sessionItems, {
+                    placeHolder: 'Select browser session for PDF'
+                });
+
+                if (!selectedSession) {
+                    return;
+                }
+
+                // PDF format
+                const format = await vscode.window.showQuickPick(
+                    ['A4', 'Letter', 'Legal', 'Tabloid'],
+                    { placeHolder: 'Select PDF format' }
+                );
+
+                if (!format) {
+                    return;
+                }
+
+                // Generate PDF
+                const result = await client.generatePdf(selectedSession.sessionId, {
+                    format: format,
+                    printBackground: true
+                });
+
+                if (result.success && result.filePath) {
+                    const size = (result.fileSize / 1024).toFixed(2);
+                    vscode.window.showInformationMessage(
+                        `✅ PDF saved: ${result.filePath} (${size} KB)`
+                    );
+                } else {
+                    vscode.window.showErrorMessage(
+                        `❌ PDF generation failed: ${result.message || 'Unknown error'}`
+                    );
+                }
+            } catch (error) {
+                console.error('❌ PDF generation error:', error);
+                vscode.window.showErrorMessage(`PDF generation failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.browserGeneratePdf registered');
+
+    // Command: List Browser Sessions
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.browserListSessions', async () => {
+            try {
+                const BrowserAutomationClient = require('./src/browser/BrowserAutomationClient');
+                const client = BrowserAutomationClient.getInstance();
+
+                // Get all sessions
+                const result = await client.listSessions({ includeInactive: true });
+
+                if (!result.success) {
+                    vscode.window.showErrorMessage(
+                        `❌ Failed to list sessions: ${result.message || 'Unknown error'}`
+                    );
+                    return;
+                }
+
+                if (!result.sessions || result.sessions.length === 0) {
+                    vscode.window.showInformationMessage('No browser sessions found.');
+                    return;
+                }
+
+                // Show sessions with actions
+                const sessionItems = result.sessions.map(s => ({
+                    label: `${s.status === 'active' ? '🟢' : '🔴'} ${s.sessionName || s.id}`,
+                    description: s.currentUrl || 'No URL',
+                    detail: `Status: ${s.status} | Last activity: ${new Date(s.lastActivity).toLocaleString()}`,
+                    sessionId: s.id,
+                    status: s.status
+                }));
+
+                const selected = await vscode.window.showQuickPick(sessionItems, {
+                    placeHolder: 'Browser Sessions (select to view details or close)'
+                });
+
+                if (!selected) {
+                    return;
+                }
+
+                // Show actions for selected session
+                const actions = [];
+                if (selected.status === 'active') {
+                    actions.push('Navigate', 'Screenshot', 'Generate PDF', 'Close Session');
+                }
+
+                const action = await vscode.window.showQuickPick(actions, {
+                    placeHolder: `Actions for ${selected.label}`
+                });
+
+                if (!action) {
+                    return;
+                }
+
+                // Execute action
+                switch (action) {
+                    case 'Navigate':
+                        await vscode.commands.executeCommand('oropendola.browserNavigate');
+                        break;
+                    case 'Screenshot':
+                        await vscode.commands.executeCommand('oropendola.browserScreenshot');
+                        break;
+                    case 'Generate PDF':
+                        await vscode.commands.executeCommand('oropendola.browserGeneratePdf');
+                        break;
+                    case 'Close Session':
+                        const closeResult = await client.closeSession(selected.sessionId);
+                        if (closeResult.success) {
+                            vscode.window.showInformationMessage('✅ Session closed');
+                        } else {
+                            vscode.window.showErrorMessage(`❌ ${closeResult.message}`);
+                        }
+                        break;
+                }
+            } catch (error) {
+                console.error('❌ List sessions error:', error);
+                vscode.window.showErrorMessage(`Failed to list sessions: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.browserListSessions registered');
+
+    // Command: Close Browser Session
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.browserCloseSession', async () => {
+            try {
+                const BrowserAutomationClient = require('./src/browser/BrowserAutomationClient');
+                const client = BrowserAutomationClient.getInstance();
+
+                // Get active sessions
+                const sessionsResult = await client.listSessions({ status: 'active' });
+                if (!sessionsResult.success || !sessionsResult.sessions || sessionsResult.sessions.length === 0) {
+                    vscode.window.showInformationMessage('No active browser sessions to close.');
+                    return;
+                }
+
+                // Select session to close
+                const sessionItems = sessionsResult.sessions.map(s => ({
+                    label: s.sessionName || s.id,
+                    description: s.currentUrl || 'No URL',
+                    detail: `Last activity: ${new Date(s.lastActivity).toLocaleString()}`,
+                    sessionId: s.id
+                }));
+
+                const selected = await vscode.window.showQuickPick(sessionItems, {
+                    placeHolder: 'Select session to close'
+                });
+
+                if (!selected) {
+                    return;
+                }
+
+                // Confirm closure
+                const confirm = await vscode.window.showWarningMessage(
+                    `Close browser session: ${selected.label}?`,
+                    { modal: true },
+                    'Close'
+                );
+
+                if (confirm !== 'Close') {
+                    return;
+                }
+
+                // Close session
+                const result = await client.closeSession(selected.sessionId);
+
+                if (result.success) {
+                    vscode.window.showInformationMessage('✅ Browser session closed');
+                } else {
+                    vscode.window.showErrorMessage(
+                        `❌ Failed to close session: ${result.message || 'Unknown error'}`
+                    );
+                }
+            } catch (error) {
+                console.error('❌ Close session error:', error);
+                vscode.window.showErrorMessage(`Failed to close session: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.browserCloseSession registered');
+
+    console.log('✅ All browser automation commands registered');
+}
+
+/**
+ * Register code actions commands
+ * Week 11: Advanced Code Actions - Phase 1
+ */
+function registerCodeActionsCommands(context) {
+    console.log('🔍 Registering code actions commands...');
+
+    // Command: Analyze Current File
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.analyzeCurrentFile', async () => {
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) {
+                    vscode.window.showWarningMessage('No file is currently open.');
+                    return;
+                }
+
+                const document = editor.document;
+                const code = document.getText();
+                const language = document.languageId;
+                const filePath = document.uri.fsPath;
+
+                // Show progress
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Analyzing code...',
+                    cancellable: false
+                }, async (progress) => {
+                    const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                    const client = getInstance();
+
+                    progress.report({ increment: 30, message: 'Scanning for issues...' });
+
+                    const result = await client.analyzeCode(code, language, {
+                        filePath,
+                        analysisTypes: ['quality', 'security', 'performance']
+                    });
+
+                    progress.report({ increment: 70, message: 'Analysis complete!' });
+
+                    // Show results
+                    const stats = client.getIssueStats(result.issues);
+                    const criticalCount = stats.critical + stats.high;
+
+                    if (result.issues.length === 0) {
+                        vscode.window.showInformationMessage('✅ No issues found! Code looks good.');
+                    } else {
+                        const message = `Found ${result.issues.length} issue(s): ${stats.critical} critical, ${stats.high} high, ${stats.medium} medium`;
+
+                        const action = await vscode.window.showWarningMessage(
+                            message,
+                            'View Details',
+                            'Dismiss'
+                        );
+
+                        if (action === 'View Details') {
+                            // Show detailed issues
+                            const sortedIssues = client.sortIssuesBySeverity(result.issues);
+                            const details = sortedIssues.map((issue, index) =>
+                                `${index + 1}. [${issue.severity.toUpperCase()}] ${issue.title}\n   Line ${issue.line_start}: ${issue.description}`
+                            ).join('\n\n');
+
+                            const outputChannel = vscode.window.createOutputChannel('Oropendola Code Analysis');
+                            outputChannel.clear();
+                            outputChannel.appendLine('=== CODE ANALYSIS RESULTS ===\n');
+                            outputChannel.appendLine(`File: ${filePath}`);
+                            outputChannel.appendLine(`Language: ${language}`);
+                            outputChannel.appendLine(`Total Issues: ${result.issues.length}\n`);
+                            outputChannel.appendLine(details);
+                            outputChannel.show();
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Code analysis error:', error);
+                vscode.window.showErrorMessage(`Code analysis failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.analyzeCurrentFile registered');
+
+    // Command: Scan for Security Issues
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.scanSecurity', async () => {
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) {
+                    vscode.window.showWarningMessage('No file is currently open.');
+                    return;
+                }
+
+                const document = editor.document;
+                const code = document.getText();
+                const language = document.languageId;
+
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Scanning for security vulnerabilities...',
+                    cancellable: false
+                }, async (progress) => {
+                    const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                    const client = getInstance();
+
+                    const result = await client.scanSecurity(code, language);
+
+                    if (result.vulnerabilities.length === 0) {
+                        vscode.window.showInformationMessage('✅ No security vulnerabilities detected.');
+                    } else {
+                        const criticalVulns = result.vulnerabilities.filter(v => v.severity === 'critical' || v.severity === 'high');
+
+                        vscode.window.showWarningMessage(
+                            `⚠️ Found ${result.vulnerabilities.length} security issue(s), ${criticalVulns.length} critical/high`,
+                            'View Details'
+                        ).then(action => {
+                            if (action === 'View Details') {
+                                const details = result.vulnerabilities.map((vuln, index) => {
+                                    let info = `${index + 1}. [${vuln.severity.toUpperCase()}] ${vuln.title}`;
+                                    if (vuln.cve_id) info += ` (${vuln.cve_id})`;
+                                    if (vuln.cvss_score) info += ` - CVSS: ${vuln.cvss_score}`;
+                                    info += `\n   ${vuln.description}`;
+                                    return info;
+                                }).join('\n\n');
+
+                                const outputChannel = vscode.window.createOutputChannel('Oropendola Security Scan');
+                                outputChannel.clear();
+                                outputChannel.appendLine('=== SECURITY SCAN RESULTS ===\n');
+                                outputChannel.appendLine(`Total Vulnerabilities: ${result.vulnerabilities.length}\n`);
+                                outputChannel.appendLine(details);
+                                outputChannel.show();
+                            }
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Security scan error:', error);
+                vscode.window.showErrorMessage(`Security scan failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.scanSecurity registered');
+
+    // Command: Get Refactoring Suggestions
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.suggestRefactoring', async () => {
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) {
+                    vscode.window.showWarningMessage('No file is currently open.');
+                    return;
+                }
+
+                const selection = editor.selection;
+                const code = selection.isEmpty ? editor.document.getText() : editor.document.getText(selection);
+                const language = editor.document.languageId;
+
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Generating refactoring suggestions...',
+                    cancellable: false
+                }, async (progress) => {
+                    const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                    const client = getInstance();
+
+                    const result = await client.suggestRefactorings(code, language);
+
+                    if (result.suggestions.length === 0) {
+                        vscode.window.showInformationMessage('No refactoring suggestions available.');
+                    } else {
+                        // Show suggestions in Quick Pick
+                        const items = result.suggestions.map(s => ({
+                            label: s.title,
+                            description: `Confidence: ${(s.confidence * 100).toFixed(0)}%`,
+                            detail: s.description,
+                            suggestion: s
+                        }));
+
+                        const selected = await vscode.window.showQuickPick(items, {
+                            placeHolder: 'Select a refactoring suggestion to view details'
+                        });
+
+                        if (selected) {
+                            const outputChannel = vscode.window.createOutputChannel('Oropendola Refactoring');
+                            outputChannel.clear();
+                            outputChannel.appendLine('=== REFACTORING SUGGESTION ===\n');
+                            outputChannel.appendLine(`Title: ${selected.suggestion.title}`);
+                            outputChannel.appendLine(`Type: ${selected.suggestion.refactor_type}`);
+                            outputChannel.appendLine(`Confidence: ${(selected.suggestion.confidence * 100).toFixed(0)}%\n`);
+                            outputChannel.appendLine(`Description:\n${selected.suggestion.description}\n`);
+                            outputChannel.appendLine(`Reasoning:\n${selected.suggestion.reasoning}\n`);
+                            outputChannel.appendLine('=== ORIGINAL CODE ===');
+                            outputChannel.appendLine(selected.suggestion.original_code);
+                            outputChannel.appendLine('\n=== REFACTORED CODE ===');
+                            outputChannel.appendLine(selected.suggestion.refactored_code);
+                            outputChannel.show();
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Refactoring suggestion error:', error);
+                vscode.window.showErrorMessage(`Refactoring suggestion failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.suggestRefactoring registered');
+
+    // Command: Explain Code
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.explainCode', async () => {
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) {
+                    vscode.window.showWarningMessage('No file is currently open.');
+                    return;
+                }
+
+                const selection = editor.selection;
+                if (selection.isEmpty) {
+                    vscode.window.showWarningMessage('Please select code to explain.');
+                    return;
+                }
+
+                const code = editor.document.getText(selection);
+                const language = editor.document.languageId;
+
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Generating code explanation...',
+                    cancellable: false
+                }, async (progress) => {
+                    const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                    const client = getInstance();
+
+                    const result = await client.explainCode(code, language);
+
+                    const outputChannel = vscode.window.createOutputChannel('Oropendola Code Explanation');
+                    outputChannel.clear();
+                    outputChannel.appendLine('=== CODE EXPLANATION ===\n');
+                    outputChannel.appendLine(`Summary:\n${result.explanation.summary}\n`);
+                    outputChannel.appendLine(`Purpose:\n${result.explanation.purpose}\n`);
+                    outputChannel.appendLine(`Complexity: ${result.explanation.complexity}\n`);
+
+                    if (result.explanation.breakdown && result.explanation.breakdown.length > 0) {
+                        outputChannel.appendLine('=== DETAILED BREAKDOWN ===\n');
+                        result.explanation.breakdown.forEach((item, index) => {
+                            outputChannel.appendLine(`${index + 1}. Lines ${item.line_start}-${item.line_end}:`);
+                            outputChannel.appendLine(`   ${item.explanation}\n`);
+                        });
+                    }
+
+                    if (result.explanation.patterns_used && result.explanation.patterns_used.length > 0) {
+                        outputChannel.appendLine(`Patterns Used: ${result.explanation.patterns_used.join(', ')}\n`);
+                    }
+
+                    if (result.explanation.potential_issues && result.explanation.potential_issues.length > 0) {
+                        outputChannel.appendLine('⚠️ Potential Issues:');
+                        result.explanation.potential_issues.forEach(issue => {
+                            outputChannel.appendLine(`   - ${issue}`);
+                        });
+                        outputChannel.appendLine('');
+                    }
+
+                    if (result.explanation.recommendations && result.explanation.recommendations.length > 0) {
+                        outputChannel.appendLine('💡 Recommendations:');
+                        result.explanation.recommendations.forEach(rec => {
+                            outputChannel.appendLine(`   - ${rec}`);
+                        });
+                    }
+
+                    outputChannel.show();
+                });
+            } catch (error) {
+                console.error('❌ Code explanation error:', error);
+                vscode.window.showErrorMessage(`Code explanation failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.explainCode registered');
+
+    // Command: Scan Dependencies for Vulnerabilities
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.scanDependencies', async () => {
+            try {
+                // Find package files in workspace
+                const packageFiles = await vscode.workspace.findFiles(
+                    '{package.json,requirements.txt,Gemfile,pom.xml,build.gradle,go.mod,Cargo.toml}',
+                    '**/node_modules/**',
+                    10
+                );
+
+                if (packageFiles.length === 0) {
+                    vscode.window.showWarningMessage('No package files found in workspace.');
+                    return;
+                }
+
+                // Let user select file if multiple
+                let selectedFile;
+                if (packageFiles.length === 1) {
+                    selectedFile = packageFiles[0];
+                } else {
+                    const items = packageFiles.map(f => ({
+                        label: vscode.workspace.asRelativePath(f),
+                        file: f
+                    }));
+
+                    const selected = await vscode.window.showQuickPick(items, {
+                        placeHolder: 'Select package file to scan'
+                    });
+
+                    if (!selected) return;
+                    selectedFile = selected.file;
+                }
+
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Scanning dependencies for vulnerabilities...',
+                    cancellable: false
+                }, async (progress) => {
+                    const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                    const client = getInstance();
+
+                    const result = await client.scanDependencies(selectedFile.fsPath);
+
+                    if (result.vulnerable_packages.length === 0) {
+                        vscode.window.showInformationMessage('✅ No vulnerable dependencies found.');
+                    } else {
+                        vscode.window.showWarningMessage(
+                            `⚠️ Found ${result.vulnerable_packages.length} vulnerable package(s)`,
+                            'View Details'
+                        ).then(action => {
+                            if (action === 'View Details') {
+                                const outputChannel = vscode.window.createOutputChannel('Oropendola Dependency Scan');
+                                outputChannel.clear();
+                                outputChannel.appendLine('=== DEPENDENCY VULNERABILITY SCAN ===\n');
+                                outputChannel.appendLine(`File: ${vscode.workspace.asRelativePath(selectedFile)}`);
+                                outputChannel.appendLine(`Vulnerable Packages: ${result.vulnerable_packages.length}\n`);
+
+                                result.vulnerable_packages.forEach((pkg, index) => {
+                                    outputChannel.appendLine(`${index + 1}. ${pkg.package} @ ${pkg.version}`);
+                                    outputChannel.appendLine(`   Vulnerability: ${pkg.vulnerability.title}`);
+                                    if (pkg.vulnerability.cve_id) {
+                                        outputChannel.appendLine(`   CVE: ${pkg.vulnerability.cve_id}`);
+                                    }
+                                    if (pkg.vulnerability.cvss_score) {
+                                        outputChannel.appendLine(`   CVSS Score: ${pkg.vulnerability.cvss_score}`);
+                                    }
+                                    outputChannel.appendLine(`   Severity: ${pkg.vulnerability.severity.toUpperCase()}`);
+                                    if (pkg.vulnerability.fixed_in) {
+                                        outputChannel.appendLine(`   Fixed in: ${pkg.vulnerability.fixed_in}`);
+                                    }
+                                    outputChannel.appendLine('');
+                                });
+
+                                outputChannel.show();
+                            }
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Dependency scan error:', error);
+                vscode.window.showErrorMessage(`Dependency scan failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.scanDependencies registered');
+
+    // Command: Quick Code Check (Analyze Selection)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.quickCodeCheck', async () => {
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) {
+                    vscode.window.showWarningMessage('No file is currently open.');
+                    return;
+                }
+
+                const selection = editor.selection;
+                if (selection.isEmpty) {
+                    vscode.window.showInformationMessage('Please select code to check, or use "Analyze Current File" for the entire file.');
+                    return;
+                }
+
+                const code = editor.document.getText(selection);
+                const language = editor.document.languageId;
+
+                const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+                statusBarItem.text = '$(loading~spin) Checking code...';
+                statusBarItem.show();
+
+                try {
+                    const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                    const client = getInstance();
+
+                    const result = await client.analyzeCode(code, language, {
+                        analysisTypes: ['quality', 'security']
+                    });
+
+                    statusBarItem.dispose();
+
+                    const stats = client.getIssueStats(result.issues);
+
+                    if (result.issues.length === 0) {
+                        vscode.window.showInformationMessage('✅ No issues found in selection.');
+                    } else {
+                        const message = `Found ${result.issues.length} issue(s): ${stats.critical} critical, ${stats.high} high`;
+                        vscode.window.showWarningMessage(message);
+                    }
+                } finally {
+                    statusBarItem.dispose();
+                }
+            } catch (error) {
+                console.error('❌ Quick code check error:', error);
+                vscode.window.showErrorMessage(`Quick code check failed: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.quickCodeCheck registered');
+
+    // Command: View Code Analysis Statistics
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.codeAnalysisStats', async () => {
+            try {
+                const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                const client = getInstance();
+
+                const cacheStats = client.getCacheStats();
+
+                const message = `Code Analysis Cache:
+Cached Results: ${cacheStats.size}
+
+Tip: Cached analyses are reused for identical code, saving AI API costs and time!`;
+
+                vscode.window.showInformationMessage(message, { modal: true });
+            } catch (error) {
+                console.error('❌ Stats error:', error);
+                vscode.window.showErrorMessage(`Failed to get statistics: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.codeAnalysisStats registered');
+
+    // Command: Clear Code Analysis Cache
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.clearCodeAnalysisCache', async () => {
+            try {
+                const { getInstance } = require('./src/code-actions/CodeActionsClient');
+                const client = getInstance();
+
+                const confirm = await vscode.window.showWarningMessage(
+                    'Clear all cached code analysis results?',
+                    { modal: true },
+                    'Clear Cache'
+                );
+
+                if (confirm === 'Clear Cache') {
+                    client.clearCache();
+                    vscode.window.showInformationMessage('✅ Code analysis cache cleared.');
+                }
+            } catch (error) {
+                console.error('❌ Clear cache error:', error);
+                vscode.window.showErrorMessage(`Failed to clear cache: ${error.message}`);
+            }
+        })
+    );
+    console.log('✅ oropendola.clearCodeAnalysisCache registered');
+
+    console.log('✅ All code actions commands registered');
 }
 
 /**

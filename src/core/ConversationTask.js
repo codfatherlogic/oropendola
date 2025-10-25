@@ -105,6 +105,11 @@ class ConversationTask extends EventEmitter {
         this.detectedFramework = null;  // Store detected framework
         this.frameworkConfidence = 0;   // Store framework confidence
 
+        // v3.4.4: Conversation auto-condense (Roo-Code pattern)
+        // LOCKED to Oropendola AI API only
+        const ConversationCondenser = require('../services/condense/ConversationCondenser');
+        this.condenser = new ConversationCondenser(options.sessionCookies);
+
         // Initialize realtime connection if session cookies provided
         console.log('🔥 [ConversationTask] Checking realtime connection requirements...');
         console.log('🔥 [ConversationTask] Has sessionCookies:', !!options.sessionCookies);
@@ -244,13 +249,23 @@ class ConversationTask extends EventEmitter {
             );
 
             if (!hasSystemPrompt) {
-                console.log('📝 Adding progressive implementation system prompt with dynamic context');
+                console.log('📝 Adding modular system prompt with dynamic context');
 
                 // Get dynamic context from codebase analysis (async)
                 // 🔥 v3.2.6: Pass initialMessage for prompt-based framework detection
                 const dynamicContext = await this._getDynamicCodebaseContext(initialMessage);
 
-                const systemPrompt = `You are an intelligent AI coding assistant integrated into VS Code that works progressively and iteratively.
+                // 🔥 v3.4.4: Use modular prompt system (Roo-Code architecture)
+                const SystemPromptBuilder = require('../prompts/builders/SystemPromptBuilder');
+                const systemPrompt = SystemPromptBuilder.buildFull(dynamicContext);
+
+                // 🔥 DEBUG: Log modular prompt modules
+                const modules = SystemPromptBuilder.listModules();
+                console.log('📦 Prompt modules loaded:', modules.length, 'sections');
+                modules.forEach(m => console.log(`  - ${m.section} (priority ${m.priority}, ${m.size} chars)`));
+
+                /* OLD HARDCODED PROMPT - REPLACED WITH MODULAR SYSTEM
+                const systemPrompt = \`You are an intelligent AI coding assistant integrated into VS Code that works progressively and iteratively.
 
 **CRITICAL GUIDELINES - PROGRESSIVE IMPLEMENTATION:**
 
@@ -345,6 +360,47 @@ Let me know if you'd like me to proceed!"
 - Run commands: Use <run_command> tool
 - Search code: Use <search_files> tool
 - Read files: Use <read_file> tool
+
+**🔥 MANDATORY: SEARCH CODEBASE FIRST (Roo-Code Pattern)**
+
+BEFORE writing ANY code, you MUST search the codebase to understand existing patterns:
+
+1. **ALWAYS Search Before Coding:**
+   - Use Grep/Glob to find ALL relevant files and code
+   - Understand existing architecture, naming conventions, patterns
+   - Find similar implementations to maintain consistency
+   - Identify dependencies and imports used in the project
+
+2. **What to Search For:**
+   - Similar features/components already implemented
+   - Configuration files (package.json, tsconfig.json, etc.)
+   - Test files to understand testing patterns
+   - Import statements to see which libraries are used
+   - Naming conventions (camelCase, PascalCase, etc.)
+   - File structure and organization patterns
+
+3. **Search Examples:**
+   - "How are components structured?" → Grep for "class.*Component|function.*Component"
+   - "What testing library is used?" → Read package.json
+   - "How are API calls made?" → Grep for "fetch|axios|http"
+   - "What's the styling approach?" → Glob for "*.css|*.scss|*.styled.*"
+
+4. **NEVER Assume - ALWAYS Verify:**
+   ❌ WRONG: "I'll create a React component using styled-components"
+   ✅ CORRECT: "Let me search for existing components... [searches]... I see you use CSS modules, I'll follow that pattern"
+
+5. **Search-First Workflow:**
+   ```
+   User Request → Search Codebase → Understand Patterns → Plan Implementation → Write Code
+   ```
+
+6. **If You Skip Searching:**
+   - You might use wrong libraries (styled-components when project uses CSS modules)
+   - You might break naming conventions (camelCase when project uses snake_case)
+   - You might duplicate existing functionality
+   - You might introduce incompatible patterns
+
+**REMEMBER:** Searching takes 5 seconds. Fixing inconsistencies takes 5 hours. Always search first!
 
 **TOOL CALL FORMAT - CRITICAL:**
 
@@ -475,7 +531,8 @@ Remember: You are a TRANSPARENT, SYSTEMATIC assistant. Always:
 - Report what you did after each step
 - Never execute without a plan
 
-${dynamicContext}`;
+${dynamicContext}\`;
+                END OF OLD PROMPT */
 
                 this.addMessage('system', systemPrompt);
             }
@@ -498,6 +555,13 @@ ${dynamicContext}`;
                     if (this.abort) {
                         console.log(`🛑 [ConversationTask] Task ${this.taskId} aborted before AI request`);
                         throw new Error(`Task ${this.taskId}.${this.instanceId} aborted`);
+                    }
+
+                    // 🔥 v3.4.4: Auto-condense conversation if needed
+                    if (this.condenser.shouldCondense(this.messages)) {
+                        console.log('📉 [ConversationTask] Condensing conversation to manage context window...');
+                        this.messages = await this.condenser.condense(this.messages);
+                        console.log('✅ [ConversationTask] Conversation condensed, new message count:', this.messages.length);
                     }
 
                     // Make AI request with retry logic
@@ -2493,6 +2557,105 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
                 name: img.name || 'attachment',
                 size: img.size
             }));
+        }
+
+        // 🔥 Roo-Code Enhancement #1: Add terminal output (last 50 lines)
+        // 🔥 v3.4.4: Now with full output capture using custom pseudo-terminal
+        try {
+            const terminalManager = require('../services/terminal/TerminalManager');
+            const terminalContext = terminalManager.getTerminalContext();
+
+            if (terminalContext.hasActiveTerminal) {
+                context.terminalInfo = {
+                    hasActiveTerminal: terminalContext.hasActiveTerminal,
+                    terminalName: terminalContext.terminalName,
+                    terminalCount: terminalContext.terminalCount,
+                    lastCommand: terminalContext.lastCommand,
+                    // Include last 50 lines of output
+                    recentOutput: terminalContext.recentOutput.slice(-50).join('\\n')
+                };
+
+                console.log('🖥️ [Context] Terminal output captured:', {
+                    lines: terminalContext.recentOutput.length,
+                    lastCommand: terminalContext.lastCommand
+                });
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to get terminal output:', error.message);
+        }
+
+        // 🔥 Roo-Code Enhancement #2: Add open tabs (visible files)
+        try {
+            const openEditors = vscode.window.visibleTextEditors;
+            if (openEditors && openEditors.length > 0) {
+                context.openTabs = openEditors
+                    .filter(editor => !editor.document.isUntitled)
+                    .map(editor => ({
+                        path: workspaceFolders ? vscode.workspace.asRelativePath(editor.document.uri) : editor.document.fileName,
+                        language: editor.document.languageId,
+                        isDirty: editor.document.isDirty,
+                        lineCount: editor.document.lineCount
+                    }))
+                    .slice(0, 10); // Limit to 10 tabs
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to get open tabs:', error.message);
+        }
+
+        // 🔥 Roo-Code Enhancement #3: Add recently modified files
+        try {
+            if (workspaceFolders) {
+                const fs = require('fs');
+                const path = require('path');
+                const workspacePath = workspaceFolders[0].uri.fsPath;
+
+                // Get list of recently modified files (last hour)
+                const now = Date.now();
+                const oneHourAgo = now - (60 * 60 * 1000);
+
+                // This is a simplified version - Roo-Code uses file watcher events
+                // For now, we'll just mark files we've modified in this session
+                if (this.executedCommands && this.executedCommands.length > 0) {
+                    const recentCommands = this.executedCommands
+                        .filter(cmd => cmd.timestamp && new Date(cmd.timestamp).getTime() > oneHourAgo)
+                        .slice(-5); // Last 5 commands
+
+                    if (recentCommands.length > 0) {
+                        context.recentActivity = {
+                            commandCount: recentCommands.length,
+                            lastCommand: recentCommands[recentCommands.length - 1].command,
+                            timeRange: '1 hour'
+                        };
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to get recent modifications:', error.message);
+        }
+
+        // 🔥 Tree-sitter Enhancement: Detect frameworks using AST parsing
+        try {
+            const { detectFrameworksInFile, detectFrameworksInDirectory } = require('../services/tree-sitter');
+
+            // Detect frameworks in active file
+            if (activeEditor) {
+                const filePath = activeEditor.document.uri.fsPath;
+                const frameworks = await detectFrameworksInFile(filePath);
+                if (frameworks && frameworks.length > 0) {
+                    context.detectedFrameworks = frameworks;
+                }
+            }
+
+            // Also detect frameworks across workspace for better context
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                const workspacePath = workspaceFolders[0].uri.fsPath;
+                const workspaceFrameworks = await detectFrameworksInDirectory(workspacePath, 15);
+                if (workspaceFrameworks && workspaceFrameworks.length > 0) {
+                    context.workspaceFrameworks = workspaceFrameworks;
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to detect frameworks with Tree-sitter:', error.message);
         }
 
         return context;

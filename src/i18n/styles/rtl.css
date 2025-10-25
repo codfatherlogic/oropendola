@@ -1,0 +1,294 @@
+/**
+ * RTL (Right-to-Left) Support for Arabic
+ * Applied when document.body.classList contains 'rtl'
+ */
+
+/* Global RTL adjustments */
+body.rtl {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Flex direction adjustments */
+body.rtl .flex-row {
+    flex-direction: row-reverse;
+}
+
+/* Margin adjustments */
+body.rtl .ml-1,
+body.rtl .ml-2,
+body.rtl .ml-3,
+body.rtl .ml-4 {
+    margin-left: 0;
+    margin-right: var(--spacing);
+}
+
+body.rtl .mr-1,
+body.rtl .mr-2,
+body.rtl .mr-3,
+body.rtl .mr-4 {
+    margin-right: 0;
+    margin-left: var(--spacing);
+}
+
+/* Padding adjustments */
+body.rtl .pl-1,
+body.rtl .pl-2,
+body.rtl .pl-3,
+body.rtl .pl-4 {
+    padding-left: 0;
+    padding-right: var(--spacing);
+}
+
+body.rtl .pr-1,
+body.rtl .pr-2,
+body.rtl .pr-3,
+body.rtl .pr-4 {
+    padding-right: 0;
+    padding-left: var(--spacing);
+}
+
+/* Text alignment */
+body.rtl .text-left {
+    text-align: right;
+}
+
+body.rtl .text-right {
+    text-align: left;
+}
+
+/* Float adjustments */
+body.rtl .float-left {
+    float: right;
+}
+
+body.rtl .float-right {
+    float: left;
+}
+
+/* Border adjustments */
+body.rtl .border-left {
+    border-left: none;
+    border-right: var(--border-width) solid var(--border-color);
+}
+
+body.rtl .border-right {
+    border-right: none;
+    border-left: var(--border-width) solid var(--border-color);
+}
+
+/* Border radius adjustments */
+body.rtl .rounded-left {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top-right-radius: var(--border-radius);
+    border-bottom-right-radius: var(--border-radius);
+}
+
+body.rtl .rounded-right {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: var(--border-radius);
+    border-bottom-left-radius: var(--border-radius);
+}
+
+/* Transform adjustments for icons/arrows */
+body.rtl .icon-chevron-left::before,
+body.rtl .icon-arrow-left::before {
+    transform: scaleX(-1);
+}
+
+body.rtl .icon-chevron-right::before,
+body.rtl .icon-arrow-right::before {
+    transform: scaleX(-1);
+}
+
+/* List adjustments */
+body.rtl ul,
+body.rtl ol {
+    padding-right: 1.5em;
+    padding-left: 0;
+}
+
+/* Form input adjustments */
+body.rtl input[type="text"],
+body.rtl input[type="email"],
+body.rtl input[type="password"],
+body.rtl input[type="search"],
+body.rtl textarea,
+body.rtl select {
+    text-align: right;
+    direction: rtl;
+}
+
+/* Button icon positioning */
+body.rtl button .icon-left {
+    margin-right: 0;
+    margin-left: 0.5em;
+}
+
+body.rtl button .icon-right {
+    margin-left: 0;
+    margin-right: 0.5em;
+}
+
+/* Chat message bubbles */
+body.rtl .chat-message {
+    direction: rtl;
+}
+
+body.rtl .chat-message.user {
+    text-align: right;
+}
+
+body.rtl .chat-message.assistant {
+    text-align: right;
+}
+
+/* Dropdown menus */
+body.rtl .dropdown-menu {
+    right: auto;
+    left: 0;
+}
+
+/* Modal positioning */
+body.rtl .modal-close {
+    right: auto;
+    left: 1rem;
+}
+
+/* Sidebar adjustments */
+body.rtl .sidebar {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+
+/* Checkbox and radio button */
+body.rtl input[type="checkbox"] + label,
+body.rtl input[type="radio"] + label {
+    padding-right: 1.5em;
+    padding-left: 0;
+}
+
+body.rtl input[type="checkbox"] + label::before,
+body.rtl input[type="radio"] + label::before {
+    right: 0;
+    left: auto;
+}
+
+/* Tooltip positioning */
+body.rtl [data-tooltip]::after {
+    right: 50%;
+    left: auto;
+    transform: translateX(50%);
+}
+
+/* Code blocks (keep LTR for code) */
+body.rtl pre,
+body.rtl code {
+    direction: ltr;
+    text-align: left;
+}
+
+/* Numbers and dates (keep LTR) */
+body.rtl .number,
+body.rtl .date,
+body.rtl .time {
+    direction: ltr;
+    unicode-bidi: embed;
+}
+
+/* Arabic-specific font adjustments */
+body.rtl {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Arabic",
+                 "Arabic UI Text", "Geeza Pro", "Simplified Arabic", sans-serif;
+    letter-spacing: 0; /* Arabic doesn't need letter-spacing */
+}
+
+/* Improve Arabic text rendering */
+body.rtl * {
+    font-feature-settings: "liga" 1, "calt" 1;
+}
+
+/* VS Code webview specific adjustments */
+body.rtl .webview-container {
+    direction: rtl;
+}
+
+/* Language switcher */
+body.rtl .language-switcher {
+    direction: rtl;
+}
+
+body.rtl .language-switcher .language-option {
+    text-align: right;
+}
+
+/* Settings panel */
+body.rtl .settings-panel {
+    direction: rtl;
+}
+
+body.rtl .settings-panel .setting-label {
+    text-align: right;
+}
+
+/* Document upload area */
+body.rtl .document-upload-area {
+    direction: rtl;
+}
+
+/* Search input */
+body.rtl .search-input {
+    padding-right: 2.5em;
+    padding-left: 1em;
+}
+
+body.rtl .search-icon {
+    right: 0.75em;
+    left: auto;
+}
+
+/* Notification badges */
+body.rtl .notification-badge {
+    right: auto;
+    left: -0.5em;
+}
+
+/* Progress bars */
+body.rtl .progress-bar {
+    transform-origin: right;
+}
+
+/* Breadcrumbs */
+body.rtl .breadcrumb {
+    direction: rtl;
+}
+
+body.rtl .breadcrumb-separator {
+    transform: scaleX(-1);
+}
+
+/* Tables */
+body.rtl table {
+    direction: rtl;
+}
+
+body.rtl th,
+body.rtl td {
+    text-align: right;
+}
+
+/* Ensure text inputs in RTL maintain directionality */
+body.rtl input:focus,
+body.rtl textarea:focus {
+    direction: rtl;
+}
+
+/* File path displays (keep LTR) */
+body.rtl .file-path,
+body.rtl .url {
+    direction: ltr;
+    text-align: left;
+    unicode-bidi: embed;
+}

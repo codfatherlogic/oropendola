@@ -5,6 +5,7 @@ import { InputArea } from './components/InputArea';
 import { EnhancedTodoPanel } from './components/EnhancedTodoPanel';
 import { FileChangesPanel } from './components/FileChangesPanel';
 import { useVSCode } from './hooks/useVSCode';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { Message, TodoItem, FileChange, MessageType } from './types';
 
 const App: React.FC = () => {
@@ -198,6 +199,37 @@ const App: React.FC = () => {
     });
     setPendingCommand(null);
   };
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'n',
+      meta: true,
+      handler: handleNewChat,
+      description: 'New chat'
+    },
+    {
+      key: 'Escape',
+      handler: () => {
+        if (isGenerating) {
+          handleStopGeneration();
+        } else if (pendingCommand) {
+          handleCancelCommand();
+        }
+      },
+      description: 'Stop generation or cancel command'
+    },
+    {
+      key: 'k',
+      meta: true,
+      handler: () => {
+        if (confirm('Clear all messages?')) {
+          setMessages([]);
+        }
+      },
+      description: 'Clear messages'
+    }
+  ]);
 
   return (
     <div className="app-container">

@@ -1,0 +1,122 @@
+{
+  "common": {
+    "yes": "Sí",
+    "no": "No",
+    "ok": "Aceptar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "close": "Cerrar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "warning": "Advertencia",
+    "info": "Información"
+  },
+  "actions": {
+    "send": "Enviar",
+    "upload": "Subir",
+    "download": "Descargar",
+    "copy": "Copiar",
+    "paste": "Pegar",
+    "cut": "Cortar",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "refresh": "Actualizar"
+  },
+  "chat": {
+    "title": "Chat",
+    "placeholder": "Escribe tu mensaje...",
+    "send": "Enviar",
+    "clear": "Limpiar Chat",
+    "new": "Nuevo Chat",
+    "history": "Historial de Chat",
+    "noMessages": "No hay mensajes aún",
+    "thinking": "Pensando...",
+    "typing": "Escribiendo...",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "reconnecting": "Reconectando..."
+  },
+  "document": {
+    "upload": "Subir Documento",
+    "analyze": "Analizar Documento",
+    "process": "Procesar Documento",
+    "processing": "Procesando documento...",
+    "error": "Error al procesar documento",
+    "success": "Documento procesado exitosamente",
+    "selectFile": "Seleccionar archivo",
+    "dragDrop": "Arrastra y suelta un archivo aquí",
+    "supportedTypes": "Tipos soportados: PDF, Word, Excel, PowerPoint, HTML",
+    "maxSize": "Tamaño máximo: 50MB",
+    "pages": "páginas",
+    "words": "palabras"
+  },
+  "settings": {
+    "title": "Configuración",
+    "language": "Idioma",
+    "theme": "Tema",
+    "preferences": "Preferencias",
+    "account": "Cuenta",
+    "about": "Acerca de",
+    "save": "Guardar Configuración",
+    "reset": "Restaurar Predeterminados"
+  },
+  "language": {
+    "english": "Inglés",
+    "spanish": "Español",
+    "french": "Francés",
+    "german": "Alemán",
+    "arabic": "Árabe",
+    "select": "Seleccionar Idioma",
+    "current": "Idioma Actual"
+  },
+  "auth": {
+    "login": "Iniciar Sesión",
+    "logout": "Cerrar Sesión",
+    "signup": "Registrarse",
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "rememberMe": "Recuérdame",
+    "loginSuccess": "Sesión iniciada exitosamente",
+    "logoutSuccess": "Sesión cerrada exitosamente",
+    "loginError": "Error al iniciar sesión. Por favor verifica tus credenciales."
+  },
+  "errors": {
+    "network": "Error de red. Por favor verifica tu conexión.",
+    "server": "Error del servidor. Por favor intenta más tarde.",
+    "unauthorized": "Por favor inicia sesión para continuar.",
+    "forbidden": "No tienes permiso para acceder a este recurso.",
+    "notFound": "Recurso no encontrado.",
+    "timeout": "Tiempo de espera agotado. Por favor intenta de nuevo.",
+    "unknown": "Ocurrió un error desconocido.",
+    "validation": "Por favor verifica tu entrada e intenta de nuevo."
+  },
+  "validation": {
+    "required": "Este campo es requerido",
+    "email": "Por favor ingresa un correo electrónico válido",
+    "minLength": "La longitud mínima es de {{min}} caracteres",
+    "maxLength": "La longitud máxima es de {{max}} caracteres",
+    "numeric": "Por favor ingresa un número válido",
+    "url": "Por favor ingresa una URL válida"
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "noNotifications": "No hay notificaciones",
+    "markAllRead": "Marcar todas como leídas",
+    "new": "Nueva notificación"
+  },
+  "search": {
+    "placeholder": "Buscar...",
+    "noResults": "No se encontraron resultados",
+    "searching": "Buscando...",
+    "results": "{{count}} resultados encontrados",
+    "semantic": "Búsqueda Semántica",
+    "exact": "Coincidencia Exacta"
+  }
+}
