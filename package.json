@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.6.0: @Mentions system with intelligent context injection, 3-5x faster performance",
-  "version": "3.6.1",
+  "description": "AI-powered assistant - v3.7.0: Multi-Mode AI System (Code/Architect/Ask/Debug) with mode-specific behavior and intelligent context",
+  "version": "3.7.0",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
