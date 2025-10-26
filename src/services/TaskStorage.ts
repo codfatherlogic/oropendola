@@ -55,7 +55,7 @@ export class TaskStorage {
     if (!this.db) throw new Error('Database not initialized')
 
     // Create tasks table
-    await this.db.exec(`
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         created_at INTEGER NOT NULL,
@@ -164,7 +164,7 @@ export class TaskStorage {
       .filter(Boolean)
       .join(' ')
 
-    await this.db.run(`
+    const stmt = this.db.prepare(`
       INSERT INTO tasks (
         id, created_at, updated_at, completed_at, text, status,
         conversation_id, messages_json, messages_text, checkpoints_json, current_checkpoint,
@@ -172,7 +172,9 @@ export class TaskStorage {
         tokens_in, tokens_out, cache_reads, cache_writes, total_cost,
         version, mode, model, total_duration, file_changes_json, tags_json, error, stack
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
+    `)
+    
+    stmt.run([
       newTask.id,
       newTask.createdAt,
       newTask.updatedAt,
@@ -211,7 +213,8 @@ export class TaskStorage {
   async getTask(id: string): Promise<Task | null> {
     if (!this.db) throw new Error('Database not initialized')
 
-    const row = await this.db.get('SELECT * FROM tasks WHERE id = ?', id)
+    const stmt = this.db.prepare('SELECT * FROM tasks WHERE id = ?')
+    const row = stmt.get(id)
     if (!row) return null
 
     return this.rowToTask(row)
@@ -240,7 +243,7 @@ export class TaskStorage {
       .filter(Boolean)
       .join(' ')
 
-    await this.db.run(`
+    const stmt = this.db.prepare(`
       UPDATE tasks SET
         updated_at = ?,
         completed_at = ?,
@@ -265,7 +268,9 @@ export class TaskStorage {
         error = ?,
         stack = ?
       WHERE id = ?
-    `, [
+    `)
+    
+    stmt.run([
       updatedTask.updatedAt,
       updatedTask.completedAt || null,
       updatedTask.text,
@@ -301,7 +306,8 @@ export class TaskStorage {
   async deleteTask(id: string): Promise<boolean> {
     if (!this.db) throw new Error('Database not initialized')
 
-    const result = await this.db.run('DELETE FROM tasks WHERE id = ?', id)
+    const stmt = this.db.prepare('DELETE FROM tasks WHERE id = ?')
+    const result = stmt.run(id)
     const deleted = (result.changes || 0) > 0
 
     if (deleted) {
@@ -332,17 +338,19 @@ export class TaskStorage {
         JOIN tasks_fts ON t.rowid = tasks_fts.rowid
         WHERE tasks_fts MATCH ?
       `
-      const ftsParams = [filters.search]
+      const ftsParams: any[] = [filters.search]
 
       if (filters.status) {
         const combined = ftsQuery + ' AND t.status = ?'
         ftsParams.push(filters.status)
-        const rows = await this.db.all(combined, ftsParams)
-        return rows.map(row => this.rowToTask(row))
+        const stmt = this.db.prepare(combined)
+        const rows = stmt.all(ftsParams)
+        return (rows as any[]).map(row => this.rowToTask(row))
       }
 
-      const rows = await this.db.all(ftsQuery, ftsParams)
-      return rows.map(row => this.rowToTask(row))
+      const stmt = this.db.prepare(ftsQuery)
+      const rows = stmt.all(ftsParams)
+      return (rows as any[]).map(row => this.rowToTask(row))
     }
 
     // Sorting
@@ -364,8 +372,9 @@ export class TaskStorage {
       params.push(filters.offset)
     }
 
-    const rows = await this.db.all(query, params)
-    return rows.map(row => this.rowToTask(row))
+    const stmt = this.db.prepare(query)
+    const rows = stmt.all(params)
+    return (rows as any[]).map(row => this.rowToTask(row))
   }
 
   /**
@@ -398,7 +407,7 @@ export class TaskStorage {
   async getStats(): Promise<TaskStats> {
     if (!this.db) throw new Error('Database not initialized')
 
-    const stats = await this.db.get(`
+    const stmt = this.db.prepare(`
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
@@ -407,6 +416,8 @@ export class TaskStorage {
         SUM(CASE WHEN status = 'terminated' THEN 1 ELSE 0 END) as terminated
       FROM tasks
     `)
+    
+    const stats: any = stmt.get()
 
     return {
       total: stats.total || 0,
@@ -422,7 +433,7 @@ export class TaskStorage {
    */
   async close(): Promise<void> {
     if (this.db) {
-      await this.db.close()
+      this.db.close()
       this.db = null
       this.isInitialized = false
       console.log('[TaskStorage] Database closed')

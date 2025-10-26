@@ -1178,7 +1178,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && node esbuild.config.js",
-    "build:production": "NODE_ENV=production node esbuild.config.js",
+    "build:production": "npm run typecheck && NODE_ENV=production node esbuild.config.js",
     "build:webview": "cd webview-ui && npm run build",
     "watch": "node esbuild.config.js --watch",
     "clean": "rimraf dist out",
