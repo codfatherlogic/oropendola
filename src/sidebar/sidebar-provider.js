@@ -62,6 +62,25 @@ class OropendolaSidebarProvider {
     }
 
     /**
+     * Set the mode manager instance
+     * v3.7.0: Multi-Mode System
+     */
+    setModeManager(modeManager) {
+        this._modeManager = modeManager;
+        
+        // Listen to mode changes
+        if (modeManager) {
+            modeManager.onModeChange(event => {
+                this.postMessage({
+                    type: 'modeChanged',
+                    mode: event.newMode,
+                    config: modeManager.getCurrentModeConfig()
+                });
+            });
+        }
+    }
+
+    /**
      * Resolve the webview view
      * @param {vscode.WebviewView} webviewView
      */

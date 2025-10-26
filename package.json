@@ -98,6 +98,42 @@
         "icon": "$(question)"
       },
       {
+        "command": "oropendola.switchMode",
+        "title": "Switch AI Mode",
+        "category": "Oropendola",
+        "icon": "$(symbol-property)"
+      },
+      {
+        "command": "oropendola.switchToCodeMode",
+        "title": "Switch to Code Mode",
+        "category": "Oropendola",
+        "icon": "$(code)"
+      },
+      {
+        "command": "oropendola.switchToArchitectMode",
+        "title": "Switch to Architect Mode",
+        "category": "Oropendola",
+        "icon": "$(symbol-structure)"
+      },
+      {
+        "command": "oropendola.switchToAskMode",
+        "title": "Switch to Ask Mode",
+        "category": "Oropendola",
+        "icon": "$(question)"
+      },
+      {
+        "command": "oropendola.switchToDebugMode",
+        "title": "Switch to Debug Mode",
+        "category": "Oropendola",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "oropendola.showModeInfo",
+        "title": "Show AI Mode Info",
+        "category": "Oropendola",
+        "icon": "$(info)"
+      },
+      {
         "command": "oropendola.fixCode",
         "title": "Fix Code",
         "category": "Oropendola",
@@ -1076,6 +1112,13 @@
         "win": "ctrl+shift+e",
         "linux": "ctrl+shift+e",
         "when": "editorHasSelection"
+      },
+      {
+        "command": "oropendola.switchMode",
+        "key": "cmd+m",
+        "mac": "cmd+m",
+        "win": "ctrl+m",
+        "linux": "ctrl+m"
       },
       {
         "command": "oropendola.fixCode",

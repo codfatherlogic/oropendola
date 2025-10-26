@@ -29,6 +29,9 @@ const StatusBarManager = require('./src/ui/StatusBarManager');
 // Sprint 1-2: Task Persistence Layer
 const { TaskManager } = require('./src/core/TaskManager');
 
+// v3.7.0: Multi-Mode System
+const { ModeManager, ModeCommands, ModeMessageHandler, ModeIntegrationService } = require('./src/core/modes');
+
 let gitHubManager;
 let chatManager;
 let repositoryAnalyzer;
@@ -64,6 +67,11 @@ let i18nManager;
 
 // Sprint 1-2: Task Manager
 let taskManager;
+
+// v3.7.0: Multi-Mode System
+let modeManager;
+let modeCommands;
+let modeMessageHandler;
 
 /**
  * Extension activation
@@ -178,6 +186,54 @@ function activate(context) {
         });
     } catch (error) {
         console.error('❌ Task Manager error:', error);
+    }
+
+    // v3.7.0: Initialize Multi-Mode System
+    try {
+        console.log('🎨 Initializing Multi-Mode System...');
+        
+        // Initialize Mode Manager
+        modeManager = new ModeManager(context);
+        console.log('✅ Mode Manager initialized');
+
+        // Initialize Mode Message Handler for webview communication
+        modeMessageHandler = new ModeMessageHandler(modeManager, context);
+        console.log('✅ Mode Message Handler initialized');
+
+        // Register mode commands
+        modeCommands = new ModeCommands(modeManager);
+        const commandDisposables = modeCommands.register();
+        commandDisposables.forEach(disposable => context.subscriptions.push(disposable));
+        console.log('✅ Mode Commands registered (6 commands)');
+
+        // Listen to mode changes and update status bar
+        modeManager.onModeChange(event => {
+            console.log(`🔄 Mode switched: ${event.oldMode} → ${event.newMode}`);
+            
+            // Update status bar if available
+            if (statusBarManager) {
+                statusBarManager.updateMode(event.newMode);
+            }
+            
+            // Notify webview of mode change
+            if (sidebarProvider) {
+                sidebarProvider.postMessage({
+                    type: 'modeChanged',
+                    mode: event.newMode,
+                    config: modeManager.getCurrentModeConfig()
+                });
+            }
+        });
+
+        // Connect mode manager to sidebar
+        if (sidebarProvider) {
+            sidebarProvider.setModeManager(modeManager);
+            console.log('✅ Mode Manager connected to sidebar');
+        }
+
+        console.log('✅ Multi-Mode System initialized successfully');
+    } catch (error) {
+        console.error('❌ Multi-Mode System error:', error);
     }
 
     // Initialize managers with error handling
@@ -339,6 +395,12 @@ function initializeOropendolaProvider() {
             maxTokens: config.get('ai.maxTokens', 4096),
             sessionCookies // Pass cookies explicitly
         });
+
+        // v3.7.0: Set mode manager for mode-aware API requests
+        if (modeManager) {
+            oropendolaProvider.setModeManager(modeManager);
+            console.log('✅ Mode Manager connected to provider');
+        }
 
         oropendolaProvider.setStatusBarItem(statusBarItem);
         console.log('✅ Oropendola provider created');

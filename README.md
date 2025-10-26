@@ -6,27 +6,37 @@
 
 ## ✨ Features
 
-### 🤖💬 Agent & Ask Modes
+### 🎨 Multi-Mode AI Assistant (NEW in v3.7.0)
 
-Oropendola offers **two interaction modes** for flexible AI assistance:
+Oropendola offers **four specialized AI modes** for different workflows:
 
-**🤖 Agent Mode (Default)**
-- ✅ Autonomous file discovery and modification
-- ✅ Multi-step operations with error correction
-- ✅ Full workspace access
-- 🎯 Perfect for: Building features, complex refactoring, autonomous tasks
+**💻 Code Mode (Default)**
+- ⚡ Fast, practical implementations
+- ✅ Can modify files and run commands
+- 🎯 Perfect for: Quick feature development, bug fixes, refactoring
 
-**💬 Ask Mode (Safe)**
-- 🛡️ Read-only, no file modifications
-- ✅ Answer questions and explain code
-- ✅ Safe exploration and learning
-- 🎯 Perfect for: Understanding code, getting suggestions, code review
+**🏗️ Architect Mode**
+- 📐 Comprehensive system design
+- ✅ Can modify files (for docs)
+- ❌ No command execution
+- 🎯 Perfect for: Architecture planning, design reviews, documentation
 
-**🔄 Switch between modes anytime** with a single click in the sidebar!
+**� Ask Mode (Learning)**
+- � Educational explanations
+- ❌ Read-only, no modifications
+- 🎯 Perfect for: Understanding code, learning concepts, code review
+
+**🐛 Debug Mode**
+- 🔍 Systematic troubleshooting
+- ✅ Can modify files and run commands
+- 🎯 Perfect for: Bug investigation, root cause analysis, performance issues
+
+**🔄 Switch modes instantly** with `Cmd+M` (Mac) or `Ctrl+M` (Windows/Linux)!
 
 📚 **Learn more**: 
-- Quick Start: [`QUICK_START_MODES.md`](./QUICK_START_MODES.md)
-- Complete Guide: [`AGENT_ASK_MODE_GUIDE.md`](./AGENT_ASK_MODE_GUIDE.md)
+- User Guide: [`docs/MULTI_MODE_USER_GUIDE.md`](./docs/MULTI_MODE_USER_GUIDE.md)
+- Developer Guide: [`docs/MULTI_MODE_DEVELOPER_GUIDE.md`](./docs/MULTI_MODE_DEVELOPER_GUIDE.md)
+- Quick Reference: [`docs/MULTI_MODE_QUICK_REFERENCE.md`](./docs/MULTI_MODE_QUICK_REFERENCE.md)
 
 ---
 

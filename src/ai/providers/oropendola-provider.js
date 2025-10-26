@@ -33,12 +33,33 @@ class OropendolaProvider {
     async chat(message, context = {}, onToken = null) {
         const endpoint = `${this.apiUrl}/api/method/ai_assistant.api.streaming_chat_completion`;
 
+        // Get mode context from mode manager if available
+        let modeContext = { mode: 'code', mode_settings: {} };
+        if (this.modeManager) {
+            const apiContext = require('../../core/modes').ModeIntegrationService.prepareApiContext(this.modeManager);
+            modeContext = {
+                mode: apiContext.mode,
+                mode_settings: apiContext.modeSettings
+            };
+        }
+
+        // Override with explicitly provided context
+        if (context.mode) {
+            modeContext.mode = context.mode;
+        }
+        if (context.modeSettings) {
+            modeContext.mode_settings = context.modeSettings;
+        }
+
         const requestBody = {
             message: this.buildPromptWithContext(message, context),
             stream: !!onToken,
             model_preference: this.modelPreference,
             temperature: this.temperature,
-            max_tokens: this.maxTokens
+            max_tokens: this.maxTokens,
+            // Add mode context
+            mode: modeContext.mode,
+            mode_settings: modeContext.mode_settings
         };
 
         try {
@@ -322,6 +343,14 @@ ${context.selection}
      */
     setStatusBarItem(statusBarItem) {
         this.statusBarItem = statusBarItem;
+    }
+
+    /**
+     * Set mode manager for mode-aware requests
+     * @param {ModeManager} modeManager - Mode manager instance
+     */
+    setModeManager(modeManager) {
+        this.modeManager = modeManager;
     }
 
     /**
