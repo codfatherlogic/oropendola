@@ -1,0 +1,149 @@
+/**
+ * Mention Autocomplete Styles
+ */
+
+.mention-autocomplete {
+	position: absolute;
+	background: var(--vscode-editorSuggestWidget-background);
+	border: 1px solid var(--vscode-editorSuggestWidget-border);
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+	max-width: 500px;
+	max-height: 300px;
+	overflow: hidden;
+	z-index: 1000;
+	font-family: var(--vscode-font-family);
+	font-size: var(--vscode-font-size);
+}
+
+.mention-autocomplete-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 6px 12px;
+	border-bottom: 1px solid var(--vscode-editorSuggestWidget-border);
+	background: var(--vscode-editorSuggestWidget-selectedBackground);
+}
+
+.mention-autocomplete-title {
+	font-weight: 600;
+	color: var(--vscode-editorSuggestWidget-foreground);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.mention-autocomplete-hint {
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+	font-family: var(--vscode-editor-font-family);
+}
+
+.mention-autocomplete-list {
+	max-height: 250px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.mention-autocomplete-item {
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	cursor: pointer;
+	transition: background-color 0.1s ease;
+	border-bottom: 1px solid var(--vscode-editorSuggestWidget-border);
+}
+
+.mention-autocomplete-item:last-child {
+	border-bottom: none;
+}
+
+.mention-autocomplete-item:hover {
+	background: var(--vscode-editorSuggestWidget-highlightForeground);
+}
+
+.mention-autocomplete-item.selected {
+	background: var(--vscode-editorSuggestWidget-selectedBackground);
+}
+
+.mention-icon {
+	font-size: 18px;
+	margin-right: 12px;
+	flex-shrink: 0;
+	width: 20px;
+	text-align: center;
+}
+
+.mention-content {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.mention-label {
+	font-weight: 500;
+	color: var(--vscode-editorSuggestWidget-foreground);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-family: var(--vscode-editor-font-family);
+}
+
+.mention-description {
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	margin-top: 2px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mention-type-badge {
+	font-size: 9px;
+	padding: 2px 6px;
+	border-radius: 3px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	text-transform: uppercase;
+	font-weight: 600;
+	letter-spacing: 0.5px;
+	margin-left: 8px;
+	flex-shrink: 0;
+}
+
+.mention-autocomplete-item.file .mention-type-badge {
+	background: var(--vscode-charts-blue);
+}
+
+.mention-autocomplete-item.folder .mention-type-badge {
+	background: var(--vscode-charts-yellow);
+}
+
+.mention-autocomplete-item.special .mention-type-badge {
+	background: var(--vscode-charts-purple);
+}
+
+.mention-autocomplete-empty {
+	padding: 20px;
+	text-align: center;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+/* Scrollbar styling */
+.mention-autocomplete-list::-webkit-scrollbar {
+	width: 8px;
+}
+
+.mention-autocomplete-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.mention-autocomplete-list::-webkit-scrollbar-thumb {
+	background: var(--vscode-scrollbarSlider-background);
+	border-radius: 4px;
+}
+
+.mention-autocomplete-list::-webkit-scrollbar-thumb:hover {
+	background: var(--vscode-scrollbarSlider-hoverBackground);
+}

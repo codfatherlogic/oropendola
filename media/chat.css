@@ -374,3 +374,418 @@ body {
         opacity: 1;
     }
 }
+
+/* Mention Autocomplete Styles */
+.mention-autocomplete {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 8px;
+    background: var(--vscode-editorSuggestWidget-background);
+    border: 1px solid var(--vscode-editorSuggestWidget-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-height: 300px;
+    overflow: hidden;
+    z-index: 1000;
+    display: none;
+}
+
+.mention-autocomplete-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--vscode-editorSuggestWidget-border);
+    background: var(--vscode-editorSuggestWidget-selectedBackground);
+}
+
+.mention-autocomplete-title {
+    font-weight: 600;
+    color: var(--vscode-editorSuggestWidget-foreground);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mention-autocomplete-hint {
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.mention-autocomplete-list {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.mention-autocomplete-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+    border-bottom: 1px solid var(--vscode-editorSuggestWidget-border);
+}
+
+.mention-autocomplete-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.mention-autocomplete-item.selected {
+    background: var(--vscode-editorSuggestWidget-selectedBackground);
+}
+
+.mention-icon {
+    font-size: 18px;
+    margin-right: 12px;
+    width: 20px;
+    text-align: center;
+}
+
+.mention-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.mention-label {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mention-description {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mention-type-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.mention-autocomplete-item.file .mention-type-badge {
+    background: #4080D0;
+    color: white;
+}
+
+.mention-autocomplete-item.folder .mention-type-badge {
+    background: #FFC83D;
+    color: #1E1E1E;
+}
+
+.mention-autocomplete-item.special .mention-type-badge {
+    background: #B180D7;
+    color: white;
+}
+
+/* Mention highlighting */
+.mention {
+    display: inline;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.mention-file {
+    background: #4080D0;
+    color: white;
+}
+
+.mention-folder {
+    background: #FFC83D;
+    color: #1E1E1E;
+}
+
+.mention-special {
+    background: #B180D7;
+    color: white;
+}
+
+.mention-url {
+    background: #89D185;
+    color: #1E1E1E;
+}
+
+/* ===== Week 4.2: Visual Feedback Enhancements ===== */
+
+/* Loading States */
+.mention-autocomplete.loading .mention-autocomplete-list {
+    position: relative;
+    min-height: 100px;
+}
+
+.mention-autocomplete-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.mention-loading-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--vscode-progressBar-background);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Error States */
+.mention-error {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    border-radius: 4px;
+    color: var(--vscode-inputValidation-errorForeground);
+    margin: 8px 0;
+    animation: shake 0.3s ease-out;
+}
+
+.mention-error-icon {
+    font-size: 16px;
+    margin-right: 8px;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+.mention-autocomplete-item.invalid {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.mention-autocomplete-item.invalid:hover {
+    background: transparent;
+}
+
+/* Success Animation */
+.mention-inserted {
+    animation: mentionPulse 0.4s ease-out;
+}
+
+@keyframes mentionPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); background-color: var(--vscode-editorSuggestWidget-selectedBackground); }
+    100% { transform: scale(1); }
+}
+
+/* Tooltip Previews */
+.mention-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 8px;
+    background: var(--vscode-editorHoverWidget-background);
+    border: 1px solid var(--vscode-editorHoverWidget-border);
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1001;
+    max-height: 200px;
+    overflow-y: auto;
+    animation: tooltipFadeIn 0.2s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.mention-tooltip-title {
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 6px;
+    color: var(--vscode-editorHoverWidget-foreground);
+}
+
+.mention-tooltip-content {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family);
+}
+
+.mention-tooltip-code {
+    background: var(--vscode-textBlockQuote-background);
+    padding: 8px;
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 11px;
+    overflow-x: auto;
+    margin-top: 6px;
+}
+
+/* Progress Indicator */
+.mention-progress {
+    height: 2px;
+    background: var(--vscode-progressBar-background);
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    transition: width 0.3s ease-out;
+}
+
+.mention-progress.active {
+    animation: progressGrow 1.5s ease-out forwards;
+}
+
+@keyframes progressGrow {
+    0% { width: 0%; }
+    100% { width: 100%; }
+}
+
+/* Accessibility - Focus States */
+.mention-autocomplete-item:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: -2px;
+}
+
+.message-input:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: -2px;
+}
+
+/* Badge Animations */
+.mention-type-badge {
+    transition: transform 0.2s ease-out;
+}
+
+.mention-autocomplete-item:hover .mention-type-badge {
+    transform: scale(1.1);
+}
+
+/* Empty State */
+.mention-autocomplete-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+}
+
+.mention-autocomplete-empty-icon {
+    font-size: 32px;
+    opacity: 0.3;
+    margin-bottom: 8px;
+}
+
+/* Context Extraction Indicator */
+.mention-context-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 8px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.mention-context-count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 8px;
+}
+
+/* Hover Preview Cards */
+.mention:hover {
+    position: relative;
+}
+
+.mention-preview-card {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    background: var(--vscode-editorHoverWidget-background);
+    border: 1px solid var(--vscode-editorHoverWidget-border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    margin-bottom: 4px;
+    z-index: 1000;
+    animation: tooltipFadeIn 0.15s ease-out;
+    pointer-events: none;
+}
+
+/* Validation States */
+.mention-valid {
+    border-left: 3px solid var(--vscode-testing-iconPassed);
+}
+
+.mention-invalid {
+    border-left: 3px solid var(--vscode-testing-iconFailed);
+    opacity: 0.7;
+}
+
+.mention-validating {
+    border-left: 3px solid var(--vscode-testing-iconQueued);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Smooth Transitions */
+.mention-autocomplete,
+.mention-autocomplete-item,
+.mention,
+.mention-type-badge {
+    transition: all 0.2s ease-out;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    .mention-autocomplete {
+        border-width: 2px;
+    }
+    
+    .mention-autocomplete-item.selected {
+        border: 2px solid var(--vscode-focusBorder);
+    }
+    
+    .mention-error {
+        border-width: 2px;
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    .mention-autocomplete,
+    .mention-autocomplete-item,
+    .mention,
+    .mention-type-badge,
+    .mention-loading-spinner {
+        animation: none !important;
+        transition: none !important;
+    }
+}

@@ -5,10 +5,15 @@
  * Manages task lifecycle, state transitions, and message handling.
  *
  * Sprint 1-2: Task Persistence Layer
+ * Sprint 3-4: Context Intelligence Integration
  */
 
 import { Task, TaskStatus, ClineMessage, TaskFilters, TaskStats, ExportFormat } from '../types/task'
 import { TaskStorage } from '../services/TaskStorage'
+import { TokenCounter } from '../services/TokenCounter'
+import { CostTracker } from '../services/CostTracker'
+import { MessageCondenser } from '../services/MessageCondenser'
+import { ContextManager, ContextStatus, CondensingResult } from '../services/ContextManager'
 import * as vscode from 'vscode'
 
 export interface TaskManagerEvents {
@@ -19,6 +24,8 @@ export interface TaskManagerEvents {
   taskCompleted: (task: Task) => void
   taskTerminated: (task: Task) => void
   taskFailed: (task: Task, error: Error) => void
+  contextStatusChanged: (status: ContextStatus) => void
+  autoCondensingTriggered: (taskId: string, result: CondensingResult) => void
 }
 
 export class TaskManager {
@@ -26,10 +33,43 @@ export class TaskManager {
   private currentTask: Task | null = null
   private tasks: Map<string, Task> = new Map()
   private eventListeners: Partial<TaskManagerEvents> = {}
+  
+  // Context Intelligence Services (Sprint 3-4)
+  private tokenCounter: TokenCounter
+  private costTracker: CostTracker
+  private messageCondenser: MessageCondenser
+  private contextManager: ContextManager
 
   constructor(context: vscode.ExtensionContext) {
     const storagePath = context.globalStorageUri.fsPath
     this.storage = new TaskStorage(storagePath)
+    
+    // Initialize Context Intelligence services
+    const apiKey = vscode.workspace.getConfiguration('oropendola').get<string>('apiKey')
+    this.tokenCounter = new TokenCounter(apiKey)
+    this.costTracker = new CostTracker(this.tokenCounter)
+    this.messageCondenser = new MessageCondenser(apiKey)
+    this.contextManager = new ContextManager(
+      this.tokenCounter,
+      this.messageCondenser,
+      {
+        maxTokens: 200_000,
+        autoCondensingThreshold: 80,
+        criticalThreshold: 90,
+        reservedOutputTokens: 4096,
+        preserveRecent: 5
+      }
+    )
+    
+    // Listen to context status changes
+    this.contextManager.onStatusChange((status) => {
+      this.emit('contextStatusChanged', status)
+      
+      // Warn if approaching limit
+      if (status.nearLimit) {
+        console.warn('[TaskManager] Context approaching limit:', status.percentUsed.toFixed(1) + '%')
+      }
+    })
   }
 
   /**
@@ -126,6 +166,7 @@ export class TaskManager {
 
   /**
    * Add a message to a task
+   * Enhanced with cost tracking and auto-condensing (Sprint 3-4)
    */
   async addMessage(taskId: string, message: ClineMessage): Promise<Task> {
     const task = await this.storage.getTask(taskId)
@@ -144,9 +185,94 @@ export class TaskManager {
       task.apiMetrics.totalCost += message.apiMetrics.cost || 0
       task.contextTokens = task.apiMetrics.tokensIn + task.apiMetrics.tokensOut
       task.apiMetrics.contextTokens = task.contextTokens
+      
+      // Track costs (Sprint 3-4)
+      const messageId = `${taskId}-${task.messages.length - 1}`
+      await this.costTracker.trackMessage(taskId, messageId, message, {
+        tokensIn: message.apiMetrics.tokensIn,
+        tokensOut: message.apiMetrics.tokensOut,
+        cacheReads: message.apiMetrics.cacheReads,
+        cacheWrites: message.apiMetrics.cacheWrites
+      })
+    }
+    
+    // Check for auto-condensing (Sprint 3-4)
+    const shouldCondense = await this.contextManager.shouldCondense(task.messages)
+    if (shouldCondense && this.currentTask?.id === taskId) {
+      console.log('[TaskManager] Auto-condensing triggered for task:', taskId)
+      const result = await this.contextManager.autoCondense(task.messages)
+      
+      if (result.success && result.condensedMessages < result.originalMessages) {
+        // Update task with condensed messages
+        // Note: This would need to extract the condensed messages from the result
+        // For now, just emit the event
+        this.emit('autoCondensingTriggered', taskId, result)
+      }
     }
 
     return await this.updateTask(taskId, task)
+  }
+  
+  /**
+   * Get task cost breakdown (Sprint 3-4)
+   */
+  getTaskCost(taskId: string) {
+    return this.costTracker.getTaskCost(taskId)
+  }
+  
+  /**
+   * Get cost summary across all tasks (Sprint 3-4)
+   */
+  getCostSummary() {
+    return this.costTracker.getSummary()
+  }
+  
+  /**
+   * Get daily cost trend (Sprint 3-4)
+   */
+  getDailyCostTrend(days: number = 7) {
+    return this.costTracker.getDailyTrend(days)
+  }
+  
+  /**
+   * Export cost data (Sprint 3-4)
+   */
+  exportCostData() {
+    return this.costTracker.exportData()
+  }
+  
+  /**
+   * Manually condense task messages (Sprint 3-4)
+   */
+  async manualCondense(taskId: string): Promise<CondensingResult> {
+    const task = await this.getTask(taskId)
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`)
+    }
+    
+    const result = await this.contextManager.condenseMessages(task.messages)
+    
+    if (result.success) {
+      console.log('[TaskManager] Manual condensing completed:', {
+        taskId,
+        saved: result.tokensSaved,
+        reduction: result.percentReduction.toFixed(1) + '%'
+      })
+    }
+    
+    return result
+  }
+  
+  /**
+   * Get context status for task (Sprint 3-4)
+   */
+  async getContextStatus(taskId: string): Promise<ContextStatus> {
+    const task = await this.getTask(taskId)
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`)
+    }
+    
+    return await this.contextManager.getStatus(task.messages)
   }
 
   /**

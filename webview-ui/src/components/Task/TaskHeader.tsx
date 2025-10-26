@@ -13,6 +13,7 @@ import { ContextWindowProgress } from './ContextWindowProgress'
 import { Mention } from './Mention'
 import { TaskActions } from './TaskActions'
 import { TodoListDisplay } from './TodoListDisplay'
+import { CostBreakdown } from './CostBreakdown'
 
 export interface TaskHeaderProps {
   task: ClineMessage
@@ -98,7 +99,7 @@ export const TaskHeader: React.FC<TaskHeaderProps> = ({
               {!isTaskExpanded && (
                 <div>
                   <span className="font-bold mr-1">Task:</span>
-                  <Mention text={task.text} />
+                  <Mention text={task.text || ''} />
                 </div>
               )}
             </div>
@@ -141,7 +142,7 @@ export const TaskHeader: React.FC<TaskHeaderProps> = ({
                   WebkitBoxOrient: 'vertical',
                 }}
               >
-                <Mention text={task.text} />
+                <Mention text={task.text || ''} />
               </div>
             </div>
 
@@ -222,14 +223,21 @@ export const TaskHeader: React.FC<TaskHeaderProps> = ({
                     </tr>
                   )}
 
-                  {/* API Cost */}
+                  {/* API Cost - Detailed Breakdown */}
                   {totalCost > 0 && (
                     <tr>
                       <th className="font-bold text-left align-top w-1 whitespace-nowrap pl-1 pr-3 h-[24px]">
                         API Cost
                       </th>
                       <td className="align-top">
-                        <span>{formatCost(totalCost)}</span>
+                        <CostBreakdown
+                          inputTokens={tokensIn}
+                          outputTokens={tokensOut}
+                          cacheWrites={cacheWrites}
+                          cacheReads={cacheReads}
+                          totalCost={totalCost}
+                          showDetails={isTaskExpanded}
+                        />
                       </td>
                     </tr>
                   )}

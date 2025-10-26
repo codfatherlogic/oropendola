@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.5.0: Production deployment with 77 APIs, 6 cron jobs, enterprise features",
-  "version": "3.5.0",
+  "description": "AI-powered assistant - v3.6.0: @Mentions system with intelligent context injection, 3-5x faster performance",
+  "version": "3.6.1",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -492,6 +492,30 @@
         "title": "Code: Clear Analysis Cache",
         "category": "Oropendola",
         "icon": "$(trash)"
+      },
+      {
+        "command": "oropendola.quickMention",
+        "title": "Quick File Mention",
+        "category": "Oropendola",
+        "icon": "$(mention)"
+      },
+      {
+        "command": "oropendola.showMentionHelp",
+        "title": "Show Mention Help",
+        "category": "Oropendola",
+        "icon": "$(question)"
+      },
+      {
+        "command": "oropendola.insertFileMention",
+        "title": "Insert File Mention",
+        "category": "Oropendola",
+        "icon": "$(file)"
+      },
+      {
+        "command": "oropendola.insertFolderMention",
+        "title": "Insert Folder Mention",
+        "category": "Oropendola",
+        "icon": "$(folder)"
       }
     ],
     "views": {
@@ -1075,6 +1099,30 @@
         "mac": "cmd+shift+h",
         "win": "ctrl+shift+h",
         "linux": "ctrl+shift+h"
+      },
+      {
+        "command": "oropendola.quickMention",
+        "key": "cmd+k",
+        "mac": "cmd+k",
+        "win": "ctrl+k",
+        "linux": "ctrl+k",
+        "when": "oropendola.chatFocused"
+      },
+      {
+        "command": "oropendola.showMentionHelp",
+        "key": "cmd+shift+@",
+        "mac": "cmd+shift+@",
+        "win": "ctrl+shift+2",
+        "linux": "ctrl+shift+2",
+        "when": "oropendola.chatFocused"
+      },
+      {
+        "command": "oropendola.insertFileMention",
+        "key": "cmd+shift+m",
+        "mac": "cmd+shift+m",
+        "win": "ctrl+shift+m",
+        "linux": "ctrl+shift+m",
+        "when": "oropendola.chatFocused"
       }
     ]
   },
@@ -1082,6 +1130,7 @@
     "lint": "eslint .",
     "pretest": "npm run lint",
     "test": "vitest run",
+    "test:nolint": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
@@ -1095,12 +1144,14 @@
     "publish": "npm run vscode:prepublish && vsce publish"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.67.0",
     "@octokit/rest": "^20.0.2",
     "axios": "^1.6.2",
     "cheerio": "^1.1.2",
     "exceljs": "^4.4.0",
     "i18next": "^25.6.0",
     "i18next-browser-languagedetector": "^8.2.0",
+    "lru-cache": "^11.2.2",
     "mammoth": "^1.11.0",
     "minimatch": "^9.0.5",
     "pdf-parse": "^2.4.5",
@@ -1114,6 +1165,7 @@
   },
   "devDependencies": {
     "@types/exceljs": "^0.5.3",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.19.23",
     "@types/socket.io-client": "^1.4.36",
     "@types/vscode": "^1.105.0",

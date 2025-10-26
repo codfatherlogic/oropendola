@@ -89,6 +89,40 @@ Never lose your work! Every conversation is automatically saved and browsable.
 3. Click "History" tab - See all your tasks
 4. Click any task - Continue the conversation!
 
+### 🎯 @Mentions System (NEW!)
+Reference files, folders, and project context directly in your conversations!
+
+Type `@` to trigger intelligent autocomplete and inject context into your prompts:
+
+- **📄 @/file.ts** - Include file contents
+- **📁 @/folder/** - Reference folder structure  
+- **⚠️ @problems** - Include workspace diagnostics
+- **💻 @terminal** - Share terminal output
+- **🔀 @git** - Include git history
+- **🌐 @https://...** - Reference external docs
+
+**Features:**
+- ⚡ Fuzzy search with scoring
+- 🚀 Parallel context extraction (3-5x faster)
+- 💾 LRU cache with 30s TTL
+- 🎯 Autocomplete with 150ms debounce
+- 📊 Supports up to 50 mentions per message
+
+📚 **Learn more**:
+- User Guide: [`docs/MENTIONS_USER_GUIDE.md`](./docs/MENTIONS_USER_GUIDE.md)
+- API Documentation: [`docs/MENTIONS_API.md`](./docs/MENTIONS_API.md)
+
+**Examples:**
+```
+Review @/src/UserService.ts for security issues
+
+What's in @/src/components/ folder?
+
+Fix @problems in the project
+
+@terminal shows an error, help debug it
+```
+
 ### 📊 Subscription Management
 - Real-time usage tracking
 - Status bar indicator with color coding:

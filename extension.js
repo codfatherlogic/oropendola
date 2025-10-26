@@ -448,6 +448,112 @@ function registerCommands(context) {
         })
     );
 
+    // Oropendola: Quick File Mention (Cmd+K in chat)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.quickMention', async () => {
+            // This command will be handled by the webview
+            // Send message to active chat webview
+            if (CopilotChatPanel.currentPanel) {
+                CopilotChatPanel.currentPanel._panel.webview.postMessage({
+                    type: 'triggerQuickMention'
+                });
+            } else if (sidebarProvider && sidebarProvider._view) {
+                sidebarProvider._view.webview.postMessage({
+                    type: 'triggerQuickMention'
+                });
+            } else {
+                vscode.window.showInformationMessage('Please open the chat first');
+            }
+        })
+    );
+
+    // Oropendola: Show Mention Help (Cmd+Shift+@)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showMentionHelp', () => {
+            vscode.window.showInformationMessage(
+                '📎 @Mentions Help:\n\n' +
+                '• @/path/to/file → Mention a file\n' +
+                '• @./folder/ → Mention a folder\n' +
+                '• @problems → Current workspace problems\n' +
+                '• @terminal → Last terminal output\n' +
+                '• @git → Git history & status\n\n' +
+                'Keyboard Shortcuts:\n' +
+                '• Type @ → Show autocomplete\n' +
+                '• ↑↓ → Navigate suggestions\n' +
+                '• Enter/Tab → Select\n' +
+                '• Esc → Close\n' +
+                '• Cmd+K → Quick file picker',
+                { modal: true }
+            );
+        })
+    );
+
+    // Oropendola: Insert File Mention
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.insertFileMention', async () => {
+            // Quick pick for file selection
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+
+            // Get recent files
+            const files = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 50);
+            const items = files.map(file => ({
+                label: vscode.workspace.asRelativePath(file),
+                description: file.fsPath,
+                uri: file
+            }));
+
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a file to mention',
+                matchOnDescription: true
+            });
+
+            if (selected && CopilotChatPanel.currentPanel) {
+                CopilotChatPanel.currentPanel._panel.webview.postMessage({
+                    type: 'insertMention',
+                    mention: `@${selected.label}`
+                });
+            } else if (selected && sidebarProvider && sidebarProvider._view) {
+                sidebarProvider._view.webview.postMessage({
+                    type: 'insertMention',
+                    mention: `@${selected.label}`
+                });
+            }
+        })
+    );
+
+    // Oropendola: Insert Folder Mention
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.insertFolderMention', async () => {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+
+            const selected = await vscode.window.showWorkspaceFolderPick({
+                placeHolder: 'Select a folder to mention'
+            });
+
+            if (selected && CopilotChatPanel.currentPanel) {
+                const relativePath = vscode.workspace.asRelativePath(selected.uri);
+                CopilotChatPanel.currentPanel._panel.webview.postMessage({
+                    type: 'insertMention',
+                    mention: `@${relativePath}/`
+                });
+            } else if (selected && sidebarProvider && sidebarProvider._view) {
+                const relativePath = vscode.workspace.asRelativePath(selected.uri);
+                sidebarProvider._view.webview.postMessage({
+                    type: 'insertMention',
+                    mention: `@${relativePath}/`
+                });
+            }
+        })
+    );
+
     // Oropendola: Chat - Open sidebar instead of panel
     context.subscriptions.push(
         vscode.commands.registerCommand('oropendola.openChat', async () => {
@@ -2980,7 +3086,7 @@ function registerEnterpriseCommands(context) {
     context.subscriptions.push(
         vscode.commands.registerCommand('oropendola.openAIChat', () => {
             const serverUrl = settingsProvider?.getServerUrl() || 'http://localhost:8000';
-            CopilotChatPanel.createOrShow(context.extensionUri, serverUrl);
+            CopilotChatPanel.createOrShow(context.extensionUri, serverUrl, taskManager);
             if (telemetryService) {
                 telemetryService.trackEvent('ai_chat_opened');
             }

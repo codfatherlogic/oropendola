@@ -1,0 +1,130 @@
+/* CostBreakdown Component Styles */
+
+.cost-breakdown {
+    padding: 12px;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.cost-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.cost-label {
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.cost-total {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--vscode-textLink-foreground);
+}
+
+.cost-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.cost-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cost-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cost-item-label {
+    font-weight: 500;
+    color: var(--vscode-foreground);
+}
+
+.cost-item-value {
+    font-weight: 600;
+    color: var(--vscode-textLink-foreground);
+}
+
+.cost-item-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.cost-item-bar {
+    height: 4px;
+    background: var(--vscode-input-background);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.cost-item-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--vscode-progressBar-background), var(--vscode-textLink-activeForeground));
+    transition: width 0.3s ease;
+}
+
+.cache-stats {
+    padding: 8px;
+    background: var(--vscode-input-background);
+    border-radius: 4px;
+    margin-bottom: 12px;
+}
+
+.cache-stat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+
+.cache-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.cache-value {
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.cache-value.good {
+    color: #4ec9b0;
+}
+
+.cache-value.low {
+    color: var(--vscode-errorForeground);
+}
+
+.cost-summary {
+    padding-top: 8px;
+    border-top: 1px solid var(--vscode-panel-border);
+}
+
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 11px;
+}
+
+.summary-label {
+    color: var(--vscode-descriptionForeground);
+}
+
+.summary-value {
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}

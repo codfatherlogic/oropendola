@@ -1,0 +1,51 @@
+/**
+ * Mention Component Styles
+ */
+
+.mention-container {
+	display: inline;
+}
+
+.mention {
+	display: inline;
+	padding: 2px 4px;
+	border-radius: 3px;
+	font-family: var(--vscode-editor-font-family);
+	font-weight: 500;
+	cursor: pointer;
+	transition: background-color 0.1s ease;
+}
+
+.mention:hover {
+	opacity: 0.8;
+}
+
+/* File mentions */
+.mention-file {
+	background: var(--vscode-textLink-activeForeground, #4080D0);
+	color: white;
+}
+
+/* Folder mentions */
+.mention-folder {
+	background: var(--vscode-charts-yellow, #FFC83D);
+	color: var(--vscode-editor-background, #1E1E1E);
+}
+
+/* Special mentions (@problems, @terminal, @git) */
+.mention-special {
+	background: var(--vscode-charts-purple, #B180D7);
+	color: white;
+}
+
+/* URL mentions */
+.mention-url {
+	background: var(--vscode-charts-green, #89D185);
+	color: var(--vscode-editor-background, #1E1E1E);
+}
+
+/* Default fallback */
+.mention-default {
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+}
