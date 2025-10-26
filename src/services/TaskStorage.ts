@@ -7,14 +7,13 @@
  * Sprint 1-2: Task Persistence Layer
  */
 
-import * as sqlite3 from 'sqlite3'
-import { open, Database } from 'sqlite'
+import Database from 'better-sqlite3'
 import * as path from 'path'
 import * as fs from 'fs'
 import { Task, TaskStatus, TaskFilters, TaskStats, ExportFormat } from '../types/task'
 
 export class TaskStorage {
-  private db: Database | null = null
+  private db: Database.Database | null = null
   private dbPath: string
   private isInitialized: boolean = false
 
@@ -37,13 +36,10 @@ export class TaskStorage {
     }
 
     // Open database
-    this.db = await open({
-      filename: this.dbPath,
-      driver: sqlite3.Database
-    })
+    this.db = new Database(this.dbPath)
 
     // Enable foreign keys
-    await this.db.exec('PRAGMA foreign_keys = ON')
+    this.db.exec('PRAGMA foreign_keys = ON')
 
     // Run migrations
     await this.runMigrations()

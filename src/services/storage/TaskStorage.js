@@ -10,12 +10,10 @@
  * - Task statistics
  */
 
-const sqlite3 = require('sqlite3')
+const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs').promises
 const { v4: uuidv4 } = require('uuid')
-
-const sqlite = sqlite3.verbose()
 
 class TaskStorage {
 	constructor (storagePath) {
@@ -33,22 +31,15 @@ class TaskStorage {
 		// Ensure storage directory exists
 		await fs.mkdir(this.storagePath, { recursive: true })
 
-		return new Promise((resolve, reject) => {
-			this.db = new sqlite.Database(this.dbPath, (err) => {
-				if (err) {
-					console.error('[TaskStorage] Failed to open database:', err)
-					return reject(err)
-				}
-
-				console.log(`[TaskStorage] Database opened: ${this.dbPath}`)
-				this._initSchema()
-					.then(() => {
-						console.log('[TaskStorage] Schema initialized')
-						resolve()
-					})
-					.catch(reject)
-			})
-		})
+		try {
+			this.db = new Database(this.dbPath)
+			console.log(`[TaskStorage] Database opened: ${this.dbPath}`)
+			await this._initSchema()
+			console.log('[TaskStorage] Schema initialized')
+		} catch (err) {
+			console.error('[TaskStorage] Failed to open database:', err)
+			throw err
+		}
 	}
 
 	/**
@@ -58,7 +49,7 @@ class TaskStorage {
 		const schemaPath = path.join(__dirname, 'schema.sql')
 		const schema = await fs.readFile(schemaPath, 'utf-8')
 
-		return this._exec(schema)
+		this.db.exec(schema)
 	}
 
 	/**
@@ -322,49 +313,29 @@ class TaskStorage {
 	/**
 	 * Execute SQL (no results)
 	 */
-	_exec (sql) {
-		return new Promise((resolve, reject) => {
-			this.db.exec(sql, (err) => {
-				if (err) return reject(err)
-				resolve()
-			})
-		})
-	}
-
 	/**
 	 * Run SQL (with parameters)
 	 */
-	_run (sql, params = []) {
-		return new Promise((resolve, reject) => {
-			this.db.run(sql, params, function (err) {
-				if (err) return reject(err)
-				resolve({ lastID: this.lastID, changes: this.changes })
-			})
-		})
+	async _run (sql, params = []) {
+		const stmt = this.db.prepare(sql)
+		const result = stmt.run(params)
+		return { lastID: result.lastInsertRowid, changes: result.changes }
 	}
 
 	/**
 	 * Get single row
 	 */
-	_get (sql, params = []) {
-		return new Promise((resolve, reject) => {
-			this.db.get(sql, params, (err, row) => {
-				if (err) return reject(err)
-				resolve(row)
-			})
-		})
+	async _get (sql, params = []) {
+		const stmt = this.db.prepare(sql)
+		return stmt.get(params)
 	}
 
 	/**
 	 * Get all rows
 	 */
-	_all (sql, params = []) {
-		return new Promise((resolve, reject) => {
-			this.db.all(sql, params, (err, rows) => {
-				if (err) return reject(err)
-				resolve(rows)
-			})
-		})
+	async _all (sql, params = []) {
+		const stmt = this.db.prepare(sql)
+		return stmt.all(params)
 	}
 
 	/**
