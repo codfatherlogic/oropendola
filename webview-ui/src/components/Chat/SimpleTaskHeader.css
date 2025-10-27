@@ -153,8 +153,8 @@
   vertical-align: top;
 }
 
-/* Context Progress Bar */
-.context-progress-container {
+/* Context Progress Bar - Exact Roo Code Implementation */
+.context-progress-wrapper {
   max-width: 320px;
   margin-top: -2px;
   display: flex;
@@ -166,7 +166,8 @@
 .context-progress-bar {
   flex: 1;
   height: 20px;
-  background-color: var(--vscode-progressBar-background);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-panel-border);
   border-radius: 10px;
   overflow: hidden;
   position: relative;
@@ -175,13 +176,13 @@
 .context-progress-fill {
   height: 100%;
   background-color: var(--vscode-progressBar-background);
-  opacity: 0.6;
   transition: width 0.3s ease;
 }
 
 .context-progress-text {
   font-size: 13px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Tokens Display */

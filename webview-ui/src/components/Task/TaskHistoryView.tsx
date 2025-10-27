@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { VSCodeButton, VSCodeTextField, VSCodeDropdown, VSCodeOption } from '@vscode/webview-ui-toolkit/react'
-import type { Task, TaskStatus, TaskFilters } from '../../types/task'
+import type { Task, TaskStatus, TaskFilters } from '../../types/task.ts'
 import { TaskHistoryItem } from './TaskHistoryItem'
 import { TaskCreationDialog } from './TaskCreationDialog'
-import { getStatusDisplayName } from './TaskStateControls'
 import './TaskHistoryView.css'
 
 export interface TaskHistoryViewProps {

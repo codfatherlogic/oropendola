@@ -2,6 +2,7 @@
  * ChatView Styles
  *
  * VSCode-native styling for the main chat container
+ * Includes Roo Code pattern: .hidden class to preserve state
  */
 
 .chat-view {
@@ -12,10 +13,40 @@
   color: var(--vscode-foreground);
 }
 
+/* Roo Code pattern: Hide when overlays active but preserve state */
+.chat-view.hidden {
+  display: none;
+}
+
 /* Header */
 .chat-view-header {
   flex-shrink: 0;
   border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+/* Task Metrics in Header - Roo-Code pattern */
+.chat-view-metrics {
+  padding: 8px 15px;
+  border-top: 1px solid var(--vscode-widget-border);
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  display: flex;
+  justify-content: center;
+}
+
+/* Context Progress - Roo-Code pattern */
+.chat-view-context-progress {
+  padding: 8px 15px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+/* Input Toolbar - Roo-Code pattern */
+.chat-view-input-toolbar {
+  padding: 8px 15px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editorWidget-background);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Controls */
@@ -71,6 +102,8 @@
   flex-shrink: 0;
   border-top: 1px solid var(--vscode-panel-border);
   background: var(--vscode-editor-background);
+  padding: 0;
+  min-height: 140px;
 }
 
 /* Approval buttons */
@@ -208,4 +241,66 @@
     padding: 6px 12px;
     font-size: 12px;
   }
+}
+
+/* AI Thinking Indicator */
+.chat-view-thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  margin: 8px 15px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.thinking-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.thinking-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--vscode-terminal-ansiBlue);
+  border-radius: 50%;
+  animation: thinking-pulse 1.4s ease-in-out infinite;
+}
+
+.thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes thinking-pulse {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.thinking-text {
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+/* Dark theme adjustments */
+body[data-vscode-theme-kind="vscode-dark"] .chat-view-thinking-indicator {
+  background: var(--vscode-input-background);
+}
+
+/* Light theme adjustments */
+body[data-vscode-theme-kind="vscode-light"] .chat-view-thinking-indicator {
+  background: var(--vscode-input-background);
 }

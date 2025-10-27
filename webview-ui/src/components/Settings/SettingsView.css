@@ -27,12 +27,40 @@
   font-weight: 600;
 }
 
+/* Roo Code pattern: Header actions container */
+.settings-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .saving-indicator {
   font-size: 12px;
   color: var(--vscode-descriptionForeground);
   padding: 4px 12px;
   background-color: var(--vscode-badge-background);
   border-radius: 12px;
+}
+
+/* Roo Code pattern: Done button */
+.done-btn {
+  padding: 6px 16px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.done-btn:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.done-btn:active {
+  transform: translateY(1px);
 }
 
 /* Content */

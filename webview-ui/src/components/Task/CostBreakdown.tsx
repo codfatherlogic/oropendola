@@ -41,7 +41,7 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
     className = '',
     showDetails = true
 }) => {
-    // Claude Sonnet 4 pricing
+    // Default model pricing
     const PRICING = {
         INPUT_PER_MTOK: 3.0,
         OUTPUT_PER_MTOK: 15.0,

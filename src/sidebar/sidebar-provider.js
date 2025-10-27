@@ -44,6 +44,10 @@ class OropendolaSidebarProvider {
         this._marketplaceClient = null; // Lazy-loaded TypeScript client
         this._vectorClient = null; // Lazy-loaded TypeScript client
         this._i18nManager = null; // Lazy-loaded TypeScript client
+
+        // Advanced features: Subtask orchestration and semantic search
+        this._subtaskOrchestrator = null; // Initialized with TaskManager
+        this._semanticSearchProvider = null; // Lazy-loaded
     }
 
     /**
@@ -59,6 +63,26 @@ class OropendolaSidebarProvider {
      */
     setTaskManager(taskManager) {
         this._taskManager = taskManager;
+        
+        // Initialize SubtaskOrchestrator
+        try {
+            const { SubtaskOrchestrator } = require('../core/SubtaskOrchestrator');
+            this._subtaskOrchestrator = new SubtaskOrchestrator(taskManager, {
+                maxDepth: 3,
+                maxConcurrentSubtasks: 1,
+                enablePauseResume: true,
+                autoSaveInterval: 30000
+            });
+            
+            // Restore task stack if available
+            this._subtaskOrchestrator.restoreTaskStack().catch(err => {
+                console.error('❌ Failed to restore task stack:', err);
+            });
+            
+            console.log('✅ SubtaskOrchestrator initialized');
+        } catch (error) {
+            console.error('❌ Failed to initialize SubtaskOrchestrator:', error);
+        }
     }
 
     /**
@@ -182,6 +206,20 @@ class OropendolaSidebarProvider {
                                 // Force UI reset
                                 this._view.webview.postMessage({ type: 'hideTyping' });
                             }
+                        }
+                        break;
+                    case 'approveTool':
+                        console.log('✅ Tool approved:', message.tool?.action);
+                        if (this._currentTask && message.tool) {
+                            // Signal approval to the task
+                            this._currentTask.emit('toolApproved', message.messageTs, message.tool);
+                        }
+                        break;
+                    case 'rejectTool':
+                        console.log('❌ Tool rejected:', message.tool?.action);
+                        if (this._currentTask && message.tool) {
+                            // Signal rejection to the task
+                            this._currentTask.emit('toolRejected', message.messageTs, message.tool);
                         }
                         break;
                     case 'switchMode':
@@ -2003,6 +2041,7 @@ class OropendolaSidebarProvider {
                         role: 'assistant',
                         content: message,
                         file_changes: extraData?.file_changes,
+                        tool_calls: extraData?.tool_calls,  // ✅ Pass tool_calls to webview
                         has_todos: false,  // Always false to prevent plan interruption
                         auto_execute: true,  // Always true for continuous flow
                         ts: Date.now(),
@@ -2300,16 +2339,9 @@ class OropendolaSidebarProvider {
             timestamp: new Date().toISOString()
         });
 
-        // Show user message in UI (original text, not enhanced) - unless silent mode
-        if (this._view && !silent) {
-            this._view.webview.postMessage({
-                type: 'addMessage',
-                message: {
-                    role: 'user',
-                    content: text
-                }
-            });
-        }
+        // Don't show user message here - ConversationTask will handle it via taskMessages
+        // This prevents duplicate user messages in the chat UI
+        // The task's addMessage() will add it to taskMessages which syncs to webview
 
         try {
             // Show typing indicator
@@ -2341,6 +2373,17 @@ class OropendolaSidebarProvider {
                 this._taskCounter++;
                 const taskId = `task_${this._taskCounter}_${Date.now()}`;
 
+                // Initialize semantic search provider if not done
+                if (!this._semanticSearchProvider) {
+                    try {
+                        const { SemanticSearchProvider } = require('../vector/SemanticSearchProvider');
+                        this._semanticSearchProvider = new SemanticSearchProvider();
+                        console.log('✅ SemanticSearchProvider initialized');
+                    } catch (error) {
+                        console.error('❌ Failed to initialize SemanticSearchProvider:', error);
+                    }
+                }
+
                 this._currentTask = new ConversationTask(taskId, {
                     apiUrl,
                     sessionCookies: this._sessionCookies,
@@ -2349,7 +2392,10 @@ class OropendolaSidebarProvider {
                     providerRef: new WeakRef(this),
                     consecutiveMistakeLimit: 10,  // Increased for progressive mode (was 3)
                     // Sprint 1-2: Pass TaskManager for persistence
-                    taskManager: this._taskManager
+                    taskManager: this._taskManager,
+                    // Advanced features
+                    subtaskOrchestrator: this._subtaskOrchestrator,
+                    semanticSearchProvider: this._semanticSearchProvider
                 });
 
                 // Set up all event listeners

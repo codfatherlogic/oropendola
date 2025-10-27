@@ -37,7 +37,7 @@ export const TaskHeader: React.FC<TaskHeaderProps> = ({
   cacheReads = 0,
   totalCost,
   contextTokens,
-  contextWindow = 200000, // Default for Claude 3.5 Sonnet
+  contextWindow = 200000, // Default context window size
   buttonsDisabled = false,
   onCondenseContext,
   todos = [],

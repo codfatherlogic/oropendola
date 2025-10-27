@@ -62,7 +62,7 @@ body {
     color: var(--vscode-errorForeground);
 }
 
-/* Message header removed for cleaner Claude-like interface */
+/* Message header removed for cleaner interface */
 .message-header {
     display: none;
 }

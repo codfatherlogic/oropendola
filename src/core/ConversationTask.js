@@ -114,6 +114,10 @@ class ConversationTask extends EventEmitter {
         const ConversationCondenser = require('../services/condense/ConversationCondenser');
         this.condenser = new ConversationCondenser(options.sessionCookies);
 
+        // Subtask orchestration and semantic search (if available)
+        this.subtaskOrchestrator = options.subtaskOrchestrator || null;
+        this.semanticSearchProvider = options.semanticSearchProvider || null;
+
         // Initialize realtime connection if session cookies provided
         console.log('🔥 [ConversationTask] Checking realtime connection requirements...');
         console.log('🔥 [ConversationTask] Has sessionCookies:', !!options.sessionCookies);
@@ -287,6 +291,9 @@ class ConversationTask extends EventEmitter {
                 const modules = SystemPromptBuilder.listModules();
                 console.log('📦 Prompt modules loaded:', modules.length, 'sections');
                 modules.forEach(m => console.log(`  - ${m.section} (priority ${m.priority}, ${m.size} chars)`));
+                console.log('📝 System prompt length:', systemPrompt.length, 'chars');
+                console.log('🔍 System prompt preview (first 500 chars):', systemPrompt.substring(0, 500));
+                console.log('🔍 Contains "THINK OUT LOUD":', systemPrompt.includes('THINK OUT LOUD'));
 
                 /* OLD HARDCODED PROMPT - REPLACED WITH MODULAR SYSTEM
                 const systemPrompt = \`You are an intelligent AI coding assistant integrated into VS Code that works progressively and iteratively.
@@ -629,6 +636,7 @@ ${dynamicContext}\`;
                         file_changes: response._file_changes,
                         conversation_id: this.conversationId,
                         hasToolCalls: toolCalls.length > 0,  // Indicate if tools will follow
+                        tool_calls: toolCalls,  // ✅ Include tool_calls in event data
                         apiMetrics: response._apiMetrics  // Pass API metrics to webview
                     });
 
@@ -656,12 +664,60 @@ ${dynamicContext}\`;
 
                     if (toolCalls.length > 0) {
                         console.log(`🔧 Found ${toolCalls.length} tool call(s) to execute`);
+                        console.log(`📤 Tool calls already sent to webview via assistantMessage event`);
 
-                        // Emit tool execution event (keeps thinking indicator visible)
-                        this.emit('toolsExecuting', this.taskId, toolCalls.length);
-
-                        // Execute all tool calls
-                        const toolResults = await this._executeToolCalls(toolCalls);
+                        // Wait for user approval for each tool
+                        const approvedToolResults = [];
+                        
+                        for (let i = 0; i < toolCalls.length; i++) {
+                            const tool = toolCalls[i];
+                            console.log(`⏳ [${i + 1}/${toolCalls.length}] Waiting for approval: ${tool.action}`);
+                            
+                            // Wait for approval/rejection
+                            const approved = await this._waitForToolApproval(tool);
+                            
+                            if (this.abort) {
+                                console.log(`🛑 [ConversationTask] Task ${this.taskId} aborted during approval`);
+                                throw new Error(`Task ${this.taskId}.${this.instanceId} aborted`);
+                            }
+                            
+                            if (approved) {
+                                console.log(`✅ [${i + 1}/${toolCalls.length}] Tool approved, executing: ${tool.action}`);
+                                
+                                // Emit tool execution start event
+                                this.emit('toolExecutionStart', this.taskId, tool, i, toolCalls.length);
+                                
+                                try {
+                                    const result = await this._executeSingleTool(tool);
+                                    approvedToolResults.push(result);
+                                    
+                                    // Track context from tool calls
+                                    this.contextTracker.extractFromToolCall(tool);
+                                    
+                                    // Emit tool execution complete event
+                                    this.emit('toolExecutionComplete', this.taskId, tool, result, i, toolCalls.length);
+                                    this.emit('toolCompleted', this.taskId, tool, result);
+                                    
+                                } catch (toolError) {
+                                    console.error('❌ Tool execution error:', toolError);
+                                    approvedToolResults.push({
+                                        tool_use_id: tool.id,
+                                        tool_name: tool.action,
+                                        content: `Error: ${toolError.message}`,
+                                        success: false
+                                    });
+                                    this.emit('toolError', this.taskId, tool, toolError);
+                                }
+                            } else {
+                                console.log(`❌ [${i + 1}/${toolCalls.length}] Tool rejected: ${tool.action}`);
+                                approvedToolResults.push({
+                                    tool_use_id: tool.id,
+                                    tool_name: tool.action,
+                                    content: `User rejected this tool`,
+                                    success: false
+                                });
+                            }
+                        }
 
                         // Check abort flag after tool execution
                         if (this.abort) {
@@ -670,7 +726,7 @@ ${dynamicContext}\`;
                         }
 
                         // Add tool results to conversation
-                        for (const result of toolResults) {
+                        for (const result of approvedToolResults) {
                             this.addMessage('tool_result', result.content, [], result.tool_name);
                         }
 
@@ -1394,10 +1450,18 @@ ${dynamicContext}\`;
      * This prevents raw tool calls from being displayed to users
      */
     _cleanToolCallsFromResponse(responseText) {
-        if (!responseText) {return '';}
+        if (!responseText) return '';
 
-        // Remove ```tool_call ... ``` blocks
+        // Remove ```tool_call ... ``` blocks (original format)
         let cleaned = responseText.replace(/```tool_call[\s\S]*?```/g, '');
+        
+        // ✅ IMPROVED: Remove ANY code block that contains "action": with tool names
+        // This catches all variations: ```json, ```, ```txt, etc.
+        cleaned = cleaned.replace(/```[\s\S]*?"action"\s*:[\s\S]*?```/g, '');
+        
+        // ✅ IMPROVED: Remove standalone lines with JSON-like tool calls
+        // Matches lines that look like: { "action": "create_file", ...
+        cleaned = cleaned.replace(/^\s*\{[^}]*"action"\s*:[^}]*$/gm, '');
 
         // Remove extra whitespace and empty lines
         cleaned = cleaned
@@ -1446,6 +1510,56 @@ ${dynamicContext}\`;
             console.error('❌ Manual extraction failed:', error);
             return null;
         }
+    }
+
+    /**
+     * Wait for user approval/rejection of a tool
+     * Returns: Promise<boolean> - true if approved, false if rejected
+     */
+    async _waitForToolApproval(tool) {
+        return new Promise((resolve, reject) => {
+            const approvalTimeout = setTimeout(() => {
+                console.warn(`⏱️ Tool approval timeout for: ${tool.action}`);
+                resolve(false); // Reject on timeout
+            }, 5 * 60 * 1000); // 5 minute timeout
+
+            // Listen for approval event
+            const handleApproval = (messageTs, approvedTool) => {
+                if (approvedTool.action === tool.action) {
+                    clearTimeout(approvalTimeout);
+                    this.removeListener('toolApproved', handleApproval);
+                    this.removeListener('toolRejected', handleRejection);
+                    this.removeListener('aborted', handleAbort);
+                    console.log(`✅ Tool approved: ${tool.action}`);
+                    resolve(true);
+                }
+            };
+
+            // Listen for rejection event
+            const handleRejection = (messageTs, rejectedTool) => {
+                if (rejectedTool.action === tool.action) {
+                    clearTimeout(approvalTimeout);
+                    this.removeListener('toolApproved', handleApproval);
+                    this.removeListener('toolRejected', handleRejection);
+                    this.removeListener('aborted', handleAbort);
+                    console.log(`❌ Tool rejected: ${tool.action}`);
+                    resolve(false);
+                }
+            };
+
+            // Listen for task abort
+            const handleAbort = () => {
+                clearTimeout(approvalTimeout);
+                this.removeListener('toolApproved', handleApproval);
+                this.removeListener('toolRejected', handleRejection);
+                this.removeListener('aborted', handleAbort);
+                reject(new Error('Task aborted during tool approval'));
+            };
+
+            this.on('toolApproved', handleApproval);
+            this.on('toolRejected', handleRejection);
+            this.on('aborted', handleAbort);
+        });
     }
 
     /**
@@ -1524,6 +1638,7 @@ ${dynamicContext}\`;
             case 'run_terminal':
             case 'run_terminal_command':
             case 'execute_command':
+            case 'run_command':  // ✅ Added for backend compatibility
                 return await this._executeTerminalCommand(command || content, description);
 
             case 'semantic_search':
@@ -1531,6 +1646,15 @@ ${dynamicContext}\`;
 
             case 'get_symbol_info':
                 return await this._executeGetSymbolInfo(toolCall);
+
+            case 'start_subtask':
+                return await this._executeStartSubtask(toolCall);
+
+            case 'complete_subtask':
+                return await this._executeCompleteSubtask(toolCall);
+
+            case 'codebase_search':
+                return await this._executeCodebaseSearch(toolCall);
 
             default:
                 throw new Error(`Unknown tool action: ${action}`);
@@ -2938,202 +3062,23 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
 
     /**
      * Get dynamically discovered codebase context
-     * ✨ v3.2.6: Enhanced with hybrid framework detection (workspace + prompt)
+     * ✨ v3.7.2: PERFORMANCE - Removed framework detection (matches Roo-Code approach)
      * @private
-     * @param {string} initialMessage - User's initial message for prompt-based detection
-     * @returns {Promise<string>} Dynamic context based on codebase analysis + framework hints
+     * @param {string} initialMessage - User's initial message
+     * @returns {Promise<string>} Simple context without heavy analysis
      */
     async _getDynamicCodebaseContext(initialMessage = '') {
         try {
-            // Get workspace path
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders || workspaceFolders.length === 0) {
-                return '';
-            }
+            // ⚡ v3.7.2: No framework detection - let AI discover naturally
+            // This matches Roo-Code's simple, fast approach
+            
+            // Store placeholder values for compatibility
+            this.detectedFramework = 'Unknown';
+            this.frameworkConfidence = 0;
 
-            const workspacePath = workspaceFolders[0].uri.fsPath;
-
-            // 🔥 STEP 1: Workspace-based framework detection
-            console.log('🔍 [Framework Detection] Analyzing workspace files...');
-            const workspaceAnalyzer = new LocalWorkspaceAnalyzer();
-            const workspaceContext = await workspaceAnalyzer.analyzeWorkspace(workspacePath);
-
-            console.log(`📁 [Workspace] Detected: ${workspaceContext.projectType} (framework: ${workspaceContext.framework || 'unknown'})`);
-
-            // 🔥 STEP 2: Prompt-based framework detection
-            console.log('💬 [Framework Detection] Analyzing user prompt...');
-            const promptDetector = new PromptFrameworkDetector();
-            const promptDetection = promptDetector.detectFromPrompt(initialMessage, workspaceContext);
-
-            console.log(`💬 [Prompt] Detected: ${promptDetection.framework || 'none'} (confidence: ${promptDetection.confidence}, method: ${promptDetection.method})`);
-
-            // 🔥 STEP 3: Combine detections (prompt wins if high confidence)
-            let finalFramework = workspaceContext.projectType;
-            let detectionMethod = 'workspace';
-            let finalConfidence = 0.5; // Default workspace confidence
-
-            if (promptDetection.framework && promptDetection.confidence > 0.7) {
-                finalFramework = promptDetection.framework;
-                detectionMethod = promptDetection.method;
-                finalConfidence = promptDetection.confidence;
-                console.log(`✅ [Hybrid] Using prompt-detected framework: ${finalFramework} (${detectionMethod})`);
-            } else if (workspaceContext.framework) {
-                finalConfidence = 0.7; // Workspace detection is fairly confident
-                console.log(`✅ [Hybrid] Using workspace-detected framework: ${finalFramework}`);
-            }
-
-            // v3.4.3: Store detected framework and confidence for task reporting
-            this.detectedFramework = finalFramework;
-            this.frameworkConfidence = finalConfidence;
-
-            // 🔥 STEP 4: Get framework-specific hints for AI
-            const frameworkHints = promptDetector.getFrameworkHints(finalFramework, initialMessage);
-
-            // 🔥 STEP 5: Build enhanced context
-            let context = '';
-
-            // Add framework information
-            if (finalFramework && finalFramework !== 'Unknown') {
-                context += `\n\n**🎯 DETECTED FRAMEWORK: ${finalFramework.toUpperCase()}**\n`;
-                context += `Detection method: ${detectionMethod}\n`;
-                // v3.4.3 fix: Use finalConfidence which we stored earlier
-                const confidencePercent = finalConfidence !== undefined && finalConfidence !== null
-                    ? Math.round(finalConfidence * 100)
-                    : 50;
-                context += `Confidence: ${confidencePercent}%\n`;
-
-                // Add file type recommendations
-                if (frameworkHints.fileTypes.length > 0) {
-                    context += `\n**File Types:**\n`;
-                    frameworkHints.fileTypes.forEach(ext => {
-                        context += `- Use ${ext} files\n`;
-                    });
-                }
-
-                // Add conventions
-                if (frameworkHints.conventions.length > 0) {
-                    context += `\n**Framework Conventions:**\n`;
-                    frameworkHints.conventions.forEach(convention => {
-                        context += `- ${convention}\n`;
-                    });
-                }
-
-                // 🔥 v3.4.0: Framework-aware file generation instructions
-                if (frameworkHints.suggestedStructure) {
-                    const structure = frameworkHints.suggestedStructure;
-                    const entityType = structure.type.toLowerCase();
-
-                    // Get comprehensive file structure from registry
-                    const entity = this.frameworkRegistry.getEntity(finalFramework, entityType);
-                    if (entity) {
-                        const requiredFiles = this.frameworkRegistry.getRequiredFiles(finalFramework, entityType, true);
-                        const conventions = this.frameworkConventions.getConventionsSummary(finalFramework, entityType);
-
-                        context += `\n${conventions}\n`;
-                        context += `\n**🔴 CRITICAL: FILE GENERATION REQUIREMENTS**\n`;
-                        context += `\nWhen creating a ${finalFramework} ${structure.type}, you MUST generate ALL of the following files:\n\n`;
-
-                        requiredFiles.forEach((fileSpec, idx) => {
-                            const status = fileSpec.mandatory ? '🔴 MANDATORY' : '🟡 RECOMMENDED';
-                            context += `${idx + 1}. ${status}: **${fileSpec.type}${fileSpec.extension}**\n`;
-                            context += `   - Description: ${fileSpec.description}\n`;
-                            context += `   - Pattern: \`${fileSpec.pattern}\`\n`;
-                            if (fileSpec.bestPractice) {
-                                context += `   - ⭐ Best Practice: Essential for production-ready code\n`;
-                            }
-                            context += `\n`;
-                        });
-
-                        context += `\n**📋 IMPLEMENTATION INSTRUCTIONS:**\n`;
-                        context += `1. Create ALL mandatory files (marked with 🔴)\n`;
-                        context += `2. Include recommended files (marked with 🟡) for production quality\n`;
-                        context += `3. Follow the framework conventions listed above\n`;
-                        context += `4. Generate proper content for each file (not empty placeholders)\n`;
-                        context += `5. Include appropriate imports, classes, and boilerplate\n`;
-                        context += `6. Add validation logic where applicable\n`;
-                        context += `7. Include comprehensive comments and documentation\n`;
-                        context += `\n⚠️ DO NOT create only the .json file - all mandatory files must be created!\n`;
-                    } else {
-                        // Fallback to old structure display
-                        context += `\n**⚠️ REQUIRED File Structure for "${structure.type}":**\n`;
-                        context += `IMPORTANT: You MUST create ALL of the following files (not just .json):\n`;
-                        context += '```\n';
-                        structure.files.forEach(file => {
-                            context += `${file}\n`;
-                        });
-                        context += '```\n';
-                        context += `\n🔴 For ${finalFramework} ${structure.type}s, all files (.json, .py, .js) are mandatory!\n`;
-                    }
-                }
-
-                // Add workspace info
-                context += `\n**Workspace Info:**\n`;
-                context += `- Languages: ${workspaceContext.languages.join(', ') || 'Unknown'}\n`;
-                context += `- Dependencies: ${workspaceContext.dependencies.length} packages\n`;
-                if (workspaceContext.git) {
-                    context += `- Git Branch: ${workspaceContext.git.branch}\n`;
-                }
-
-                // 🔥 STEP 6: Learn workspace structure (v3.2.7)
-                console.log('🎓 [Learning] Analyzing workspace structure...');
-                this.learnedStructure = await this.structureLearner.learnStructure(workspacePath, finalFramework);
-
-                if (this.learnedStructure && this.learnedStructure.suggestedLocations) {
-                    context += `\n**📍 FILE CREATION LOCATIONS** (learned from workspace):\n`;
-
-                    // Add detected app metadata
-                    if (this.learnedStructure.appMetadata.appName) {
-                        context += `App Name: ${this.learnedStructure.appMetadata.appName}\n`;
-                        context += `Workspace Type: ${this.learnedStructure.appMetadata.type || 'unknown'}\n`;
-                    }
-
-                    // Add file location patterns
-                    context += `\n**Where to create files:**\n`;
-                    Object.entries(this.learnedStructure.suggestedLocations).forEach(([type, location]) => {
-                        context += `- ${type}: ${location}\n`;
-                    });
-
-                    // Add detected patterns
-                    if (this.learnedStructure.detectedPatterns.length > 0) {
-                        context += `\n**Detected Patterns:**\n`;
-                        this.learnedStructure.detectedPatterns.forEach(pattern => {
-                            context += `- ${pattern}\n`;
-                        });
-                    }
-
-                    // Add example files if available
-                    if (this.learnedStructure.exampleFiles.length > 0) {
-                        context += `\n**Example Files Found:**\n`;
-                        this.learnedStructure.exampleFiles.forEach(file => {
-                            context += `- ${file}\n`;
-                        });
-                    }
-                }
-            }
-
-            // 🔥 STEP 7: Add conversation context (v3.2.7)
-            const contextSummary = this.contextTracker.getContextSummary();
-            if (contextSummary) {
-                context += `\n${contextSummary}`;
-            }
-
-            // Dynamically analyze codebase patterns
-            const CodebasePatternAnalyzer = require('../analysis/CodebasePatternAnalyzer');
-            const analyzer = new CodebasePatternAnalyzer();
-
-            console.log('🔍 Dynamically discovering codebase patterns...');
-            const patterns = await analyzer.analyzePatterns(workspacePath);
-
-            // Build context from discovered patterns
-            const DynamicContextBuilder = require('../analysis/DynamicContextBuilder');
-            const patternContext = DynamicContextBuilder.buildContext(patterns);
-
-            // Combine framework hints + pattern analysis
-            context += '\n' + patternContext;
-
-            console.log('✅ Dynamic context built with hybrid framework detection + structure learning');
-
-            return context;
+            // Return empty context - AI will discover framework from reading files
+            console.log('⚡ [v3.7.2] Skipping framework detection for instant response');
+            return '';
 
         } catch (error) {
             console.warn('⚠️ Error building dynamic context:', error.message);
@@ -3941,6 +3886,158 @@ Use React best practices:
             isPaused: this.isPaused,
             fileChanges: this.fileChangeTracker.getAllChanges()
         };
+    }
+
+    /**
+     * Execute start_subtask tool
+     * Creates a new subtask and pauses the current task
+     */
+    async _executeStartSubtask(toolCall) {
+        const { description, mode } = toolCall;
+
+        if (!this.subtaskOrchestrator) {
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'start_subtask',
+                content: 'Error: Subtask orchestrator not initialized',
+                success: false
+            };
+        }
+
+        try {
+            console.log(`🔄 Starting subtask: ${description}`);
+            
+            // Start subtask (this will automatically pause current task)
+            const subtaskPromise = this.subtaskOrchestrator.startSubtask(description, mode || this.mode);
+
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'start_subtask',
+                content: `Subtask started: ${description}\n\nThe current task has been paused and will resume after the subtask completes.`,
+                success: true,
+                subtaskPromise  // Store promise for waiting
+            };
+        } catch (error) {
+            console.error('❌ Failed to start subtask:', error);
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'start_subtask',
+                content: `Error starting subtask: ${error.message}`,
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Execute complete_subtask tool
+     * Marks current subtask as complete and returns to parent
+     */
+    async _executeCompleteSubtask(toolCall) {
+        const { result } = toolCall;
+
+        if (!this.subtaskOrchestrator) {
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'complete_subtask',
+                content: 'Error: Subtask orchestrator not initialized',
+                success: false
+            };
+        }
+
+        try {
+            console.log(`✅ Completing subtask`);
+            
+            await this.subtaskOrchestrator.completeSubtask(result);
+
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'complete_subtask',
+                content: `Subtask completed successfully. Returning to parent task.`,
+                success: true
+            };
+        } catch (error) {
+            console.error('❌ Failed to complete subtask:', error);
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'complete_subtask',
+                content: `Error completing subtask: ${error.message}`,
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Execute codebase_search tool
+     * Performs semantic search across the codebase
+     */
+    async _executeCodebaseSearch(toolCall) {
+        const { query, limit, min_similarity } = toolCall;
+
+        if (!this.semanticSearchProvider) {
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'codebase_search',
+                content: 'Error: Semantic search not initialized',
+                success: false
+            };
+        }
+
+        try {
+            console.log(`🔍 Semantic search: ${query}`);
+            
+            const searchLimit = limit || 5;
+            const minSimilarity = min_similarity || 0.6;
+
+            const { codeContext, contextString } = await this.semanticSearchProvider.searchContext(query, {
+                includeCode: true,
+                includeMemories: false,  // Focus on code for codebase_search
+                maxResults: searchLimit
+            });
+
+            // Filter by minimum similarity
+            const filteredResults = codeContext.filter(r => r.similarity >= minSimilarity);
+
+            if (filteredResults.length === 0) {
+                return {
+                    tool_use_id: toolCall.id,
+                    tool_name: 'codebase_search',
+                    content: `No relevant code found for query: "${query}"\n\nTry:\n- Using different keywords\n- Lowering min_similarity threshold\n- Being more specific or more general`,
+                    success: true,
+                    results: []
+                };
+            }
+
+            // Format results for AI
+            const formattedResults = filteredResults.map((result, index) => {
+                const location = result.filePath 
+                    ? `File: ${result.filePath}${result.lineNumber ? `:${result.lineNumber}` : ''}`
+                    : 'Location: Unknown';
+                
+                return `Result ${index + 1}/${filteredResults.length}:
+${location}
+Similarity: ${(result.similarity * 100).toFixed(1)}%
+
+${result.content}
+
+---`;
+            }).join('\n\n');
+
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'codebase_search',
+                content: `Found ${filteredResults.length} relevant code snippet(s) for: "${query}"\n\n${formattedResults}`,
+                success: true,
+                results: filteredResults
+            };
+        } catch (error) {
+            console.error('❌ Semantic search failed:', error);
+            return {
+                tool_use_id: toolCall.id,
+                tool_name: 'codebase_search',
+                content: `Error performing semantic search: ${error.message}`,
+                success: false
+            };
+        }
     }
 }
 

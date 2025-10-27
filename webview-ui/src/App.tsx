@@ -1,29 +1,32 @@
 /**
- * App Component - Integrated Roo-Code Style Interface
+ * App Component - Roo-Code Exact Interface Pattern
  *
- * Complete Roo-Code UI with ChatView, TaskHeader, auto-approval, and SSE streaming.
- * Communicates directly with backend at https://oropendola.ai
+ * EXACT Roo Code architecture:
+ * - ChatView ALWAYS rendered (hidden when overlays active)
+ * - History/Settings as full-screen overlays (not tabs)
+ * - Single view - no top navigation tabs
+ * - Bottom action bar handles navigation
+ * - Single backend: https://oropendola.ai
  *
- * Now includes Navigation between Chat and History views (Sprint 1-2 Task Persistence)
+ * Pattern from Roo Code:
+ * - tab state controls which overlay is shown
+ * - ChatView never unmounts (preserves state)
+ * - Overlays mount on top when tab !== 'chat'
  */
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useCallback } from 'react'
 import { ChatProvider, useChatContext } from './context/ChatContext'
 import { ChatView } from './components/Chat/ChatView'
 import { HistoryView } from './components/History/HistoryView'
-import { TerminalView } from './components/Terminal/TerminalView'
-import { BrowserView } from './components/Browser/BrowserView'
-import { MarketplaceView } from './components/Marketplace/MarketplaceView'
-import { VectorView } from './components/Vector/VectorView'
 import { SettingsView } from './components/Settings/SettingsView'
-import { ViewNavigation, ViewType } from './components/Navigation/ViewNavigation'
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
-import vscode from './vscode-api'
 import './AppIntegrated.css'
 
+// Tab type matching Roo Code pattern - only chat, history, settings for now
+type Tab = 'chat' | 'history' | 'settings'
+
 /**
- * Main interface with navigation between Chat and History views
- * Sprint 1-2: Added view switching for Task Persistence feature
+ * Main interface - Roo Code pattern
+ * ChatView always rendered, overlays conditionally shown
  */
 const ChatInterface: React.FC = () => {
   const {
@@ -42,93 +45,16 @@ const ChatInterface: React.FC = () => {
     clearError,
   } = useChatContext()
 
-  // View state management - Sprint 1-2: Navigation between Chat and History
-  const [currentView, setCurrentView] = useState<ViewType>('chat')
+  // Tab state - Roo Code pattern
+  const [tab, setTab] = useState<Tab>('chat')
 
-  // Task statistics for badge
-  const [taskStats, setTaskStats] = useState<{ total: number }>({ total: 0 })
-
-  // Request task stats on mount
-  useEffect(() => {
-    // Request stats from extension
-    vscode.postMessage({ type: 'getTaskStats' })
-
-    // Listen for stats response
-    const handleMessage = (event: MessageEvent) => {
-      const message = event.data
-      if (message.type === 'taskStats') {
-        setTaskStats(message.stats)
-      }
-    }
-
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
+  // Switch tab with callback - like Roo Code
+  const switchTab = useCallback((newTab: Tab) => {
+    setTab(newTab)
   }, [])
-
-  // Keyboard shortcuts for view switching
-  const shortcuts = useMemo(() => [
-    {
-      key: '1',
-      ctrl: true,
-      description: 'Switch to Chat view',
-      handler: () => setCurrentView('chat')
-    },
-    {
-      key: '2',
-      ctrl: true,
-      description: 'Switch to History view',
-      handler: () => setCurrentView('history')
-    },
-    {
-      key: '3',
-      ctrl: true,
-      description: 'Switch to Terminal view',
-      handler: () => setCurrentView('terminal')
-    },
-    {
-      key: '4',
-      ctrl: true,
-      description: 'Switch to Browser view',
-      handler: () => setCurrentView('browser')
-    },
-    {
-      key: '5',
-      ctrl: true,
-      description: 'Switch to Marketplace view',
-      handler: () => setCurrentView('marketplace')
-    },
-    {
-      key: '6',
-      ctrl: true,
-      description: 'Switch to Vector view',
-      handler: () => setCurrentView('vector')
-    },
-    {
-      key: '7',
-      ctrl: true,
-      description: 'Switch to Settings view',
-      handler: () => setCurrentView('settings')
-    },
-    {
-      key: 'h',
-      ctrl: true,
-      shift: true,
-      description: 'Toggle between Chat and History',
-      handler: () => setCurrentView(prev => prev === 'chat' ? 'history' : 'chat')
-    }
-  ], [])
-
-  useKeyboardShortcuts(shortcuts)
 
   return (
     <div className="app-container">
-      {/* Navigation tabs - Sprint 1-2 */}
-      <ViewNavigation
-        currentView={currentView}
-        onViewChange={setCurrentView}
-        taskCount={taskStats.total}
-      />
-
       {/* Error banner */}
       {error && (
         <div className="error-banner">
@@ -139,56 +65,39 @@ const ChatInterface: React.FC = () => {
         </div>
       )}
 
-      {/* Loading overlay (only for chat view) */}
-      {isLoading && messages.length === 0 && currentView === 'chat' && (
+      {/* Loading overlay */}
+      {isLoading && messages.length === 0 && (
         <div className="loading-overlay">
           <div className="loading-spinner" />
           <p>Connecting to Oropendola AI...</p>
         </div>
       )}
 
-      {/* View switcher - Sprint 1-2 + Week 6 + Week 7 */}
-      <div className="view-container">
-        {currentView === 'chat' && (
-          /* Chat view */
-          <ChatView
-            messages={messages}
-            taskMessage={taskMessage || undefined}
-            todos={todos}
-            autoApprovalEnabled={autoApprovalEnabled}
-            autoApproveToggles={autoApproveToggles}
-            onSendMessage={sendMessage}
-            onApproveMessage={approveMessage}
-            onRejectMessage={rejectMessage}
-            onAutoApprovalEnabledChange={setAutoApprovalEnabled}
-            onAutoApproveToggleChange={setAutoApproveToggle}
-          />
-        )}
-        {currentView === 'history' && (
-          /* History view - Sprint 1-2: Task Persistence */
-          <HistoryView />
-        )}
-        {currentView === 'terminal' && (
-          /* Terminal view - Week 7: Enhanced Terminal */
-          <TerminalView />
-        )}
-        {currentView === 'browser' && (
-          /* Browser view - Week 6: Browser Automation */
-          <BrowserView />
-        )}
-        {currentView === 'marketplace' && (
-          /* Marketplace view - Week 8: Extension Marketplace */
-          <MarketplaceView />
-        )}
-        {currentView === 'vector' && (
-          /* Vector view - Week 8: Semantic Search */
-          <VectorView />
-        )}
-        {currentView === 'settings' && (
-          /* Settings view - I18n & App Settings */
-          <SettingsView />
-        )}
-      </div>
+      {/* Roo Code pattern: Overlays mount conditionally */}
+      {tab === 'history' && (
+        <HistoryView onDone={() => switchTab('chat')} />
+      )}
+      {tab === 'settings' && (
+        <SettingsView onDone={() => switchTab('chat')} />
+      )}
+
+      {/* ChatView ALWAYS rendered - hidden when overlays active */}
+      <ChatView
+        isHidden={tab !== 'chat'}
+        messages={messages}
+        taskMessage={taskMessage || undefined}
+        todos={todos}
+        isLoading={isLoading}
+        autoApprovalEnabled={autoApprovalEnabled}
+        autoApproveToggles={autoApproveToggles}
+        onSendMessage={sendMessage}
+        onApproveMessage={approveMessage}
+        onRejectMessage={rejectMessage}
+        onAutoApprovalEnabledChange={setAutoApprovalEnabled}
+        onAutoApproveToggleChange={setAutoApproveToggle}
+        onOpenHistory={() => switchTab('history')}
+        onOpenSettings={() => switchTab('settings')}
+      />
     </div>
   )
 }

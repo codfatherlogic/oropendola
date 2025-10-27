@@ -56,7 +56,12 @@ interface TaskStats {
 	terminated: number
 }
 
-export const HistoryView: React.FC = () => {
+// Roo Code pattern: onDone callback to return to chat
+interface HistoryViewProps {
+	onDone: () => void
+}
+
+export const HistoryView: React.FC<HistoryViewProps> = ({ onDone }) => {
 	const [tasks, setTasks] = useState<Task[]>([])
 	const [stats, setStats] = useState<TaskStats | null>(null)
 	const [loading, setLoading] = useState(true)
@@ -204,7 +209,7 @@ export const HistoryView: React.FC = () => {
 
 	return (
 		<div className="history-view">
-			{/* Header */}
+			{/* Header with Done button (Roo Code pattern) */}
 			<div className="history-header">
 				<div className="history-title">
 					<h2>Task History</h2>
@@ -215,14 +220,23 @@ export const HistoryView: React.FC = () => {
 					)}
 				</div>
 
-				<button
-					className="refresh-btn"
-					onClick={handleRefresh}
-					disabled={loading}
-					title="Refresh"
-				>
-					<RefreshCw size={16} className={loading ? 'spinning' : ''} />
-				</button>
+				<div className="history-actions">
+					<button
+						className="refresh-btn"
+						onClick={handleRefresh}
+						disabled={loading}
+						title="Refresh"
+					>
+						<RefreshCw size={16} className={loading ? 'spinning' : ''} />
+					</button>
+					<button
+						className="done-btn"
+						onClick={onDone}
+						title="Return to Chat"
+					>
+						Done
+					</button>
+				</div>
 			</div>
 
 			{/* Statistics Bar */}

@@ -8,7 +8,7 @@
 import React, { useMemo } from 'react'
 import './Mention.css'
 
-interface MentionProps {
+export interface MentionProps {
 	text: string
 }
 

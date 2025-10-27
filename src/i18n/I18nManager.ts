@@ -145,11 +145,14 @@ export class I18nManager {
                 throw new Error('Invalid response format');
             }
         } catch (error) {
-            console.error(`Failed to load translations for ${language}:`, error);
+            // Silently fall back - don't spam console with errors
+            if (process.env.DEBUG) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.warn(`Translation loading failed for ${language} (using fallback):`, errorMsg);
+            }
 
             // Fall back to English if loading failed and not already English
-            if (language !== 'en') {
-                console.log('Falling back to English translations');
+            if (language !== 'en' && !this.translationCache.has('en')) {
                 await this.loadLanguage('en');
             } else {
                 // Use hardcoded fallback translations

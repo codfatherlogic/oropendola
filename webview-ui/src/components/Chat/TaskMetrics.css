@@ -1,0 +1,97 @@
+/* TaskMetrics.css - Styling for API metrics display */
+
+.task-metrics {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-font-family);
+}
+
+.metric-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metric-label {
+  font-weight: 500;
+  color: var(--vscode-foreground);
+  opacity: 0.8;
+}
+
+.metric-values {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metric-value {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--vscode-editor-font-family);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-separator {
+  opacity: 0.5;
+  margin: 0 2px;
+}
+
+/* Token metrics */
+.metric-in {
+  color: var(--vscode-terminal-ansiGreen);
+}
+
+.metric-out {
+  color: var(--vscode-terminal-ansiBlue);
+}
+
+/* Cache metrics */
+.metric-cache-write {
+  color: var(--vscode-terminal-ansiYellow);
+}
+
+.metric-cache-read {
+  color: var(--vscode-terminal-ansiCyan);
+}
+
+/* Cost metric */
+.metric-cost {
+  font-weight: 600;
+  color: var(--vscode-terminal-ansiMagenta);
+}
+
+/* Hover effects */
+.metric-value:hover {
+  opacity: 0.8;
+  cursor: help;
+}
+
+/* Compact mode */
+.task-metrics.compact {
+  gap: 12px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+/* Dark theme adjustments */
+body[data-vscode-theme-kind="vscode-dark"] .task-metrics {
+  background: var(--vscode-input-background);
+}
+
+/* Light theme adjustments */
+body[data-vscode-theme-kind="vscode-light"] .task-metrics {
+  background: var(--vscode-input-background);
+}
+
+/* High contrast adjustments */
+body[data-vscode-theme-kind="vscode-high-contrast"] .task-metrics {
+  border-width: 2px;
+}

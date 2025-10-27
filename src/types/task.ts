@@ -46,6 +46,8 @@ export interface TaskMetadata {
   tags?: string[]               // User tags
   error?: string                // Error message if failed
   stack?: string                // Stack trace if failed
+  childTasks?: string[]         // Child task IDs (for subtask support)
+  pauseState?: any              // Pause state for resumption
 }
 
 export interface Checkpoint {

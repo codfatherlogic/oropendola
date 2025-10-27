@@ -271,6 +271,78 @@ export class OropendolaAPIClient {
     const data = await response.json()
     return data.message?.task_id || ''
   }
+
+  /**
+   * Batch read multiple files
+   */
+  async readFilesBatch(paths: string[]): Promise<Array<{ path: string; content: string; error?: string }>> {
+    const response = await fetch(
+      `${this.baseUrl}/api/method/ai_assistant.api.file_operations.read_files_batch`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ paths }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Batch file read failed: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.message?.files || []
+  }
+
+  /**
+   * Apply multiple diffs in batch
+   */
+  async applyDiffsBatch(diffs: Array<{ path: string; diff: string }>): Promise<Array<{ path: string; success: boolean; error?: string }>> {
+    const response = await fetch(
+      `${this.baseUrl}/api/method/ai_assistant.api.file_operations.apply_diffs_batch`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ diffs }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Batch diff apply failed: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.message?.results || []
+  }
+
+  /**
+   * Get file information
+   */
+  async getFileInfo(path: string): Promise<{ exists: boolean; size?: number; modified?: string; error?: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/api/method/ai_assistant.api.file_operations.get_file_info`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ path }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Get file info failed: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.message || { exists: false }
+  }
 }
 
 /**

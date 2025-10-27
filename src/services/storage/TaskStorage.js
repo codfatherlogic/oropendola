@@ -381,7 +381,7 @@ class TaskStorage {
 		return {
 			version: '3.5.0',
 			mode: 'architect',
-			model: 'claude-3-5-sonnet-20241022'
+			model: 'default-model'
 		}
 	}
 

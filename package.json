@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.7.0: Multi-Mode AI System (Code/Architect/Ask/Debug) with mode-specific behavior and intelligent context",
-  "version": "3.7.0",
+  "description": "AI-powered assistant - v3.7.2: Cancel/Terminate Buttons + Performance Optimizations",
+  "version": "3.7.2",
   "publisher": "oropendola",
   "repository": {
     "type": "git",

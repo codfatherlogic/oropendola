@@ -1,0 +1,133 @@
+/**
+ * TaskStackNavigator - Styles for task hierarchy visualization
+ */
+
+.task-stack-navigator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.task-stack-label {
+  color: var(--vscode-descriptionForeground);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.task-stack-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.task-stack-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  transition: all 0.2s ease;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.task-stack-item-clickable {
+  cursor: pointer;
+}
+
+.task-stack-item-clickable:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--vscode-focusBorder);
+}
+
+.task-stack-item-current {
+  background: var(--vscode-list-activeSelectionBackground);
+  border-color: var(--vscode-focusBorder);
+  font-weight: 500;
+}
+
+.task-stack-icon {
+  flex-shrink: 0;
+}
+
+.task-stack-icon-active {
+  color: var(--vscode-charts-blue);
+  animation: spin 1s linear infinite;
+}
+
+.task-stack-icon-completed {
+  color: var(--vscode-charts-green);
+}
+
+.task-stack-icon-failed {
+  color: var(--vscode-charts-red);
+}
+
+.task-stack-icon-paused {
+  color: var(--vscode-charts-yellow);
+}
+
+.task-stack-icon-pending {
+  color: var(--vscode-descriptionForeground);
+}
+
+.task-stack-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.task-stack-depth {
+  display: inline-block;
+  padding: 1px 4px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.task-stack-separator {
+  color: var(--vscode-descriptionForeground);
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dark theme adjustments */
+.vscode-dark .task-stack-item {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vscode-dark .task-stack-item-current {
+  background: rgba(75, 110, 175, 0.3);
+}
+
+/* Light theme adjustments */
+.vscode-light .task-stack-item {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.vscode-light .task-stack-item-current {
+  background: rgba(0, 120, 212, 0.15);
+}

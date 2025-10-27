@@ -74,7 +74,7 @@ class TaskManager extends EventEmitter {
 			metadata: {
 				version: metadata.version || '3.5.0',
 				mode: metadata.mode || 'architect',
-				model: metadata.model || 'claude-3-5-sonnet-20241022',
+				model: metadata.model || 'default-model',
 				...metadata
 			}
 		})

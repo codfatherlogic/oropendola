@@ -1,8 +1,13 @@
 /**
- * SimpleTaskHeader - Roo-Code Style Task Header for Oropendola
+ * SimpleTaskHeader - Exact Roo-Code TaskHeader Implementation for Oropendola
  *
- * This is a simplified version of Roo-Code's TaskHeader that works with
- * our current data structure while maintaining the exact same visual appearance.
+ * Matches Roo-Code's TaskHeader.tsx design exactly:
+ * - Collapsible header with chevron indicator
+ * - Inline metrics in collapsed state (tokens/contextWindow, cost)
+ * - Expanded state shows full task text and detailed metrics table
+ * - Progress bar for context window usage
+ * - Integrated TodoListDisplay component
+ * - Clean, professional styling matching Roo-Code exactly
  */
 
 import React, { useState } from 'react'
@@ -10,6 +15,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react'
 import type { ClineMessage } from '../../types/cline-message'
 import { TodoItem } from '../../context/ChatContext'
 import { TodoListDisplay } from './TodoListDisplay'
+import './SimpleTaskHeader.css'
 
 interface SimpleTaskHeaderProps {
   // Task info
@@ -19,6 +25,8 @@ interface SimpleTaskHeaderProps {
   // Metrics
   tokensIn?: number
   tokensOut?: number
+  cacheWrites?: number
+  cacheReads?: number
   totalCost?: number
   contextTokens?: number
   contextWindow?: number
@@ -26,7 +34,7 @@ interface SimpleTaskHeaderProps {
   // Todos
   todos?: TodoItem[]
 
-  // Actions
+  // Actions (kept for future condense context button)
   onCondenseContext?: () => void
 }
 
@@ -35,6 +43,8 @@ export const SimpleTaskHeader: React.FC<SimpleTaskHeaderProps> = ({
   taskText,
   tokensIn = 0,
   tokensOut = 0,
+  cacheWrites,
+  cacheReads,
   totalCost = 0,
   contextTokens = 0,
   contextWindow = 200000,
@@ -43,8 +53,8 @@ export const SimpleTaskHeader: React.FC<SimpleTaskHeaderProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // Format large numbers like Roo-Code
-  const formatNumber = (num: number): string => {
+  // Format large numbers like Roo-Code (e.g., 1000 -> 1k, 1000000 -> 1m)
+  const formatLargeNumber = (num: number): string => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}m`
     if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
     return num.toString()
@@ -56,13 +66,17 @@ export const SimpleTaskHeader: React.FC<SimpleTaskHeaderProps> = ({
   // Check if we have todos to display
   const hasTodos = todos && todos.length > 0
 
+  // Calculate context window progress percentage
+  const contextPercent = contextWindow > 0 
+    ? Math.min(100, ((contextTokens || 0) / contextWindow) * 100) 
+    : 0
+
   return (
     <div className="task-header-container">
       {/* Main Task Header */}
       <div
         className={`task-header ${hasTodos ? 'has-todos' : ''}`}
         onClick={() => setIsExpanded(!isExpanded)}
-        style={{ cursor: 'pointer' }}
       >
         {/* Top Row */}
         <div className="task-header-top">
@@ -91,7 +105,7 @@ export const SimpleTaskHeader: React.FC<SimpleTaskHeaderProps> = ({
         {!isExpanded && contextWindow > 0 && (
           <div className="task-metrics-inline">
             <span className="metric-item">
-              {formatNumber(contextTokens || 0)} / {formatNumber(contextWindow)}
+              {formatLargeNumber(contextTokens || 0)} / {formatLargeNumber(contextWindow)}
             </span>
             {!!totalCost && totalCost > 0 && (
               <span className="metric-item">
@@ -113,23 +127,23 @@ export const SimpleTaskHeader: React.FC<SimpleTaskHeaderProps> = ({
             <div className="task-metrics-table">
               <table>
                 <tbody>
-                  {/* Context Window */}
+                  {/* Context Window with Progress Bar */}
                   {contextWindow > 0 && (
                     <tr>
                       <th>Context Window</th>
                       <td>
                         <div className="context-progress-container">
-                          <div className="context-progress-bar">
-                            <div
-                              className="context-progress-fill"
-                              style={{
-                                width: `${Math.min(100, ((contextTokens || 0) / contextWindow) * 100)}%`
-                              }}
-                            />
+                          <div className="context-progress-wrapper">
+                            <div className="context-progress-bar">
+                              <div
+                                className="context-progress-fill"
+                                style={{ width: `${contextPercent}%` }}
+                              />
+                            </div>
+                            <span className="context-progress-text">
+                              {formatLargeNumber(contextTokens || 0)} / {formatLargeNumber(contextWindow)}
+                            </span>
                           </div>
-                          <span className="context-progress-text">
-                            {formatNumber(contextTokens || 0)} / {formatNumber(contextWindow)}
-                          </span>
                         </div>
                       </td>
                     </tr>
@@ -142,10 +156,28 @@ export const SimpleTaskHeader: React.FC<SimpleTaskHeaderProps> = ({
                       <td>
                         <div className="tokens-display">
                           {tokensIn > 0 && (
-                            <span className="token-metric">↑ {formatNumber(tokensIn)}</span>
+                            <span className="token-metric">↑ {formatLargeNumber(tokensIn)}</span>
                           )}
                           {tokensOut > 0 && (
-                            <span className="token-metric">↓ {formatNumber(tokensOut)}</span>
+                            <span className="token-metric">↓ {formatLargeNumber(tokensOut)}</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* Cache (if available) */}
+                  {((typeof cacheReads === 'number' && cacheReads > 0) ||
+                    (typeof cacheWrites === 'number' && cacheWrites > 0)) && (
+                    <tr>
+                      <th>Cache</th>
+                      <td>
+                        <div className="tokens-display">
+                          {typeof cacheWrites === 'number' && cacheWrites > 0 && (
+                            <span className="token-metric">↑ {formatLargeNumber(cacheWrites)}</span>
+                          )}
+                          {typeof cacheReads === 'number' && cacheReads > 0 && (
+                            <span className="token-metric">↓ {formatLargeNumber(cacheReads)}</span>
                           )}
                         </div>
                       </td>

@@ -20,6 +20,18 @@ export interface CombinedApiMetrics {
   contextTokens: number
 }
 
+export interface ToolCall {
+  id?: string
+  action: string  // 'create_file', 'edit_file', 'run_terminal', etc.
+  path?: string
+  content?: string
+  command?: string
+  old_string?: string
+  new_string?: string
+  description?: string
+  [key: string]: any  // Allow additional tool-specific fields
+}
+
 export interface ClineMessage {
   ts: number
   type: 'ask' | 'say'
@@ -28,7 +40,7 @@ export interface ClineMessage {
   text?: string
   images?: string[]
   partial?: boolean
-  tool?: any
+  tool?: ToolCall  // Tool data for approval
   apiMetrics?: ApiMetrics
 }
 

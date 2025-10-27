@@ -71,7 +71,7 @@ export function formatCost(cost: number): string {
  * This is a fallback - the backend should provide actual costs
  */
 export function calculateCost(tokensIn: number, tokensOut: number, cacheReads: number = 0): number {
-  // Default pricing for Claude 3.5 Sonnet (backend may override)
+  // Default pricing (backend may override based on selected model)
   const INPUT_COST_PER_1M = 3.0    // $3 per 1M input tokens
   const OUTPUT_COST_PER_1M = 15.0  // $15 per 1M output tokens
   const CACHE_READ_COST_PER_1M = 0.30 // $0.30 per 1M cache read tokens

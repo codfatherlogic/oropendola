@@ -24,7 +24,12 @@ interface AppSettings {
   theme: 'system' | 'light' | 'dark'
 }
 
-export const SettingsView: React.FC = () => {
+// Roo Code pattern: onDone callback to return to chat
+interface SettingsViewProps {
+  onDone: () => void
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ onDone }) => {
   const [languages, setLanguages] = useState<Language[]>([])
   const [currentLanguage, setCurrentLanguage] = useState('en')
   const [settings, setSettings] = useState<AppSettings>({
@@ -109,7 +114,16 @@ export const SettingsView: React.FC = () => {
     <div className="settings-view">
       <div className="settings-header">
         <h2>⚙️ Settings</h2>
-        {saving && <span className="saving-indicator">Saving...</span>}
+        <div className="settings-header-actions">
+          {saving && <span className="saving-indicator">Saving...</span>}
+          <button
+            className="done-btn"
+            onClick={onDone}
+            title="Return to Chat"
+          >
+            Done
+          </button>
+        </div>
       </div>
 
       <div className="settings-content">

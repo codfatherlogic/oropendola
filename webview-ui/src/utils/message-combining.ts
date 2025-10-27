@@ -188,19 +188,24 @@ export function shouldAutoApprove(
       return settings.alwaysAllowExecute || false
 
     case 'tool':
-      try {
-        const tool = JSON.parse(message.text || '{}')
+      // ✅ FIX: Check message.tool object directly instead of parsing text
+      if (message.tool) {
+        const toolAction = message.tool.action
+        
         // Read-only operations
-        if (['readFile', 'listFilesTopLevel', 'listFilesRecursive', 'searchFiles'].includes(tool.tool)) {
+        if (['read_file', 'list_files', 'grep_search', 'semantic_search'].includes(toolAction)) {
           return settings.alwaysAllowReadOnly || false
         }
-        // Write operations
-        if (['editedExistingFile', 'newFileCreated', 'appliedDiff'].includes(tool.tool)) {
+        // Write operations (file creation, editing)
+        if (['create_file', 'edit_file', 'replace_string_in_file', 'modify_file'].includes(toolAction)) {
           return settings.alwaysAllowWrite || false
         }
-      } catch {
-        return false
+        // Execute operations (commands)
+        if (['run_command', 'run_terminal', 'execute_command'].includes(toolAction)) {
+          return settings.alwaysAllowExecute || false
+        }
       }
+      // Don't auto-approve unknown tools
       return false
 
     case 'browser_action_launch':

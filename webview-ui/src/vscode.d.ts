@@ -9,6 +9,9 @@ export interface VSCodeAPI {
 }
 
 declare global {
+  interface Window {
+    vscode: VSCodeAPI;
+  }
   function acquireVsCodeApi(): VSCodeAPI;
 }
 

@@ -182,7 +182,10 @@ function activate(context) {
                 console.error(`❌ Task failed: ${task.id}`, error);
             });
         }).catch(err => {
-            console.error('⚠️  Task Manager initialization error:', err);
+            // Task Manager is optional - silently continue without it
+            if (process.env.DEBUG) {
+                console.warn('⚠️  Task Manager unavailable (non-critical):', err.message);
+            }
         });
     } catch (error) {
         console.error('❌ Task Manager error:', error);

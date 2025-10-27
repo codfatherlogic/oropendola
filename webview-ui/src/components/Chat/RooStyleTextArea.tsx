@@ -8,10 +8,7 @@
 import React, { forwardRef, useCallback, useState, useMemo, useRef } from 'react'
 import DynamicTextArea from 'react-textarea-autosize'
 import { Image, Sparkles, Send } from 'lucide-react'
-import { cn } from '../../lib/utils'
 import { Tooltip } from '../ui'
-import { AutoApproveDropdown } from '../AutoApprove/AutoApproveDropdown'
-import { AutoApproveToggles, AutoApproveSetting } from '../../types/auto-approve'
 
 interface RooStyleTextAreaProps {
   inputValue: string
@@ -25,11 +22,12 @@ interface RooStyleTextAreaProps {
   onHeightChange?: (height: number) => void
   mode: string
   setMode: (value: string) => void
-  // Auto-approval props
+  // Auto-approval props (simplified for Roo Code style)
   autoApprovalEnabled: boolean
-  autoApproveToggles: AutoApproveToggles
   onAutoApprovalEnabledChange: (enabled: boolean) => void
-  onAutoApproveToggleChange: (key: AutoApproveSetting, value: boolean) => void
+  // Unused but kept for compatibility
+  autoApproveToggles?: any
+  onAutoApproveToggleChange?: any
 }
 
 export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextAreaProps>(
@@ -47,9 +45,7 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
       mode,
       setMode,
       autoApprovalEnabled,
-      autoApproveToggles,
       onAutoApprovalEnabledChange,
-      onAutoApproveToggleChange,
     },
     ref
   ) => {
@@ -72,23 +68,37 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
       [onSend]
     )
 
-    const placeholderBottomText = `\n(Add context with @, drag files/images)`
-
-    // Available modes (simplified for Oropendola)
+    // Available modes - Ask and Agent
     const availableModes = [
-      { value: 'architect', label: 'Architect', description: 'Plan and build autonomously' },
-      { value: 'code', label: 'Code', description: 'Code editing mode' },
+      { value: 'agent', label: 'Agent', description: 'AI agent mode' },
       { value: 'ask', label: 'Ask', description: 'Ask questions' },
     ]
 
     return (
-      <div className={cn(
-        "flex flex-col gap-1 bg-editor-background outline-none border border-none box-border",
-        "relative px-1.5 pb-1 w-[calc(100%-16px)] ml-auto mr-auto"
-      )}>
-        <div className={cn("relative")}>
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        outline: "none",
+        border: "none",
+        boxSizing: "border-box",
+        position: "relative",
+        paddingLeft: "6px",
+        paddingRight: "6px",
+        paddingBottom: "4px",
+        width: "calc(100% - 16px)",
+        marginLeft: "auto",
+        marginRight: "auto",
+      }}>
+        <div style={{ position: "relative" }}>
           <div
-            className={cn("chat-text-area", "relative", "flex", "flex-col", "outline-none")}
+            style={{
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              outline: "none",
+            }}
+            className="chat-text-area"
             onDragOver={(e) => {
               if (!e.shiftKey) {
                 setIsDraggingOver(false)
@@ -111,15 +121,15 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
               }
             }}>
 
-            <div className={cn(
-              "relative",
-              "flex-1",
-              "flex",
-              "flex-col-reverse",
-              "min-h-0",
-              "overflow-hidden",
-              "rounded",
-            )}>
+            <div style={{
+              position: "relative",
+              flex: "1",
+              display: "flex",
+              flexDirection: "column-reverse",
+              minHeight: "0",
+              overflow: "hidden",
+              borderRadius: "4px",
+            }}>
               <DynamicTextArea
                 ref={(el) => {
                   if (typeof ref === 'function') {
@@ -136,61 +146,97 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
                 onBlur={() => setIsFocused(false)}
                 onHeightChange={onHeightChange}
                 placeholder={placeholderText}
-                minRows={3}
+                minRows={5}
                 maxRows={15}
                 autoFocus={true}
-                className={cn(
-                  "w-full",
-                  "text-vscode-input-foreground",
-                  "font-vscode-font-family",
-                  "text-vscode-editor-font-size",
-                  "leading-vscode-editor-line-height",
-                  "cursor-text",
-                  "py-2 pl-2",
-                  isFocused
-                    ? "border border-vscode-focusBorder outline outline-vscode-focusBorder"
-                    : isDraggingOver
-                      ? "border-2 border-dashed border-vscode-focusBorder"
-                      : "border border-transparent",
-                  isDraggingOver
-                    ? "bg-[color-mix(in_srgb,var(--vscode-input-background)_95%,var(--vscode-focusBorder))]"
-                    : "bg-vscode-input-background",
-                  "transition-background-color duration-150 ease-in-out",
-                  "min-h-[94px]",
-                  "box-border",
-                  "rounded",
-                  "resize-none",
-                  "overflow-x-hidden",
-                  "overflow-y-auto",
-                  "pr-9",
-                  "flex-none flex-grow",
-                  "z-[2]",
-                )}
+                style={
+                  {
+                    width: "100%",
+                    color: "var(--vscode-input-foreground)",
+                    backgroundColor: isDraggingOver
+                      ? "color-mix(in srgb, var(--vscode-input-background) 95%, var(--vscode-focusBorder))"
+                      : "var(--vscode-input-background)",
+                    fontFamily: "var(--vscode-font-family)",
+                    fontSize: "var(--vscode-editor-font-size)",
+                    lineHeight: "var(--vscode-editor-line-height)",
+                    cursor: "text",
+                    padding: "8px 36px 8px 8px",
+                    border: isFocused
+                      ? "1px solid var(--vscode-focusBorder)"
+                      : isDraggingOver
+                        ? "2px dashed var(--vscode-focusBorder)"
+                        : "1px solid transparent",
+                    outline: isFocused ? "1px solid var(--vscode-focusBorder)" : "none",
+                    transition: "background-color 150ms ease-in-out",
+                    boxSizing: "border-box",
+                    borderRadius: "4px",
+                    resize: "none" as const,
+                    overflowX: "hidden" as const,
+                    overflowY: "auto" as const,
+                  } as any
+                }
+                className="focus:outline-none"
               />
 
               {/* Action buttons - right side of textarea */}
-              <div className="absolute bottom-2 right-1 z-30 flex flex-col items-center gap-0">
+              <div style={{
+                position: "absolute",
+                bottom: "8px",
+                right: "4px",
+                zIndex: 30,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0",
+              }}>
                 <Tooltip content="Add images">
                   <button
                     aria-label="Add images"
                     disabled={shouldDisableImages}
                     onClick={!shouldDisableImages ? onSelectImages : undefined}
-                    className={cn(
-                      "relative inline-flex items-center justify-center",
-                      "bg-transparent border-none p-1.5",
-                      "rounded-md min-w-[28px] min-h-[28px]",
-                      "text-vscode-descriptionForeground hover:text-vscode-foreground",
-                      "transition-all duration-1000",
-                      "cursor-pointer",
-                      !shouldDisableImages
-                        ? "opacity-50 hover:opacity-100 delay-750 pointer-events-auto"
-                        : "opacity-0 pointer-events-none duration-200 delay-0",
-                      !shouldDisableImages &&
-                        "hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
-                      "focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
-                      !shouldDisableImages && "active:bg-[rgba(255,255,255,0.1)]",
-                    )}>
-                    <Image className="w-4 h-4" />
+                    style={{
+                      position: "relative",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "transparent",
+                      border: "none",
+                      padding: "6px",
+                      borderRadius: "6px",
+                      minWidth: "28px",
+                      minHeight: "28px",
+                      color: "var(--vscode-descriptionForeground)",
+                      transition: "all 1000ms",
+                      cursor: "pointer",
+                      opacity: !shouldDisableImages ? "0.5" : "0",
+                      pointerEvents: !shouldDisableImages ? "auto" : "none",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!shouldDisableImages) {
+                        e.currentTarget.style.opacity = "1";
+                        e.currentTarget.style.color = "var(--vscode-foreground)";
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!shouldDisableImages) {
+                        e.currentTarget.style.opacity = "0.5";
+                        e.currentTarget.style.color = "var(--vscode-descriptionForeground)";
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }
+                    }}
+                    onMouseDown={(e) => {
+                      if (!shouldDisableImages) {
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
+                      }
+                    }}
+                    onMouseUp={(e) => {
+                      if (!shouldDisableImages) {
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
+                      }
+                    }}
+                  >
+                    <Image style={{ width: "16px", height: "16px" }} />
                   </button>
                 </Tooltip>
 
@@ -199,22 +245,49 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
                     aria-label="Enhance prompt"
                     disabled={false}
                     onClick={() => {}}  // TODO: Implement enhance prompt
-                    className={cn(
-                      "relative inline-flex items-center justify-center",
-                      "bg-transparent border-none p-1.5",
-                      "rounded-md min-w-[28px] min-h-[28px]",
-                      "text-vscode-descriptionForeground hover:text-vscode-foreground",
-                      "transition-all duration-1000",
-                      "cursor-pointer",
-                      hasInputContent
-                        ? "opacity-50 hover:opacity-100 delay-750 pointer-events-auto"
-                        : "opacity-0 pointer-events-none duration-200 delay-0",
-                      hasInputContent &&
-                        "hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
-                      "focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
-                      hasInputContent && "active:bg-[rgba(255,255,255,0.1)]",
-                    )}>
-                    <Sparkles className="w-4 h-4" />
+                    style={{
+                      position: "relative",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "transparent",
+                      border: "none",
+                      padding: "6px",
+                      borderRadius: "6px",
+                      minWidth: "28px",
+                      minHeight: "28px",
+                      color: "var(--vscode-descriptionForeground)",
+                      transition: "all 1000ms",
+                      cursor: "pointer",
+                      opacity: hasInputContent ? "0.5" : "0",
+                      pointerEvents: hasInputContent ? "auto" : "none",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.opacity = "1";
+                        e.currentTarget.style.color = "var(--vscode-foreground)";
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.opacity = "0.5";
+                        e.currentTarget.style.color = "var(--vscode-descriptionForeground)";
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }
+                    }}
+                    onMouseDown={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
+                      }
+                    }}
+                    onMouseUp={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
+                      }
+                    }}
+                  >
+                    <Sparkles style={{ width: "16px", height: "16px" }} />
                   </button>
                 </Tooltip>
 
@@ -223,63 +296,95 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
                     aria-label="Send message"
                     disabled={false}
                     onClick={onSend}
-                    className={cn(
-                      "relative inline-flex items-center justify-center",
-                      "bg-transparent border-none p-1.5",
-                      "rounded-md min-w-[28px] min-h-[28px]",
-                      "text-vscode-descriptionForeground hover:text-vscode-foreground",
-                      "transition-all duration-200",
-                      hasInputContent
-                        ? "opacity-100 hover:opacity-100 pointer-events-auto"
-                        : "opacity-0 pointer-events-none",
-                      hasInputContent &&
-                        "hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
-                      "focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
-                      hasInputContent && "active:bg-[rgba(255,255,255,0.1)]",
-                      hasInputContent && "cursor-pointer",
-                    )}>
-                    <Send className="w-4 h-4" />
+                    style={{
+                      position: "relative",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "transparent",
+                      border: "none",
+                      padding: "6px",
+                      borderRadius: "6px",
+                      minWidth: "28px",
+                      minHeight: "28px",
+                      color: "var(--vscode-descriptionForeground)",
+                      transition: "all 200ms",
+                      cursor: hasInputContent ? "pointer" : "default",
+                      opacity: hasInputContent ? "1" : "0",
+                      pointerEvents: hasInputContent ? "auto" : "none",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.color = "var(--vscode-foreground)";
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.color = "var(--vscode-descriptionForeground)";
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }
+                    }}
+                    onMouseDown={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
+                      }
+                    }}
+                    onMouseUp={(e) => {
+                      if (hasInputContent) {
+                        e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
+                      }
+                    }}
+                  >
+                    <Send style={{ width: "16px", height: "16px" }} />
                   </button>
                 </Tooltip>
               </div>
-
-              {/* Bottom placeholder text */}
-              {!inputValue && (
-                <div
-                  className={cn(
-                    "absolute left-2 z-30 flex items-center h-8 font-vscode-font-family text-vscode-editor-font-size leading-vscode-editor-line-height",
-                    "pr-9",
-                  )}
-                  style={{
-                    bottom: "0.75rem",
-                    color: "color-mix(in oklab, var(--vscode-input-foreground) 50%, transparent)",
-                    userSelect: "none",
-                    pointerEvents: "none",
-                  }}>
-                  {placeholderBottomText}
-                </div>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Bottom controls bar - matching Roo-Code exactly */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 min-w-0 overflow-clip flex-1">
-            {/* Mode selector */}
+        {/* Helper text - Roo Code style */}
+        <div style={{
+          fontSize: "11px",
+          color: "var(--vscode-descriptionForeground)",
+          padding: "0 4px",
+        }}>
+          @ to add context, / for commands, hold shift to drag in files/images
+        </div>
+
+        {/* Bottom controls bar - Roo Code pattern: Mode pills and settings */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "0 4px",
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flex: "1",
+          }}>
+            {/* Mode selector as pill badge */}
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value)}
-              className={cn(
-                "text-ellipsis overflow-hidden flex-shrink-0",
-                "bg-vscode-input-background",
-                "text-vscode-input-foreground",
-                "border border-vscode-input-border",
-                "rounded px-2 py-1",
-                "text-xs",
-                "cursor-pointer",
-                "hover:bg-vscode-list-hoverBackground",
-              )}
+              style={{
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "4px",
+                background: "var(--vscode-badge-background)",
+                color: "var(--vscode-badge-foreground)",
+                border: "none",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = "0.8";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = "1";
+              }}
               title="Select mode">
               {availableModes.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -288,30 +393,28 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
               ))}
             </select>
 
-            {/* API Config selector (simplified) */}
-            <select
-              className={cn(
-                "min-w-[28px] text-ellipsis overflow-hidden flex-shrink",
-                "bg-vscode-input-background",
-                "text-vscode-input-foreground",
-                "border border-vscode-input-border",
-                "rounded px-2 py-1",
-                "text-xs",
-                "cursor-pointer",
-                "hover:bg-vscode-list-hoverBackground",
-              )}
-              title="Select API configuration">
-              <option>Claude 3.5 Sonnet</option>
-            </select>
-
-            {/* Auto-approve dropdown */}
-            <AutoApproveDropdown
-              autoApprovalEnabled={autoApprovalEnabled}
-              toggles={autoApproveToggles}
-              onAutoApprovalEnabledChange={onAutoApprovalEnabledChange}
-              onToggleChange={onAutoApproveToggleChange}
-              triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink"
-            />
+            {/* Auto-approve status - simple badge like Roo Code */}
+            <button
+              onClick={() => onAutoApprovalEnabledChange(!autoApprovalEnabled)}
+              style={{
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "4px",
+                background: "var(--vscode-badge-background)",
+                color: "var(--vscode-badge-foreground)",
+                border: "none",
+                outline: "none",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = "0.8";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = "1";
+              }}
+              title="Toggle auto-approval">
+              {autoApprovalEnabled ? '✓ Auto-approve on' : '✕ Auto-approve off'}
+            </button>
           </div>
         </div>
       </div>

@@ -88,10 +88,11 @@ export class TelemetryService {
                 }
             );
         } catch (error) {
-            console.error('Failed to send telemetry:', error);
-            // Re-queue failed events (up to a limit)
-            if (this.eventQueue.length < 100) {
-                this.eventQueue.push(...eventsToSend);
+            // Silently fail - don't re-queue to avoid infinite retry loops
+            // Only log in debug mode to reduce console noise
+            if (process.env.DEBUG) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.warn('Telemetry failed (non-critical):', errorMsg);
             }
         }
     }

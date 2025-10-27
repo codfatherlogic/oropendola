@@ -16,34 +16,66 @@ class SystemPromptBuilder {
 
     /**
      * Load all prompt modules from the modules directory
+     * In bundled extension, modules are pre-loaded below
      */
     loadModules() {
         try {
             const modulesDir = path.join(__dirname, '../modules');
+            const dirExists = fs.existsSync(modulesDir);
+            
+            console.log(`🔍 Modules directory check: ${dirExists ? 'EXISTS' : 'NOT FOUND'}`);
+            console.log(`🔍 Looking for modules at: ${modulesDir}`);
 
-            // Check if directory exists before trying to read it
-            if (!fs.existsSync(modulesDir)) {
-                console.log('ℹ️  Prompt modules directory not found, using default system prompt');
-                return;
-            }
+            // Try to load from filesystem first (development mode)
+            if (dirExists) {
+                console.log('📁 Development mode: Loading from filesystem');
+                const moduleFiles = fs.readdirSync(modulesDir).filter(f => f.endsWith('.js'));
+                console.log(`📁 Found ${moduleFiles.length} module files:`, moduleFiles);
 
-            const moduleFiles = fs.readdirSync(modulesDir).filter(f => f.endsWith('.js'));
-
-            for (const file of moduleFiles) {
+                for (const file of moduleFiles) {
+                    try {
+                        const module = require(path.join(modulesDir, file));
+                        this.modules.push(module);
+                    } catch (error) {
+                        console.warn(`⚠️ Failed to load prompt module ${file}:`, error.message);
+                    }
+                }
+            } else {
+                // Bundled mode - directly require modules
+                console.log('📦 Bundled mode: Loading modules via require()');
                 try {
-                    const module = require(path.join(modulesDir, file));
-                    this.modules.push(module);
+                    this.modules = [
+                        require('../modules/core-instructions'),
+                        require('../modules/workflow-guidelines'),
+                        require('../modules/reasoning-output'),
+                        require('../modules/tool-usage'),
+                        require('../modules/capabilities'),
+                        require('../modules/progressive-implementation'),
+                        require('../modules/search-first-mandate'),
+                        require('../modules/automatic-context-awareness'),
+                        require('../modules/todo-format')
+                    ].filter(m => m); // Filter out any failed loads
+                    console.log(`📦 Successfully loaded ${this.modules.length} bundled modules`);
                 } catch (error) {
-                    console.warn(`⚠️ Failed to load prompt module ${file}:`, error.message);
+                    console.warn('⚠️ Failed to load bundled modules:', error.message);
+                    console.warn('⚠️ Stack trace:', error.stack);
                 }
             }
 
             // Sort modules by priority
             this.modules.sort((a, b) => a.priority - b.priority);
 
-            console.log(`✅ Loaded ${this.modules.length} prompt modules`);
+            console.log(`✅ Prompt modules loaded: ${this.modules.length} sections`);
+            
+            // Log module details
+            if (this.modules.length > 0) {
+                console.log('📋 Loaded modules:', this.modules.map(m => `${m.section} (priority ${m.priority})`).join(', '));
+            } else {
+                console.warn('⚠️ WARNING: No modules loaded! System prompt will be incomplete');
+            }
         } catch (error) {
             console.warn('⚠️  Failed to load prompt modules:', error.message);
+            console.warn('⚠️ Stack trace:', error.stack);
         }
     }
 
@@ -77,7 +109,7 @@ class SystemPromptBuilder {
                 continue;
             }
 
-            prompt += module.content + '\\n\\n';
+            prompt += module.content + '\n\n';
         }
 
         // Add dynamic context at the end
