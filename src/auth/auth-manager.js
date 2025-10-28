@@ -6,7 +6,7 @@ const axios = require('axios');
  */
 class AuthManager {
     constructor() {
-        this.isAuthenticated = false;
+        this._isAuthenticated = false;  // Private property
         this.currentUser = null;
         this.sessionToken = null;
         this.loginPanel = null;
@@ -457,7 +457,7 @@ class AuthManager {
                 const userData = response.data.message || response.data;
 
                 // Store authentication data
-                this.isAuthenticated = true;
+                this._isAuthenticated = true;
                 this.currentUser = {
                     email,
                     name: userData.full_name || userData.user || email,
@@ -547,7 +547,7 @@ class AuthManager {
         // 1. Token-based auth (user.token + user.email)
         // 2. Session-based auth (session.cookies)
         if ((token && email) || sessionCookies) {
-            this.isAuthenticated = true;
+            this._isAuthenticated = true;
             this.sessionToken = token || sessionCookies;
             this.currentUser = {
                 email: email || this._extractEmailFromCookies(sessionCookies),
@@ -581,7 +581,7 @@ class AuthManager {
      * Logout user
      */
     async logout() {
-        this.isAuthenticated = false;
+        this._isAuthenticated = false;
         this.currentUser = null;
         this.sessionToken = null;
 
@@ -599,6 +599,84 @@ class AuthManager {
      */
     getCurrentUser() {
         return this.currentUser;
+    }
+
+    // ============================================
+    // OAuth Compatibility Methods
+    // Added to support sidebar-provider.js which expects OAuth AuthManager interface
+    // ============================================
+
+    /**
+     * Load authentication state from storage (OAuth compatible)
+     */
+    async loadFromStorage() {
+        try {
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const apiKey = config.get('api.key');
+            const userEmail = config.get('user.email');
+            
+            if (apiKey && userEmail) {
+                this._isAuthenticated = true;
+                this.currentUser = { email: userEmail };
+                return {
+                    authenticated: true,
+                    apiKey,
+                    userEmail
+                };
+            }
+            
+            return {
+                authenticated: false
+            };
+        } catch (error) {
+            console.error('[AuthManager] loadFromStorage error:', error);
+            return { authenticated: false };
+        }
+    }
+
+    /**
+     * Get user email (OAuth compatible)
+     */
+    getUserEmail() {
+        const config = vscode.workspace.getConfiguration('oropendola');
+        return config.get('user.email') || (this.currentUser ? this.currentUser.email : null);
+    }
+
+    /**
+     * Get API key (OAuth compatible)
+     */
+    getApiKey() {
+        const config = vscode.workspace.getConfiguration('oropendola');
+        return config.get('api.key') || null;
+    }
+
+    /**
+     * Get subscription info (OAuth compatible)
+     */
+    getSubscription() {
+        // Legacy auth doesn't track subscription separately
+        return null;
+    }
+
+    /**
+     * Initiate OAuth flow (compatibility stub)
+     */
+    async initiate() {
+        // For legacy auth, just show the login panel
+        this.showLoginPanel();
+        return {
+            authUrl: null, // Legacy flow uses webview panel
+            sessionToken: null,
+            expiresIn: 0
+        };
+    }
+
+    /**
+     * Check if authenticated (OAuth compatible method)
+     * This is a method that returns the authentication state
+     */
+    isAuthenticated() {
+        return this._isAuthenticated === true;
     }
 }
 

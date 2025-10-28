@@ -3,7 +3,14 @@ const vscode = require('vscode');
 const ConversationTask = require('../core/ConversationTask');
 const URLAnalyzer = require('../analysis/url-analyzer');
 const TodoManager = require('../utils/todo-manager');
-const AuthManager = require('../auth/AuthManager');
+
+// TEMPORARY FIX: Use the legacy auth manager to bypass bundler issue
+// TODO: Debug why bundler returns module object instead of class for OAuth AuthManager
+const AuthManager = require('../auth/auth-manager');
+
+// Debugging: Check if AuthManager loaded correctly
+console.log('🔍 [SidebarProvider] AuthManager type:', typeof AuthManager);
+console.log('🔍 [SidebarProvider] AuthManager.name:', AuthManager?.name);
 
 // Week 6-8: New Feature Clients
 const TerminalManager = require('../services/terminal/TerminalManager');
@@ -241,8 +248,8 @@ class OropendolaSidebarProvider {
                         if (this._view) {
                             this._view.webview.postMessage({
                                 type: 'authenticationStatus',
-                                isAuthenticated: isAuthenticated,
-                                message: isAuthenticated ? null : 'Start by signing in'
+                                isAuthenticated: !!isAuthenticated,
+                                message: !!isAuthenticated ? null : 'Start by signing in'
                             });
                         }
                         break;

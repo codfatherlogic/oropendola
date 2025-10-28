@@ -10,14 +10,88 @@ const OropendolaAutocompleteProvider = require('./src/autocomplete/autocomplete-
 const EditMode = require('./src/edit/edit-mode');
 
 // Enterprise Features
-const { EnhancedAuthManager } = require('./src/auth/AuthManager');
-const { WorkspaceIndexer } = require('./src/workspace/WorkspaceIndexer');
-const { OropendolaInlineCompletionProvider } = require('./src/providers/InlineCompletionProvider');
-const { OropendolaDiagnosticsProvider } = require('./src/providers/DiagnosticsProvider');
-const { OropendolaCodeActionProvider } = require('./src/providers/CodeActionProvider');
-const { TelemetryService } = require('./src/telemetry/TelemetryService');
-const { SettingsProvider } = require('./src/settings/SettingsProvider');
-const { CopilotChatPanel } = require('./src/views/CopilotChatPanel');
+// Load EnhancedAuthManager with safe fallbacks to avoid bundler / import-shape issues
+let EnhancedAuthManager;
+try {
+    const enhancedModule = require('./src/auth/AuthManager');
+    // Support CommonJS exports and named/default shapes
+    EnhancedAuthManager = enhancedModule && (enhancedModule.EnhancedAuthManager || enhancedModule.default || enhancedModule);
+} catch (err) {
+    try {
+        // Fallback to the legacy auth manager if present
+        EnhancedAuthManager = require('./src/auth/auth-manager');
+    } catch (err2) {
+        EnhancedAuthManager = undefined;
+    }
+}
+
+// Debugging: log types to help diagnose activation constructor errors
+try {
+    console.log('🔎 [DEBUG] AuthManager import type:', typeof AuthManager);
+    console.log('🔎 [DEBUG] EnhancedAuthManager import type:', typeof EnhancedAuthManager);
+} catch (e) {
+    console.warn('🔎 [DEBUG] Failed to inspect auth imports:', e && e.message);
+}
+
+// Load enterprise modules with error handling
+let WorkspaceIndexer, OropendolaInlineCompletionProvider, OropendolaDiagnosticsProvider;
+let OropendolaCodeActionProvider, TelemetryService, SettingsProvider, CopilotChatPanel;
+
+try {
+    const wsModule = require('./src/workspace/WorkspaceIndexer');
+    WorkspaceIndexer = wsModule.WorkspaceIndexer || wsModule.default || wsModule;
+    console.log('✅ WorkspaceIndexer loaded');
+} catch (err) {
+    console.warn('⚠️  WorkspaceIndexer not available:', err.message);
+}
+
+try {
+    const inlineModule = require('./src/providers/InlineCompletionProvider');
+    OropendolaInlineCompletionProvider = inlineModule.OropendolaInlineCompletionProvider || inlineModule.default || inlineModule;
+    console.log('✅ InlineCompletionProvider loaded');
+} catch (err) {
+    console.warn('⚠️  InlineCompletionProvider not available:', err.message);
+}
+
+try {
+    const diagModule = require('./src/providers/DiagnosticsProvider');
+    OropendolaDiagnosticsProvider = diagModule.OropendolaDiagnosticsProvider || diagModule.default || diagModule;
+    console.log('✅ DiagnosticsProvider loaded');
+} catch (err) {
+    console.warn('⚠️  DiagnosticsProvider not available:', err.message);
+}
+
+try {
+    const codeActionModule = require('./src/providers/CodeActionProvider');
+    OropendolaCodeActionProvider = codeActionModule.OropendolaCodeActionProvider || codeActionModule.default || codeActionModule;
+    console.log('✅ CodeActionProvider loaded');
+} catch (err) {
+    console.warn('⚠️  CodeActionProvider not available:', err.message);
+}
+
+try {
+    const telemetryModule = require('./src/telemetry/TelemetryService');
+    TelemetryService = telemetryModule.TelemetryService || telemetryModule.default || telemetryModule;
+    console.log('✅ TelemetryService loaded');
+} catch (err) {
+    console.warn('⚠️  TelemetryService not available:', err.message);
+}
+
+try {
+    const settingsModule = require('./src/settings/SettingsProvider');
+    SettingsProvider = settingsModule.SettingsProvider || settingsModule.default || settingsModule;
+    console.log('✅ SettingsProvider loaded');
+} catch (err) {
+    console.warn('⚠️  SettingsProvider not available:', err.message);
+}
+
+try {
+    const copilotModule = require('./src/views/CopilotChatPanel');
+    CopilotChatPanel = copilotModule.CopilotChatPanel || copilotModule.default || copilotModule;
+    console.log('✅ CopilotChatPanel loaded');
+} catch (err) {
+    console.warn('⚠️  CopilotChatPanel not available:', err.message);
+}
 
 // Backend Integration v2.0 - New Panels
 const TodoPanel = require('./src/panels/TodoPanel');
@@ -82,19 +156,28 @@ function activate(context) {
     console.log('🐦 Oropendola AI Extension is now active!');
 
     // Register sidebar webview provider FIRST
-    sidebarProvider = new OropendolaSidebarProvider(context);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
-            'oropendola.chatView',
-            sidebarProvider,
-            {
-                webviewOptions: {
-                    retainContextWhenHidden: true
+    try {
+        console.log('🔧 Instantiating OropendolaSidebarProvider...');
+        console.log('🔍 OropendolaSidebarProvider type:', typeof OropendolaSidebarProvider);
+        
+        sidebarProvider = new OropendolaSidebarProvider(context);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(
+                'oropendola.chatView',
+                sidebarProvider,
+                {
+                    webviewOptions: {
+                        retainContextWhenHidden: true
+                    }
                 }
-            }
-        )
-    );
-    console.log('✅ Sidebar provider registered');
+            )
+        );
+        console.log('✅ Sidebar provider registered');
+    } catch (error) {
+        console.error('❌ Sidebar provider error:', error);
+        console.error('   Stack:', error.stack);
+        throw error; // Re-throw to see full activation error
+    }
 
     // v3.4.3: Initialize Status Bar Manager
     try {
@@ -3025,31 +3108,50 @@ function initializeEnterpriseFeatures(context) {
 
         // Initialize Enhanced Auth Manager (new enterprise auth)
         if (EnhancedAuthManager) {
-            enhancedAuthManager = new EnhancedAuthManager(context, serverUrl);
-            context.subscriptions.push(enhancedAuthManager);
-            console.log('✅ Enhanced auth manager initialized');
+            try {
+                console.log('🔧 Attempting to instantiate EnhancedAuthManager...');
+                console.log('🔍 EnhancedAuthManager type:', typeof EnhancedAuthManager);
+                console.log('🔍 EnhancedAuthManager.name:', EnhancedAuthManager.name);
+                console.log('🔍 EnhancedAuthManager.prototype:', EnhancedAuthManager.prototype);
+                
+                // Verify it's actually a constructor
+                if (typeof EnhancedAuthManager !== 'function') {
+                    throw new Error(`EnhancedAuthManager is not a function (got ${typeof EnhancedAuthManager})`);
+                }
+                
+                enhancedAuthManager = new EnhancedAuthManager(context, serverUrl);
+                context.subscriptions.push(enhancedAuthManager);
+                console.log('✅ Enhanced auth manager initialized');
+            } catch (err) {
+                console.warn('⚠️  Enhanced auth manager initialization failed (non-critical):', err);
+                console.warn('   Extension will continue with basic auth only');
+            }
         }
 
         // Initialize Workspace Indexer
         if (WorkspaceIndexer && settingsProvider.getIndexingEnabled()) {
-            workspaceIndexer = new WorkspaceIndexer(serverUrl);
-            context.subscriptions.push({
-                dispose: () => workspaceIndexer.dispose()
-            });
+            try {
+                workspaceIndexer = new WorkspaceIndexer(serverUrl);
+                context.subscriptions.push({
+                    dispose: () => workspaceIndexer.dispose()
+                });
 
-            // Setup file watcher for active workspace
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (workspaceFolders && workspaceFolders.length > 0) {
-                workspaceIndexer.setupFileWatcher(workspaceFolders[0]);
+                // Setup file watcher for active workspace
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    workspaceIndexer.setupFileWatcher(workspaceFolders[0]);
 
-                // Index on startup if enabled
-                if (settingsProvider.getIndexingOnStartup()) {
-                    setTimeout(() => {
-                        workspaceIndexer.indexWorkspace(workspaceFolders[0]);
-                    }, 5000); // Wait 5 seconds after activation
+                    // Index on startup if enabled
+                    if (settingsProvider.getIndexingOnStartup()) {
+                        setTimeout(() => {
+                            workspaceIndexer.indexWorkspace(workspaceFolders[0]);
+                        }, 5000); // Wait 5 seconds after activation
+                    }
                 }
+                console.log('✅ Workspace indexer initialized');
+            } catch (err) {
+                console.warn('⚠️  Workspace indexer initialization failed (non-critical):', err);
             }
-            console.log('✅ Workspace indexer initialized');
         }
 
         // Create status bar for inline completions
@@ -3062,63 +3164,75 @@ function initializeEnterpriseFeatures(context) {
 
         // Initialize Inline Completion Provider
         if (OropendolaInlineCompletionProvider && settingsProvider.getInlineCompletionsEnabled()) {
-            inlineCompletionProvider = new OropendolaInlineCompletionProvider(
-                serverUrl,
-                inlineCompletionStatusBar
-            );
+            try {
+                inlineCompletionProvider = new OropendolaInlineCompletionProvider(
+                    serverUrl,
+                    inlineCompletionStatusBar
+                );
 
-            const inlineDisposable = vscode.languages.registerInlineCompletionItemProvider(
-                { pattern: '**' },
-                inlineCompletionProvider
-            );
-            context.subscriptions.push(inlineDisposable);
-            context.subscriptions.push({
-                dispose: () => inlineCompletionProvider.dispose()
-            });
-            console.log('✅ Inline completion provider registered');
+                const inlineDisposable = vscode.languages.registerInlineCompletionItemProvider(
+                    { pattern: '**' },
+                    inlineCompletionProvider
+                );
+                context.subscriptions.push(inlineDisposable);
+                context.subscriptions.push({
+                    dispose: () => inlineCompletionProvider.dispose()
+                });
+                console.log('✅ Inline completion provider registered');
+            } catch (err) {
+                console.warn('⚠️  Inline completion provider initialization failed (non-critical):', err);
+            }
         }
 
         // Initialize Diagnostics Provider
         if (OropendolaDiagnosticsProvider && settingsProvider.getDiagnosticsEnabled()) {
-            diagnosticsProvider = new OropendolaDiagnosticsProvider(serverUrl);
-            context.subscriptions.push({
-                dispose: () => diagnosticsProvider.dispose()
-            });
+            try {
+                diagnosticsProvider = new OropendolaDiagnosticsProvider(serverUrl);
+                context.subscriptions.push({
+                    dispose: () => diagnosticsProvider.dispose()
+                });
 
-            // Run diagnostics on save if enabled
-            if (settingsProvider.getDiagnosticsOnSave()) {
-                context.subscriptions.push(
-                    vscode.workspace.onDidSaveTextDocument(doc => {
-                        if (doc.languageId !== 'plaintext') {
-                            diagnosticsProvider.analyzeDiagnostics(doc);
-                        }
-                    })
-                );
+                // Run diagnostics on save if enabled
+                if (settingsProvider.getDiagnosticsOnSave()) {
+                    context.subscriptions.push(
+                        vscode.workspace.onDidSaveTextDocument(doc => {
+                            if (doc.languageId !== 'plaintext') {
+                                diagnosticsProvider.analyzeDiagnostics(doc);
+                            }
+                        })
+                    );
+                }
+                console.log('✅ Diagnostics provider initialized');
+            } catch (err) {
+                console.warn('⚠️  Diagnostics provider initialization failed (non-critical):', err);
             }
-            console.log('✅ Diagnostics provider initialized');
         }
 
         // Initialize Code Action Provider
         if (OropendolaCodeActionProvider && settingsProvider.getCodeActionsEnabled()) {
-            codeActionProvider = new OropendolaCodeActionProvider(serverUrl);
+            try {
+                codeActionProvider = new OropendolaCodeActionProvider(serverUrl);
 
-            const codeActionDisposable = vscode.languages.registerCodeActionsProvider(
-                { pattern: '**' },
-                codeActionProvider,
-                {
-                    providedCodeActionKinds: [
-                        vscode.CodeActionKind.QuickFix,
-                        vscode.CodeActionKind.Refactor,
-                        vscode.CodeActionKind.RefactorRewrite,
-                        vscode.CodeActionKind.Source
-                    ]
-                }
-            );
-            context.subscriptions.push(codeActionDisposable);
-            context.subscriptions.push({
-                dispose: () => codeActionProvider.dispose()
-            });
-            console.log('✅ Code action provider registered');
+                const codeActionDisposable = vscode.languages.registerCodeActionsProvider(
+                    { pattern: '**' },
+                    codeActionProvider,
+                    {
+                        providedCodeActionKinds: [
+                            vscode.CodeActionKind.QuickFix,
+                            vscode.CodeActionKind.Refactor,
+                            vscode.CodeActionKind.RefactorRewrite,
+                            vscode.CodeActionKind.Source
+                        ]
+                    }
+                );
+                context.subscriptions.push(codeActionDisposable);
+                context.subscriptions.push({
+                    dispose: () => codeActionProvider.dispose()
+                });
+                console.log('✅ Code action provider registered');
+            } catch (err) {
+                console.warn('⚠️  Code action provider initialization failed (non-critical):', err);
+            }
         }
 
         // Register enterprise commands

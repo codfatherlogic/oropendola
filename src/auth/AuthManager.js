@@ -286,6 +286,9 @@ class AuthManager {
     }
 }
 
-// Export both for compatibility
+// Primary export - must be the class itself
 module.exports = AuthManager;
-module.exports.EnhancedAuthManager = AuthManager; // Alias for backward compatibility
+
+// Secondary named export for enterprise features (backward compatibility)
+module.exports.EnhancedAuthManager = AuthManager;
+module.exports.AuthManager = AuthManager; // Explicit named export
