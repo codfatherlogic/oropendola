@@ -9,6 +9,7 @@ import React, { forwardRef, useCallback, useState, useMemo, useRef } from 'react
 import DynamicTextArea from 'react-textarea-autosize'
 import { Image, Sparkles, Send } from 'lucide-react'
 import { Tooltip } from '../ui'
+import vscode from '../../vscode-api'
 
 interface RooStyleTextAreaProps {
   inputValue: string
@@ -22,6 +23,9 @@ interface RooStyleTextAreaProps {
   onHeightChange?: (height: number) => void
   mode: string
   setMode: (value: string) => void
+  // Authentication
+  isAuthenticated?: boolean
+  authMessage?: string | null
   // Auto-approval props (simplified for Roo Code style)
   autoApprovalEnabled: boolean
   onAutoApprovalEnabledChange: (enabled: boolean) => void
@@ -44,6 +48,8 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
       onHeightChange,
       mode,
       setMode,
+      isAuthenticated = true,
+      authMessage = null,
       autoApprovalEnabled,
       onAutoApprovalEnabledChange,
     },
@@ -52,6 +58,57 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [isFocused, setIsFocused] = useState(false)
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
+
+    // If not authenticated, show Sign In button instead of textarea
+    console.log('🔐 [RooStyleTextArea] isAuthenticated:', isAuthenticated, 'authMessage:', authMessage)
+    if (!isAuthenticated) {
+      console.log('🔐 [RooStyleTextArea] Rendering Sign In button')
+      return (
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "16px",
+          padding: "24px 16px",
+          backgroundColor: "var(--vscode-input-background)",
+          borderRadius: "8px",
+          border: "1px solid var(--vscode-input-border)",
+          margin: "0 8px 8px 8px",
+        }}>
+          <div style={{
+            fontSize: "14px",
+            color: "var(--vscode-descriptionForeground)",
+            textAlign: "center"
+          }}>
+            {authMessage || 'Start by signing in'}
+          </div>
+          <button
+            onClick={() => {
+              vscode.postMessage({ type: 'login' });
+            }}
+            style={{
+              backgroundColor: 'var(--vscode-button-secondaryBackground)',
+              color: 'var(--vscode-button-secondaryForeground)',
+              border: '1px solid var(--vscode-button-border)',
+              borderRadius: '2px',
+              padding: '6px 14px',
+              fontSize: '13px',
+              fontWeight: 'normal',
+              cursor: 'pointer',
+              transition: 'background-color 0.1s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryHoverBackground)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryBackground)';
+            }}
+          >
+            Sign in
+          </button>
+        </div>
+      )
+    }
 
     // Memoized check for whether the input has content
     const hasInputContent = useMemo(() => {

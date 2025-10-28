@@ -33,6 +33,8 @@ const FrameworkConventions = require('../framework/FrameworkConventions');
 // v3.4.3: Workspace memory and task reporting
 const WorkspaceMemoryService = require('../memory/WorkspaceMemoryService');
 const TaskSummaryGenerator = require('../utils/task-summary-generator');
+// Agent Mode API client for automatic model selection
+const { agentClient } = require('../api/agent-client');
 
 class ConversationTask extends EventEmitter {
     constructor(taskId, options = {}) {
@@ -117,6 +119,11 @@ class ConversationTask extends EventEmitter {
         // Subtask orchestration and semantic search (if available)
         this.subtaskOrchestrator = options.subtaskOrchestrator || null;
         this.semanticSearchProvider = options.semanticSearchProvider || null;
+
+        // Agent Mode tracking - for automatic model selection
+        this.useAgentMode = options.useAgentMode !== false; // Default to true
+        this.selectedModel = null;  // Track which model was auto-selected
+        this.modelSelectionReason = null;  // Why this model was chosen
 
         // Initialize realtime connection if session cookies provided
         console.log('🔥 [ConversationTask] Checking realtime connection requirements...');
@@ -846,6 +853,19 @@ ${dynamicContext}\`;
                 return; // Exit without throwing
             }
 
+            // Check for authentication errors
+            const isAuthError = error.response?.status === 401 || 
+                               error.response?.status === 403 || 
+                               (error.response?.status === 417 && error.message?.includes('auth'));
+            
+            if (isAuthError) {
+                console.error('❌ Authentication error detected');
+                this.status = 'error';
+                this.emit('authenticationError', this.taskId, error);
+                this.emit('taskError', this.taskId, error);
+                throw error;
+            }
+
             this.status = 'error';
             this.emit('taskError', this.taskId, error);
             console.error(`❌ Task ${this.taskId} error:`, error);
@@ -1080,10 +1100,190 @@ ${dynamicContext}\`;
     }
 
     /**
+     * Make AI request using Agent Mode API
+     * The backend automatically selects the best model
+     * 
+     * @param {number} retryCount - Current retry attempt
+     * @returns {Promise<Object>} AI response with model selection info
+     */
+    async _makeAgentModeRequest(retryCount = 0) {
+        try {
+            console.log(`📤 Making Agent Mode AI request (attempt ${retryCount + 1}/${this.maxRetries + 1})`);
+
+            // Get the last user message to send as prompt
+            const lastUserMessage = this.apiMessages
+                .slice()
+                .reverse()
+                .find(msg => msg.role === 'user');
+
+            if (!lastUserMessage) {
+                throw new Error('No user message found to send to Agent Mode API');
+            }
+
+            // Extract text from message content (handle both string and array formats)
+            let promptText = '';
+            if (typeof lastUserMessage.content === 'string') {
+                promptText = lastUserMessage.content;
+            } else if (Array.isArray(lastUserMessage.content)) {
+                // Extract text from content array (skip images)
+                promptText = lastUserMessage.content
+                    .filter(item => item.type === 'text')
+                    .map(item => item.text)
+                    .join('\n');
+            }
+
+            // Build context asynchronously
+            const contextData = await this._buildContext();
+
+            // Prepare agent request parameters
+            const agentParams = {
+                prompt: promptText,
+                conversation_id: this.conversationId,
+                context: contextData
+            };
+
+            console.log('🤖 Calling Agent Mode API...');
+            console.log('🔍 Prompt length:', promptText.length);
+            console.log('🔍 Has context:', !!contextData);
+
+            // Call the agent API
+            const response = await agentClient.agent(agentParams);
+
+            console.log('✅ Received Agent Mode response');
+            console.log('🤖 Auto-selected model:', response.model);
+            if (response.selection_reason) {
+                console.log('📊 Selection reason:', response.selection_reason);
+            }
+
+            // Store model selection info
+            this.selectedModel = response.model;
+            this.modelSelectionReason = response.selection_reason;
+
+            // Save conversation ID if provided
+            if (response.conversation_id) {
+                this.conversationId = response.conversation_id;
+                console.log('💬 Conversation ID:', this.conversationId);
+            }
+
+            // Extract response content
+            const responseText = response.response?.content || 
+                                response.response?.text ||
+                                response.content ||
+                                response.text;
+
+            if (!responseText) {
+                console.error('❌ No response content found in:', response);
+                throw new Error('No AI response in Agent Mode reply');
+            }
+
+            console.log('🔍 Agent response:', responseText.substring(0, 200) + '...');
+
+            // Create response object compatible with existing code
+            const aiResponse = {
+                toString: function () { return responseText; },
+                valueOf: function () { return responseText; },
+                text: responseText,
+                substring: function (...args) { return responseText.substring(...args); },
+                includes: function (...args) { return responseText.includes(...args); },
+                indexOf: function (...args) { return responseText.indexOf(...args); },
+                replace: function (...args) { return responseText.replace(...args); },
+                replaceAll: function (...args) { return responseText.replaceAll(...args); },
+                split: function (...args) { return responseText.split(...args); },
+                trim: function (...args) { return responseText.trim(...args); },
+                toLowerCase: function (...args) { return responseText.toLowerCase(...args); },
+                toUpperCase: function (...args) { return responseText.toUpperCase(...args); },
+                match: function (...args) { return responseText.match(...args); },
+                search: function (...args) { return responseText.search(...args); },
+                slice: function (...args) { return responseText.slice(...args); },
+                startsWith: function (...args) { return responseText.startsWith(...args); },
+                endsWith: function (...args) { return responseText.endsWith(...args); },
+                charAt: function (...args) { return responseText.charAt(...args); },
+                charCodeAt: function (...args) { return responseText.charCodeAt(...args); },
+                length: responseText.length,
+                // Store agent mode metadata
+                _agentMode: true,
+                _selectedModel: response.model,
+                _selectionReason: response.selection_reason
+            };
+
+            // Attach API metrics if available
+            if (response.usage || response.cost || response.model) {
+                const usage = response.usage || {};
+                aiResponse._apiMetrics = {
+                    tokensIn: usage.input_tokens || usage.prompt_tokens || 0,
+                    tokensOut: usage.output_tokens || usage.completion_tokens || 0,
+                    cacheWrites: usage.cache_creation_input_tokens || 0,
+                    cacheReads: usage.cache_read_input_tokens || 0,
+                    cost: response.cost || 0,
+                    _raw: {
+                        usage: response.usage,
+                        model: response.model,
+                        provider: response.provider,
+                        agent_mode: true,
+                        selection_reason: response.selection_reason
+                    }
+                };
+                console.log('📊 Attached Agent Mode metrics:', {
+                    model: response.model,
+                    tokensIn: aiResponse._apiMetrics.tokensIn,
+                    tokensOut: aiResponse._apiMetrics.tokensOut,
+                    cost: aiResponse._apiMetrics.cost
+                });
+            }
+
+            // Add AI response to messages
+            this.addMessage('assistant', responseText);
+
+            // Reset retry count on success
+            this.retryCount = 0;
+
+            // Emit event with model selection info
+            this.emit('modelSelected', {
+                model: response.model,
+                reason: response.selection_reason,
+                agentMode: true
+            });
+
+            return aiResponse;
+
+        } catch (error) {
+            // Check if error is due to user abort
+            if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || error.message?.includes('cancel')) {
+                console.log('⏹ Agent Mode request canceled by user');
+                return null;
+            }
+
+            console.error(`❌ Agent Mode request error (attempt ${retryCount + 1}):`, error.message);
+
+            // Retry logic
+            if (retryCount < this.maxRetries && this._shouldRetry(error)) {
+                const delay = Math.min(Math.pow(2, retryCount) * 1000, 60000);
+                console.log(`⏳ Retrying Agent Mode request in ${delay / 1000}s...`);
+
+                this.emit('taskRetrying', this.taskId, retryCount + 1, delay);
+
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this._makeAgentModeRequest(retryCount + 1);
+            }
+
+            throw error;
+        }
+    }
+
+    /**
      * Make AI request with exponential backoff retry logic
      * KiloCode pattern: Retry with progressive delays
      */
     async _makeAIRequestWithRetry(retryCount = 0) {
+        // Check if Agent Mode is enabled
+        if (this.useAgentMode && this.mode === 'agent') {
+            console.log('🤖 Using Agent Mode API for automatic model selection');
+            return this._makeAgentModeRequest(retryCount);
+        }
+
+        // Otherwise use the traditional approach
+        console.log('🔧 Using traditional API endpoint');
+
         const axios = require('axios');
         const http = require('http');
         const https = require('https');

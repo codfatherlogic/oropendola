@@ -319,21 +319,9 @@ ${context.selection}
      * Update status bar with subscription info
      */
     updateStatusBar() {
-        if (this.statusBarItem && this.remainingRequests !== null) {
-            const percentage = this.subscriptionStatus?.total_requests
-                ? (this.remainingRequests / this.subscriptionStatus.total_requests) * 100
-                : 100;
-
-            let icon = '🟢';
-            if (percentage < 10) {
-                icon = '🔴';
-            } else if (percentage < 30) {
-                icon = '🟡';
-            }
-
-            this.statusBarItem.text = `${icon} Oropendola: ${this.remainingRequests} requests`;
-            this.statusBarItem.tooltip = `${this.remainingRequests} requests remaining\nTier: ${this.subscriptionStatus?.tier || 'Unknown'}`;
-            this.statusBarItem.show();
+        // Hidden - authentication and request count shown in chat UI instead
+        if (this.statusBarItem) {
+            this.statusBarItem.hide();
         }
     }
 

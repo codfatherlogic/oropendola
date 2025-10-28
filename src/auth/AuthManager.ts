@@ -138,9 +138,10 @@ export class EnhancedAuthManager implements vscode.Disposable {
             this.statusBarItem.tooltip = 'Oropendola: Connected';
             this.statusBarItem.command = 'oropendola.showAccountMenu';
         } else {
-            this.statusBarItem.text = '$(account) Sign in';
-            this.statusBarItem.tooltip = 'Oropendola: Not connected';
-            this.statusBarItem.command = 'oropendola.authenticate';
+            // Don't show status bar when not authenticated
+            // Authentication is now handled via sidebar Sign In button
+            this.statusBarItem.hide();
+            return;
         }
         this.statusBarItem.show();
     }

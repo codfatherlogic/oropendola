@@ -26,6 +26,10 @@ interface ChatContextValue {
   isLoading: boolean
   error: string | null
 
+  // Authentication
+  isAuthenticated: boolean
+  authMessage: string | null
+
   // Auto-approval
   autoApprovalEnabled: boolean
   autoApproveToggles: AutoApproveToggles
@@ -58,12 +62,19 @@ interface ChatProviderProps {
   children: React.ReactNode
 }
 
+console.log('🔥🔥🔥 [ChatProvider] Module is loading!');
+
 export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
+  console.log('🔥 [ChatProvider] Component rendering!');
   const [messages, setMessages] = useState<ClineMessage[]>([])
   const [taskMessage, setTaskMessage] = useState<ClineMessage | null>(null)
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Authentication state - start as false, backend will send status
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authMessage, setAuthMessage] = useState<string | null>(null)
 
   const [autoApprovalEnabled, setAutoApprovalEnabledState] = useState(false)
   const [autoApproveToggles, setAutoApproveToggles] = useState<AutoApproveToggles>({})
@@ -82,11 +93,35 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     }
     loadSettings()
 
+    // Request authentication status when webview is ready
+    console.log('🔐 [ChatContext] Webview ready - requesting auth status')
+    vscode.postMessage({ type: 'getAuthStatus' })
+
     // Listen for messages from extension
     const handleMessage = (event: MessageEvent) => {
       const message = event.data
 
       switch (message.type) {
+        case 'authenticationStatus':
+          // Update authentication state from backend
+          console.log('🔐 [ChatContext] Received authenticationStatus:', message)
+          setIsAuthenticated(message.isAuthenticated)
+          setAuthMessage(message.message || null)
+          console.log(`🔐 [ChatContext] Set isAuthenticated=${message.isAuthenticated}, authMessage="${message.message}"`)
+          break
+
+        case 'showSignInPrompt':
+          // Show sign-in prompt as a system message
+          const signInMessage: ClineMessage = {
+            ts: Date.now(),
+            type: 'say',
+            say: 'sign_in_required',
+            text: message.message || 'Please sign in to use Oropendola AI'
+          }
+          setMessages(prev => [...prev, signInMessage])
+          setIsLoading(false)
+          break
+
         case 'addMessage':
           if (message.message) {
             const isAssistant = message.message.role === 'assistant'
@@ -324,6 +359,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     todos,
     isLoading,
     error,
+    isAuthenticated,
+    authMessage,
     autoApprovalEnabled,
     autoApproveToggles,
     reasoningBlockCollapsed,

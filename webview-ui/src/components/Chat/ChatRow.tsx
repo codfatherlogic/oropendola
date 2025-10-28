@@ -15,6 +15,8 @@ import type { ClineMessage } from '../../types/cline-message'
 import { MarkdownBlock } from './MarkdownBlock'
 import { ProgressIndicator } from './ProgressIndicator'
 import { ReasoningBlock } from './ReasoningBlock'
+import { AgentModelBadge } from './AgentModelBadge'
+import vscode from '../../vscode-api'
 import './ChatRow.css'
 
 interface ChatRowProps {
@@ -38,6 +40,7 @@ export const ChatRow: React.FC<ChatRowProps> = ({
   const isError = message.say === 'error' || message.ask === 'error'
   const isApiRequest = message.say === 'api_req_started'
   const isToolApproval = message.type === 'ask' && message.ask === 'tool'  // ✅ Added
+  const isSignInRequired = message.say === 'sign_in_required'  // Sign in prompt
 
   // Header style for tool/action messages
   const headerStyle: React.CSSProperties = {
@@ -46,6 +49,57 @@ export const ChatRow: React.FC<ChatRowProps> = ({
     gap: '10px',
     marginBottom: '10px',
     wordBreak: 'break-word',
+  }
+
+  // Render Sign In prompt with big yellow button
+  if (isSignInRequired) {
+    return (
+      <div className="chat-row chat-row-sign-in" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px 20px',
+        gap: '20px',
+        backgroundColor: 'var(--vscode-editor-background)',
+        borderRadius: '8px',
+        margin: '20px 0'
+      }}>
+        <div style={{
+          fontSize: '16px',
+          color: 'var(--vscode-foreground)',
+          textAlign: 'center',
+          marginBottom: '10px'
+        }}>
+          {message.text || 'Please sign in to use Oropendola AI'}
+        </div>
+        <button
+          onClick={() => {
+            // Trigger sign in via VS Code command
+            vscode.postMessage({ type: 'login' });
+          }}
+          style={{
+            backgroundColor: 'var(--vscode-button-secondaryBackground)',
+            color: 'var(--vscode-button-secondaryForeground)',
+            border: '1px solid var(--vscode-button-border)',
+            borderRadius: '2px',
+            padding: '6px 14px',
+            fontSize: '13px',
+            fontWeight: 'normal',
+            cursor: 'pointer',
+            transition: 'background-color 0.1s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryHoverBackground)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryBackground)';
+          }}
+        >
+          Sign in
+        </button>
+      </div>
+    )
   }
 
   // Render user message
@@ -154,11 +208,20 @@ export const ChatRow: React.FC<ChatRowProps> = ({
 
   // Render assistant text message
   if (isAssistant && message.say === 'text') {
+    const hasAgentMode = message.apiMetrics?.agentMode && message.apiMetrics?.selectedModel
+
     return (
       <div className="chat-row chat-row-assistant">
         <div style={headerStyle}>
           <MessageCircle className="w-4 h-4" aria-label="Assistant icon" />
           <span style={{ fontWeight: 'bold' }}>Oropendola said</span>
+          {hasAgentMode && message.apiMetrics && (
+            <AgentModelBadge 
+              model={message.apiMetrics.selectedModel || ''}
+              selectionReason={message.apiMetrics.selectionReason}
+              compact={true}
+            />
+          )}
         </div>
         <div className="chat-row-assistant-content">
           <MarkdownBlock markdown={message.text} partial={message.partial} />

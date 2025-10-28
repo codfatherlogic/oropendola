@@ -122,16 +122,8 @@ class StatusBarManager {
     // ============================================
 
     updateConnection(connected) {
-        if (connected) {
-            this.connectionItem.text = '$(check) Connected';
-            this.connectionItem.tooltip = 'Backend connected\nServer: oropendola.ai';
-            this.connectionItem.backgroundColor = undefined;
-        } else {
-            this.connectionItem.text = '$(x) Disconnected';
-            this.connectionItem.tooltip = 'Backend disconnected\nClick to test connection';
-            this.connectionItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-        }
-        this.connectionItem.show();
+        // Hidden - authentication is now handled via Sign In button in chat area
+        this.connectionItem.hide();
     }
 
     // ============================================

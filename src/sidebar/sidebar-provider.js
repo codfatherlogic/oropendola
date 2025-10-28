@@ -3,6 +3,7 @@ const vscode = require('vscode');
 const ConversationTask = require('../core/ConversationTask');
 const URLAnalyzer = require('../analysis/url-analyzer');
 const TodoManager = require('../utils/todo-manager');
+const AuthManager = require('../auth/AuthManager');
 
 // Week 6-8: New Feature Clients
 const TerminalManager = require('../services/terminal/TerminalManager');
@@ -23,6 +24,9 @@ class OropendolaSidebarProvider {
         this._chatManager = null;
         this._conversationId = null;  // Track conversation ID
         this._mode = 'agent';  // Default mode: 'ask' or 'agent' (agent is default)
+
+        // OAuth Authentication
+        this._authManager = new AuthManager(context);
 
         // Task management (KiloCode pattern)
         this._currentTask = null;  // Current active task
@@ -108,7 +112,7 @@ class OropendolaSidebarProvider {
      * Resolve the webview view
      * @param {vscode.WebviewView} webviewView
      */
-    resolveWebviewView(webviewView) {
+    async resolveWebviewView(webviewView) {
         console.log('🔍 SidebarProvider: resolveWebviewView called');
         this._view = webviewView;
 
@@ -117,33 +121,25 @@ class OropendolaSidebarProvider {
             localResourceRoots: [this._context.extensionUri]
         };
 
-        // Check if user is already logged in
-        const config = vscode.workspace.getConfiguration('oropendola');
-        const userEmail = config.get('user.email');
-        const savedCookies = config.get('session.cookies');
-
-        // Restore session cookies if available
-        if (savedCookies) {
-            this._sessionCookies = savedCookies;
-            console.log('🔄 Restored session cookies from storage');
+        // Load authentication status from OAuth storage
+        const isAuthenticated = await this._authManager.loadFromStorage();
+        this._isLoggedIn = isAuthenticated;
+        
+        if (isAuthenticated) {
+            const userEmail = this._authManager.getUserEmail();
+            const apiKey = this._authManager.getApiKey();
+            console.log(`✅ Loaded OAuth authentication for: ${userEmail}`);
+            
+            // Update agent client with API key
+            const { agentClient } = require('../api/agent-client');
+            agentClient.updateCredentials(apiKey);
+            console.log('✅ Updated agent client with API key');
+        } else {
+            console.log('ℹ️ No OAuth authentication found');
         }
 
-        // Restore CSRF token if available
-        const savedCsrfToken = config.get('session.csrfToken');
-        if (savedCsrfToken) {
-            this._csrfToken = savedCsrfToken;
-            console.log('🔄 Restored CSRF token from storage');
-        }
-
-        // Check if we have a session or user is logged in
-        this._isLoggedIn = !!userEmail || !!this._sessionId || !!this._sessionCookies;
-
-        console.log(`🔍 SidebarProvider: isLoggedIn = ${this._isLoggedIn}, email = ${userEmail || 'none'}`);
-
-        // Show chat if logged in, otherwise show login
-        const html = this._isLoggedIn
-            ? this._getChatHtml(webviewView.webview)
-            : this._getLoginHtml(webviewView.webview);
+        // Always show chat interface (with sign-in prompt if needed)
+        const html = this._getChatHtml(webviewView.webview);
 
         console.log(`🔍 SidebarProvider: Setting HTML (${html.length} chars)`);
         webviewView.webview.html = html;
@@ -154,14 +150,73 @@ class OropendolaSidebarProvider {
         webviewView.show?.();
         console.log('✅ SidebarProvider: View shown');
 
+        // Send authentication status to webview - retry multiple times to ensure delivery
+        const sendAuthStatus = () => {
+            if (this._view) {
+                console.log('📤 Sending authentication status to webview');
+                this._view.webview.postMessage({
+                    type: 'authenticationStatus',
+                    isAuthenticated: this._isLoggedIn,
+                    message: this._isLoggedIn ? 'Authenticated' : 'Start by signing in'
+                });
+            }
+        };
+        
+        // Send immediately and retry to ensure webview receives it
+        setTimeout(sendAuthStatus, 500);
+        setTimeout(sendAuthStatus, 1000);
+        setTimeout(sendAuthStatus, 2000);
+        setTimeout(sendAuthStatus, 3000);
+
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async message => {
             try {
                 switch (message.type) {
                     case 'login':
-                        await this._handleLogin(message.email, message.password);
+                        // OAuth flow authentication
+                        console.log('🔐 Starting OAuth authentication flow');
+                        try {
+                            await this._authManager.authenticate();
+                            this._isLoggedIn = true;
+                            
+                            // Update agent client with API key
+                            const apiKey = this._authManager.getApiKey();
+                            const { agentClient } = require('../api/agent-client');
+                            agentClient.updateCredentials(apiKey);
+                            console.log('✅ Updated agent client with API key');
+                            
+                            // Send success to webview
+                            if (this._view) {
+                                this._view.webview.postMessage({
+                                    type: 'authenticationStatus',
+                                    isAuthenticated: true,
+                                    message: 'Authentication successful'
+                                });
+                            }
+                        } catch (error) {
+                            console.error('❌ Authentication failed:', error);
+                            if (this._view) {
+                                this._view.webview.postMessage({
+                                    type: 'authenticationStatus',
+                                    isAuthenticated: false,
+                                    message: `Authentication failed: ${error.message}`
+                                });
+                            }
+                        }
                         break;
                     case 'sendMessage':
+                        // Check OAuth authentication first
+                        if (!this._authManager.isAuthenticated()) {
+                            console.log('⚠️ Cannot send message - not authenticated');
+                            if (this._view) {
+                                this._view.webview.postMessage({
+                                    type: 'authenticationStatus',
+                                    isAuthenticated: false,
+                                    message: 'Please sign in to send messages'
+                                });
+                            }
+                            return;
+                        }
                         // Prevent multiple simultaneous sends
                         if (this._currentTask && this._currentTask.status === 'running') {
                             console.log('⚠️ Task already running, ignoring duplicate send');
@@ -169,8 +224,27 @@ class OropendolaSidebarProvider {
                         }
                         await this._handleSendMessage(message.text, message.attachments);
                         break;
+                    case 'openBrowser':
+                        // Open URL in external browser
+                        if (message.url) {
+                            console.log('🌐 Opening browser:', message.url);
+                            await vscode.env.openExternal(vscode.Uri.parse(message.url));
+                        }
+                        break;
                     case 'openSettings':
                         await vscode.commands.executeCommand('workbench.action.openSettings', 'oropendola');
+                        break;
+                    case 'getAuthStatus':
+                        // Webview is requesting current authentication status
+                        console.log('🔐 Webview requesting auth status');
+                        const isAuthenticated = this._authManager.isAuthenticated();
+                        if (this._view) {
+                            this._view.webview.postMessage({
+                                type: 'authenticationStatus',
+                                isAuthenticated: isAuthenticated,
+                                message: isAuthenticated ? null : 'Start by signing in'
+                            });
+                        }
                         break;
                     case 'newChat':
                         this._messages = [];
@@ -408,6 +482,20 @@ class OropendolaSidebarProvider {
                     case 'getSettings':
                         await this._handleGetSettings();
                         break;
+
+                    // User API handlers
+                    case 'getMyAPIKey':
+                        await this._handleGetMyAPIKey();
+                        break;
+                    case 'getMySubscription':
+                        await this._handleGetMySubscription();
+                        break;
+                    case 'regenerateAPIKey':
+                        await this._handleRegenerateAPIKey();
+                        break;
+                    case 'getUserProfile':
+                        await this._handleGetUserProfile();
+                        break;
                 }
             } catch (error) {
                 console.error('❌ Message handler error:', error);
@@ -481,6 +569,32 @@ class OropendolaSidebarProvider {
                     }).join('; ');
                     console.log('✅ Stored session cookies:', this._sessionCookies);
 
+                    // Update agent client with session cookies
+                    try {
+                        const { agentClient } = require('../api/agent-client');
+                        agentClient.updateSessionCookies(this._sessionCookies);
+                        console.log('✅ Updated agent client with session cookies');
+                    } catch (error) {
+                        console.warn('⚠️ Could not update agent client:', error.message);
+                    }
+
+                    // Update user API client with session cookies
+                    try {
+                        const userAPIClient = require('../api/user-api-client');
+                        // Convert cookie string to object format
+                        const cookieObj = {};
+                        this._sessionCookies.split('; ').forEach(cookie => {
+                            const [key, value] = cookie.split('=');
+                            if (key && value) {
+                                cookieObj[key] = value;
+                            }
+                        });
+                        userAPIClient.updateSessionCookies(cookieObj);
+                        console.log('✅ Updated user API client with session cookies');
+                    } catch (error) {
+                        console.warn('⚠️ Could not update user API client:', error.message);
+                    }
+
                     // Extract session ID from sid cookie
                     const sidCookie = setCookieHeaders.find(c => c.startsWith('sid='));
                     if (sidCookie) {
@@ -537,6 +651,16 @@ class OropendolaSidebarProvider {
                 }
 
                 vscode.window.showInformationMessage(`✅ Welcome back, ${email}!`);
+
+                // Auto-fetch user profile after login (non-blocking)
+                setTimeout(async () => {
+                    try {
+                        await this._handleGetUserProfile();
+                        console.log('✅ User profile fetched after login');
+                    } catch (error) {
+                        console.warn('⚠️ Could not fetch user profile:', error.message);
+                    }
+                }, 500);
             } else {
                 throw new Error('Login failed: Invalid response from server');
             }
@@ -621,42 +745,104 @@ class OropendolaSidebarProvider {
     }
 
     /**
+     * Validate session asynchronously
+     * @private
+     */
+    async _validateSession(savedCookies, userEmail, config, webviewView) {
+        try {
+            const axios = require('axios');
+            const apiUrl = config.get('api.url', 'https://oropendola.ai');
+            
+            // Wait a bit for webview to fully load
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const response = await axios.get(`${apiUrl}/api/method/frappe.auth.get_logged_user`, {
+                headers: { 'Cookie': savedCookies },
+                timeout: 5000
+            });
+            
+            if (response.data && response.data.message && response.data.message !== 'Guest') {
+                console.log('✅ Session validated:', response.data.message);
+                
+                // Session is valid - mark as logged in
+                this._isLoggedIn = true;
+                this._sessionCookies = savedCookies;
+                
+                // Send authenticated status to webview
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'authenticationStatus',
+                        isAuthenticated: true,
+                        userEmail: response.data.message
+                    });
+                }
+                
+                console.log('✅ User authenticated - chat ready');
+            } else {
+                throw new Error('Session expired');
+            }
+        } catch (error) {
+            console.warn('⚠️ Session validation failed:', error.message);
+            // Clear invalid session
+            this._isLoggedIn = false;
+            this._sessionCookies = null;
+            this._sessionId = null;
+            
+            await config.update('session.cookies', null, vscode.ConfigurationTarget.Global);
+            await config.update('session.csrfToken', null, vscode.ConfigurationTarget.Global);
+            await config.update('user.email', null, vscode.ConfigurationTarget.Global);
+            
+            // Clear agent client
+            try {
+                const { agentClient } = require('../api/agent-client');
+                agentClient.updateSessionCookies(null);
+            } catch (e) {
+                console.warn('⚠️ Could not clear agent client:', e.message);
+            }
+            
+            // Send unauthenticated status to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'authenticationStatus',
+                    isAuthenticated: false,
+                    message: 'Your session has expired. Please sign in again.'
+                });
+            }
+        }
+    }
+
+    /**
      * Handle logout
      */
     async _handleLogout() {
-        const config = vscode.workspace.getConfiguration('oropendola');
-
-        // Clear stored credentials and session
-        await config.update('api.key', undefined, vscode.ConfigurationTarget.Global);
-        await config.update('api.secret', undefined, vscode.ConfigurationTarget.Global);
-        await config.update('user.email', undefined, vscode.ConfigurationTarget.Global);
-
-        // Clear session cookies from persistent storage
-        await config.update('session.cookies', undefined, vscode.ConfigurationTarget.Global);
-        console.log('🗑️ Cleared session cookies from storage');
-
-        // Clear CSRF token from persistent storage
-        await config.update('session.csrfToken', undefined, vscode.ConfigurationTarget.Global);
-        console.log('🗑️ Cleared CSRF token from storage');
-
-        // Clear session data
+        // OAuth logout
+        await this._authManager.logout();
+        
+        // Clear local state
         this._isLoggedIn = false;
         this._messages = [];
-        this._sessionId = null;
-        this._sessionCookies = null;
-        this._userInfo = null;
-        this._conversationId = null;  // Clear conversation ID
-        this._csrfToken = null;  // Clear CSRF token
+        this._conversationId = null;
+
+        // Clear agent client API key
+        try {
+            const { agentClient } = require('../api/agent-client');
+            agentClient.updateCredentials(null);
+            console.log('✅ Cleared agent client API key');
+        } catch (error) {
+            console.warn('⚠️ Could not clear agent client:', error.message);
+        }
 
         console.log('✅ Logged out - cleared all session data');
 
-        // Show login screen
+        // Send unauthenticated status to webview
         if (this._view) {
-            this._view.webview.html = this._getLoginHtml(this._view.webview);
-            console.log('✅ Login screen restored');
+            this._view.webview.postMessage({
+                type: 'authenticationStatus',
+                isAuthenticated: false,
+                message: 'You have been logged out. Please sign in to continue.'
+            });
+            console.log('✅ Sign-in prompt shown');
         }
-
-        vscode.window.showInformationMessage('✅ Logged out successfully');
     }
 
     /**
@@ -1880,6 +2066,30 @@ class OropendolaSidebarProvider {
             this._taskHistory.push(task.getSummary());
         });
 
+        // Authentication error - session expired
+        task.on('authenticationError', async (taskId, error) => {
+            console.error(`🔐 Authentication error in task ${taskId}`);
+            
+            // Clear invalid session
+            this._isLoggedIn = false;
+            this._sessionCookies = null;
+            this._sessionId = null;
+            
+            const config = vscode.workspace.getConfiguration('oropendola');
+            await config.update('session.cookies', null, vscode.ConfigurationTarget.Global);
+            await config.update('session.csrfToken', null, vscode.ConfigurationTarget.Global);
+            await config.update('user.email', null, vscode.ConfigurationTarget.Global);
+            
+            // Send unauthenticated status to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'authenticationStatus',
+                    isAuthenticated: false,
+                    message: 'Your session has expired. Please sign in again.'
+                });
+            }
+        });
+
         // Task error
         task.on('taskError', (taskId, error) => {
             console.error(`❌ Task ${taskId} error:`, error);
@@ -2356,14 +2566,26 @@ class OropendolaSidebarProvider {
             const apiUrl = config.get('api.url', 'https://oropendola.ai');
             const userEmail = config.get('user.email');
 
-            // Validate session
+            // Validate session - show friendly Sign In button if not authenticated
             if (!userEmail && !this._sessionId) {
-                throw new Error('Please sign in to use AI features');
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'showSignInPrompt',
+                        message: 'Please sign in to start chatting with Oropendola AI'
+                    });
+                }
+                return;
             }
 
             if (!this._sessionCookies) {
                 console.error('❌ No session cookies available!');
-                throw new Error('Session expired. Please sign in again.');
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'showSignInPrompt',
+                        message: 'Your session has expired. Please sign in again.'
+                    });
+                }
+                return;
             }
 
             // Create new task if needed or current task is not running
@@ -3188,274 +3410,6 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
         function logout() {
             vscode.postMessage({ type: 'logout' });
         }
-    </script>
-</body>
-</html>`;
-    }
-
-    /**
-     * Get login HTML content - shown when user is not authenticated
-     */
-    _getLoginHtml(webview) {
-        console.log('🔧 Generating login HTML...');
-        // Get logo URI for webview
-        const logoUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._context.extensionUri, 'media', 'icon.png')
-        );
-        console.log('🖼️ Logo URI:', logoUri.toString());
-
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oropendola AI - Login</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: var(--vscode-font-family);
-            color: var(--vscode-foreground);
-            background-color: var(--vscode-sideBar-background);
-            padding: 20px;
-            line-height: 1.6;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .login-container {
-            width: 100%;
-            max-width: 300px;
-        }
-        
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .logo-icon {
-            margin-bottom: 20px;
-        }
-        
-        .logo-icon img {
-            width: 80px;
-            height: 80px;
-            object-fit: contain;
-        }
-        
-        h1 {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            text-align: center;
-        }
-        
-        .subtitle {
-            text-align: center;
-            color: var(--vscode-descriptionForeground);
-            font-size: 13px;
-            margin-bottom: 30px;
-        }
-        
-        .button {
-            width: 100%;
-            padding: 12px 16px;
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            text-align: center;
-            transition: background 0.2s;
-        }
-        
-        .button:hover {
-            background: var(--vscode-button-hoverBackground);
-        }
-        
-        .button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .button-secondary {
-            background: transparent;
-            color: var(--vscode-foreground);
-            border: 1px solid var(--vscode-input-border);
-            margin-top: 8px;
-        }
-        
-        .button-secondary:hover {
-            background: var(--vscode-button-secondaryHoverBackground);
-        }
-        
-        .form-group {
-            margin-bottom: 16px;
-        }
-        
-        .form-label {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--vscode-foreground);
-        }
-        
-        .form-input {
-            width: 100%;
-            padding: 10px 12px;
-            background: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-            font-family: var(--vscode-font-family);
-            font-size: 13px;
-        }
-        
-        .form-input:focus {
-            outline: none;
-            border-color: var(--vscode-focusBorder);
-        }
-        
-        .form-input::placeholder {
-            color: var(--vscode-input-placeholderForeground);
-        }
-        
-        .error {
-            color: var(--vscode-errorForeground);
-            background: var(--vscode-inputValidation-errorBackground);
-            border: 1px solid var(--vscode-inputValidation-errorBorder);
-            padding: 8px 12px;
-            border-radius: 4px;
-            margin-bottom: 16px;
-            font-size: 12px;
-            display: none;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            color: var(--vscode-descriptionForeground);
-            font-size: 13px;
-            margin-top: 12px;
-        }
-        
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s steps(4, end) infinite;
-        }
-        
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <div class="logo">
-            <div class="logo-icon"><img src="${logoUri}" alt="Oropendola AI Logo" /></div>
-            <h1>Oropendola AI</h1>
-            <div class="subtitle">Sign in to get started</div>
-        </div>
-        
-        <div id="error" class="error"></div>
-        
-        <form id="loginForm" onsubmit="handleLogin(event)">
-            <div class="form-group">
-                <label class="form-label" for="email">Email Address</label>
-                <input 
-                    type="email" 
-                    id="email" 
-                    class="form-input" 
-                    placeholder="Enter your email"
-                    required
-                    autocomplete="email"
-                />
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label" for="password">Password</label>
-                <input 
-                    type="password" 
-                    id="password" 
-                    class="form-input" 
-                    placeholder="Enter your password"
-                    required
-                    autocomplete="current-password"
-                />
-            </div>
-            
-            <button type="submit" class="button" id="loginBtn">
-                🔐 Sign In
-            </button>
-        </form>
-        
-        <button class="button button-secondary" onclick="openSettings()">
-            ⚙️ Settings
-        </button>
-        
-        <div id="loading" class="loading">Signing in</div>
-    </div>
-    
-    <script>
-        const vscode = acquireVsCodeApi();
-        
-        function handleLogin(event) {
-            if (event) event.preventDefault();
-            
-            const loginBtn = document.getElementById('loginBtn');
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            
-            if (!email || !password) {
-                error.textContent = 'Please enter both email and password';
-                error.style.display = 'block';
-                return;
-            }
-            
-            loginBtn.disabled = true;
-            loading.style.display = 'block';
-            error.style.display = 'none';
-            
-            vscode.postMessage({ 
-                type: 'login',
-                email: email,
-                password: password
-            });
-        }
-        
-        function openSettings() {
-            vscode.postMessage({ type: 'openSettings' });
-        }
-        
-        // Handle messages from extension
-        window.addEventListener('message', event => {
-            const message = event.data;
-            const loginBtn = document.getElementById('loginBtn');
-            const loading = document.getElementById('loading');
-            const error = document.getElementById('error');
-            
-            switch (message.type) {
-                case 'loginError':
-                    loginBtn.disabled = false;
-                    loading.style.display = 'none';
-                    error.textContent = message.message || 'Login failed. Please try again.';
-                    error.style.display = 'block';
-                    break;
-            }
-        });
     </script>
 </body>
 </html>`;
@@ -5107,6 +5061,144 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
             }
         } catch (error) {
             console.error('❌ Error getting settings:', error);
+        }
+    }
+
+    // ============================================
+    // User API Handlers
+    // ============================================
+
+    /**
+     * Get user's API key
+     */
+    async _handleGetMyAPIKey() {
+        try {
+            const userAPIClient = require('../api/user-api-client');
+            
+            if (!userAPIClient.isAuthenticated()) {
+                throw new Error('Not authenticated. Please sign in first.');
+            }
+
+            const data = await userAPIClient.getMyAPIKey();
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'apiKeyData',
+                    data: data
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting API key:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Get user's subscription details
+     */
+    async _handleGetMySubscription() {
+        try {
+            const userAPIClient = require('../api/user-api-client');
+            
+            if (!userAPIClient.isAuthenticated()) {
+                throw new Error('Not authenticated. Please sign in first.');
+            }
+
+            const data = await userAPIClient.getMySubscription();
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'subscriptionData',
+                    data: data
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting subscription:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Regenerate user's API key
+     */
+    async _handleRegenerateAPIKey() {
+        try {
+            const userAPIClient = require('../api/user-api-client');
+            
+            if (!userAPIClient.isAuthenticated()) {
+                throw new Error('Not authenticated. Please sign in first.');
+            }
+
+            // Confirm with user first
+            const confirm = await vscode.window.showWarningMessage(
+                '⚠️ This will revoke your current API key. Continue?',
+                { modal: true },
+                'Yes, Regenerate',
+                'Cancel'
+            );
+
+            if (confirm !== 'Yes, Regenerate') {
+                return;
+            }
+
+            const data = await userAPIClient.regenerateAPIKey();
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'apiKeyRegenerated',
+                    data: data
+                });
+            }
+
+            vscode.window.showInformationMessage('✅ API key regenerated successfully!');
+        } catch (error) {
+            console.error('❌ Error regenerating API key:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Get complete user profile (subscription + API key info)
+     */
+    async _handleGetUserProfile() {
+        try {
+            const userAPIClient = require('../api/user-api-client');
+            
+            if (!userAPIClient.isAuthenticated()) {
+                throw new Error('Not authenticated. Please sign in first.');
+            }
+
+            const data = await userAPIClient.getUserProfile();
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'userProfile',
+                    data: data
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting user profile:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: error.message
+                });
+            }
         }
     }
 }

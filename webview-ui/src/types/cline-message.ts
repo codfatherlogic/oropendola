@@ -9,6 +9,10 @@ export interface ApiMetrics {
   cacheWrites?: number
   cacheReads?: number
   apiRequestId?: string
+  // Agent Mode metadata
+  agentMode?: boolean
+  selectedModel?: string
+  selectionReason?: string
 }
 
 export interface CombinedApiMetrics {
@@ -36,7 +40,7 @@ export interface ClineMessage {
   ts: number
   type: 'ask' | 'say'
   ask?: string
-  say?: string
+  say?: string | 'sign_in_required'
   text?: string
   images?: string[]
   partial?: boolean

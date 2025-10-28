@@ -490,6 +490,29 @@ function registerCommands(context) {
         })
     );
 
+    // Oropendola: Clear Session Data (for debugging)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.clearSession', async () => {
+            console.log('🗑️ Clear Session command executed!');
+            const config = vscode.workspace.getConfiguration('oropendola');
+            
+            // Clear all session data
+            await config.update('session.cookies', undefined, vscode.ConfigurationTarget.Global);
+            await config.update('session.csrfToken', undefined, vscode.ConfigurationTarget.Global);
+            await config.update('user.email', undefined, vscode.ConfigurationTarget.Global);
+            await config.update('api.key', undefined, vscode.ConfigurationTarget.Global);
+            await config.update('api.secret', undefined, vscode.ConfigurationTarget.Global);
+            
+            console.log('✅ All session data cleared');
+            vscode.window.showInformationMessage('Session data cleared. Please reload VS Code.', 'Reload Window')
+                .then(selection => {
+                    if (selection === 'Reload Window') {
+                        vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                });
+        })
+    );
+
     // Keep old setup command for backwards compatibility
     context.subscriptions.push(
         vscode.commands.registerCommand('oropendola.setup', async () => {

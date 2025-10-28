@@ -35,6 +35,10 @@ interface ChatViewProps {
   // Loading state
   isLoading?: boolean
 
+  // Authentication
+  isAuthenticated?: boolean
+  authMessage?: string | null
+
   // Auto-approval settings
   autoApprovalEnabled: boolean
   autoApproveToggles: AutoApproveToggles
@@ -58,6 +62,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   taskMessage,
   todos = [],
   isLoading = false,
+  isAuthenticated = true,
+  authMessage = null,
   autoApprovalEnabled,
   autoApproveToggles,
   onSendMessage,
@@ -391,6 +397,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
           shouldDisableImages={false}
           mode={mode}
           setMode={setMode}
+          isAuthenticated={isAuthenticated}
+          authMessage={authMessage}
           autoApprovalEnabled={autoApprovalEnabled}
           autoApproveToggles={autoApproveToggles}
           onAutoApprovalEnabledChange={onAutoApprovalEnabledChange || (() => {})}

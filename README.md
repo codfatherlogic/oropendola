@@ -47,8 +47,22 @@ Get AI responses token-by-token as they're generated for a smooth, interactive e
 One powerful AI assistant that handles everything:
 - **Intelligent Responses** - Context-aware code understanding
 - **Real-time Streaming** - Token-by-token responses
+- **Agent Mode (NEW!)** - Automatic AI model selection for optimal cost and performance
 - **No Configuration** - Just login and start coding
 - **Consistent Performance** - Optimized for your needs
+
+#### 🎯 Agent Mode - Automatic Model Selection
+Oropendola automatically selects the best AI model for each request based on:
+- **Cost Efficiency** - Balances performance with your subscription plan
+- **Performance** - Matches task complexity with model capability
+- **Availability** - Routes around unhealthy models automatically
+- **Latency** - Optimizes for response time
+
+**You don't choose models - Oropendola does it automatically!**
+
+Supported models: Claude, GPT-4, DeepSeek, Grok, Gemini
+
+📚 **Learn more**: [`AGENT_MODE_INTEGRATION.md`](./AGENT_MODE_INTEGRATION.md)
 
 ### 💬 AI Chat Interface
 - Beautiful WebView-based chat panel
@@ -135,10 +149,17 @@ Fix @problems in the project
 
 ### 📊 Subscription Management
 - Real-time usage tracking
+- **User API Integration (NEW!)** - Manage API keys and view subscription details
+  - Get/regenerate API key directly from extension
+  - View daily quota and monthly budget
+  - Track subscription status
+  - Auto-fetch profile after login
 - Status bar indicator with color coding:
   - 🟢 Green: Plenty of requests remaining
   - 🟡 Yellow: Running low (< 30%)
   - 🔴 Red: Very low (< 10%)
+
+📚 **Learn more**: [`USER_API_INTEGRATION.md`](./USER_API_INTEGRATION.md)
 
 ### ⚡ Advanced Features
 - Repository analysis and insights
@@ -175,30 +196,33 @@ code --install-extension oropendola-ai-assistant-1.0.0.vsix
 
 ## 🚀 Getting Started
 
-### 1. Get API Credentials
+### 1. Sign In to Oropendola
 
-1. Visit [oropendola.ai](https://oropendola.ai)
-2. Sign up for an account
-3. Get your API key and secret from the dashboard
+1. Install the extension
+2. Click the **Oropendola icon** in the Activity Bar (left sidebar)
+3. Click **"Sign In"** yellow button
+4. Enter your email and password
+5. ✅ Done! Your API key and subscription are loaded automatically
 
-### 2. Configure the Extension
+> **No manual API key configuration needed!** The extension uses session-based authentication and automatically fetches your API key and subscription details after login.
 
-**Option A: Using Setup Command (Recommended)**
-1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
-2. Run `Oropendola: Setup`
-3. Enter your API key
-4. Enter your API secret
+### 2. View Your Subscription
 
-**Option B: Manual Configuration**
-1. Open VS Code Settings
-2. Navigate to Extensions → Oropendola
-3. Enter your API credentials
+After signing in, you can:
+- View your API key (first time only - store it securely!)
+- Check daily quota remaining
+- Monitor monthly budget usage
+- Regenerate API key if needed
 
-### 3. Start Using Oropendola
+📚 See [`USER_API_INTEGRATION.md`](./USER_API_INTEGRATION.md) for details
 
-Open the chat panel:
+### 3. Start Coding with AI
+
+Open the chat panel and ask questions:
 ```
-Ctrl+Shift+P → Oropendola: Chat
+"Explain this code"
+"Fix the bug in my function"
+"Create a REST API endpoint"
 ```
 
 Or right-click on code and select Oropendola actions!

@@ -56,6 +56,12 @@
         "icon": "$(sign-out)"
       },
       {
+        "command": "oropendola.clearSession",
+        "title": "Clear Session Data",
+        "category": "Oropendola",
+        "icon": "$(trash)"
+      },
+      {
         "command": "oropendola.setup",
         "title": "Setup",
         "category": "Oropendola",
@@ -599,6 +605,18 @@
           "type": "string",
           "default": "",
           "description": "Your Oropendola API secret from oropendola.ai",
+          "scope": "application"
+        },
+        "oropendola.agentMode.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Agent Mode for automatic AI model selection based on cost, performance, and availability",
+          "scope": "application"
+        },
+        "oropendola.agentMode.showModelBadge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show which model was auto-selected by Agent Mode in chat messages",
           "scope": "application"
         },
         "oropendola.user.email": {

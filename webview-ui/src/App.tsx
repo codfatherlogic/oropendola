@@ -35,6 +35,8 @@ const ChatInterface: React.FC = () => {
     todos,
     isLoading,
     error,
+    isAuthenticated,
+    authMessage,
     autoApprovalEnabled,
     autoApproveToggles,
     sendMessage,
@@ -88,6 +90,8 @@ const ChatInterface: React.FC = () => {
         taskMessage={taskMessage || undefined}
         todos={todos}
         isLoading={isLoading}
+        isAuthenticated={isAuthenticated}
+        authMessage={authMessage}
         autoApprovalEnabled={autoApprovalEnabled}
         autoApproveToggles={autoApproveToggles}
         onSendMessage={sendMessage}

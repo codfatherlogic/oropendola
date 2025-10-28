@@ -1,139 +1,291 @@
+/**
+ * AuthManager - Handles OAuth-style authentication flow with Oropendola backend
+ * 
+ * Flow:
+ * 1. Call initiate() to get auth URL and session token
+ * 2. Open browser to auth URL for user to login
+ * 3. Poll status endpoint until authentication completes
+ * 4. Store API key and subscription info
+ */
+
 const vscode = require('vscode');
-const axios = require('axios');
 
-class EnhancedAuthManager {
-    static SERVICE_NAME = 'oropendola-vscode';
-    static ACCOUNT_NAME = 'api-token';
+const API_BASE = 'https://oropendola.ai';
+const POLL_INTERVAL = 5000; // 5 seconds
+const POLL_TIMEOUT = 600000; // 10 minutes
 
-    constructor(context, serverUrl) {
-        this.context = context;
-        this.serverUrl = serverUrl;
-        this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-        this.updateStatusBar(false, '');
-        this.refreshTimer = undefined;
+class AuthManager {
+    constructor(context) {
+        this._context = context;
+        this._apiKey = null;
+        this._userEmail = null;
+        this._subscription = null;
     }
 
-    // Use VS Code secrets API for secure credential storage
-    async setCredentials(key, value) {
-        await this.context.secrets.store(`${EnhancedAuthManager.SERVICE_NAME}.${key}`, value);
+    /**
+     * Initiate authentication flow
+     * Returns auth URL for user to visit
+     */
+    async initiate() {
+        try {
+            console.log('🔐 [AuthManager] Initiating authentication flow');
+
+            const response = await fetch(
+                `${API_BASE}/api/method/oropendola_ai.oropendola_ai.api.vscode_extension.initiate_vscode_auth`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.message?.success) {
+                throw new Error(data.message?.error || 'Failed to initiate authentication');
+            }
+
+            console.log('✅ [AuthManager] Auth session created');
+            return {
+                authUrl: data.message.auth_url,
+                sessionToken: data.message.session_token,
+                expiresIn: data.message.expires_in
+            };
+
+        } catch (error) {
+            console.error('❌ [AuthManager] Initiate error:', error);
+            throw new Error(`Failed to start authentication: ${error.message}`);
+        }
     }
 
-    async getCredentials(key) {
-        return await this.context.secrets.get(`${EnhancedAuthManager.SERVICE_NAME}.${key}`);
+    /**
+     * Poll authentication status until complete or timeout
+     */
+    async pollStatus(sessionToken) {
+        const startTime = Date.now();
+        
+        console.log('🔄 [AuthManager] Starting to poll auth status');
+
+        return new Promise((resolve, reject) => {
+            const pollInterval = setInterval(async () => {
+                try {
+                    // Check timeout
+                    const elapsed = Date.now() - startTime;
+                    if (elapsed > POLL_TIMEOUT) {
+                        clearInterval(pollInterval);
+                        console.log('⏱️ [AuthManager] Polling timeout reached');
+                        reject(new Error('Authentication timed out'));
+                        return;
+                    }
+
+                    // Poll the status endpoint
+                    const response = await fetch(
+                        `${API_BASE}/api/method/oropendola_ai.oropendola_ai.api.vscode_extension.check_vscode_auth_status`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ session_token: sessionToken })
+                        }
+                    );
+
+                    if (!response.ok) {
+                        console.error('❌ [AuthManager] Poll request failed:', response.status);
+                        return; // Continue polling
+                    }
+
+                    const data = await response.json();
+                    
+                    if (!data.message?.success) {
+                        console.error('❌ [AuthManager] Poll response error:', data.message?.error);
+                        return; // Continue polling
+                    }
+
+                    const status = data.message.status;
+                    console.log(`🔍 [AuthManager] Auth status: ${status}`);
+
+                    if (status === 'complete') {
+                        clearInterval(pollInterval);
+                        
+                        // Store authentication data
+                        this._apiKey = data.message.api_key;
+                        this._userEmail = data.message.user_email;
+                        this._subscription = data.message.subscription;
+
+                        // Save to secure storage
+                        await this._saveToStorage();
+
+                        console.log('✅ [AuthManager] Authentication complete');
+                        resolve({
+                            apiKey: this._apiKey,
+                            userEmail: this._userEmail,
+                            subscription: this._subscription
+                        });
+
+                    } else if (status === 'expired') {
+                        clearInterval(pollInterval);
+                        console.log('⏱️ [AuthManager] Session expired');
+                        reject(new Error('Authentication session expired'));
+                    }
+                    // Otherwise status is 'pending', keep polling
+
+                } catch (error) {
+                    console.error('❌ [AuthManager] Poll error:', error);
+                    // Continue polling despite errors
+                }
+            }, POLL_INTERVAL);
+        });
     }
 
-    async deleteCredentials(key) {
-        await this.context.secrets.delete(`${EnhancedAuthManager.SERVICE_NAME}.${key}`);
-    }
-
+    /**
+     * Complete authentication flow
+     * Opens browser and waits for completion
+     */
     async authenticate() {
         try {
-            const serverUrl = await vscode.window.showInputBox({
-                prompt: 'Enter Oropendola server URL',
-                placeHolder: 'https://your-server.com',
-                value: this.context.globalState.get('serverUrl', ''),
-                validateInput: (value) => {
-                    try { new URL(value); return null; } catch { return 'Please enter a valid URL'; }
-                }
-            });
-            if (!serverUrl) return false;
+            // Step 1: Initiate authentication
+            const { authUrl, sessionToken } = await this.initiate();
 
-            const username = await vscode.window.showInputBox({ prompt: 'Enter your username/email', placeHolder: 'user@example.com' });
-            if (!username) return false;
+            // Step 2: Show message and open browser
+            const selection = await vscode.window.showInformationMessage(
+                'Opening browser for authentication...',
+                'Open Browser',
+                'Cancel'
+            );
 
-            const password = await vscode.window.showInputBox({ prompt: 'Enter your password', password: true });
-            if (!password) return false;
-
-            const response = await axios.post(`${serverUrl}/api/method/ai_assistant.api.endpoints.session_login`, { usr: username, pwd: password }, { timeout: 10000, withCredentials: true });
-
-            if (response.data && response.data.success) {
-                await this.setCredentials(EnhancedAuthManager.ACCOUNT_NAME, JSON.stringify({ serverUrl, sessionId: response.data.session_id, user: response.data.user, timestamp: Date.now() }));
-                await this.context.globalState.update('serverUrl', serverUrl);
-                await this.context.globalState.update('currentUser', response.data.user);
-                this.updateStatusBar(true, (response.data.user && (response.data.user.full_name || response.data.user.name)) || username);
-                this.startTokenRefresh(serverUrl, response.data.session_id);
-                vscode.window.showInformationMessage(`✅ Successfully authenticated as ${(response.data.user && (response.data.user.full_name || response.data.user.name)) || username}`);
-                return true;
-            } else {
-                throw new Error((response.data && response.data.error) || 'Authentication failed');
+            if (selection !== 'Open Browser') {
+                throw new Error('Authentication cancelled by user');
             }
+
+            // Open browser
+            await vscode.env.openExternal(vscode.Uri.parse(authUrl));
+
+            // Show progress while polling
+            return await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Waiting for authentication...',
+                    cancellable: true
+                },
+                async (progress, token) => {
+                    // Handle cancellation
+                    token.onCancellationRequested(() => {
+                        throw new Error('Authentication cancelled');
+                    });
+
+                    // Step 3: Poll for completion
+                    const result = await this.pollStatus(sessionToken);
+
+                    // Show success message
+                    vscode.window.showInformationMessage(
+                        `✓ Successfully authenticated as ${result.userEmail}!`
+                    );
+
+                    return result;
+                }
+            );
+
         } catch (error) {
-            vscode.window.showErrorMessage(`❌ Authentication failed: ${error && error.message ? error.message : error}`);
+            console.error('❌ [AuthManager] Authentication failed:', error);
+            vscode.window.showErrorMessage(`Authentication failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Save authentication data to secure storage
+     */
+    async _saveToStorage() {
+        if (this._apiKey) {
+            await this._context.secrets.store('oropendola_api_key', this._apiKey);
+        }
+        if (this._userEmail) {
+            await this._context.globalState.update('oropendola_user_email', this._userEmail);
+        }
+        if (this._subscription) {
+            await this._context.globalState.update('oropendola_subscription', JSON.stringify(this._subscription));
+        }
+        console.log('💾 [AuthManager] Saved credentials to secure storage');
+    }
+
+    /**
+     * Load authentication data from secure storage
+     */
+    async loadFromStorage() {
+        try {
+            this._apiKey = await this._context.secrets.get('oropendola_api_key');
+            this._userEmail = await this._context.globalState.get('oropendola_user_email');
+            
+            const subJson = await this._context.globalState.get('oropendola_subscription');
+            if (subJson) {
+                this._subscription = JSON.parse(subJson);
+            }
+
+            const hasAuth = !!(this._apiKey && this._userEmail);
+            console.log(`🔍 [AuthManager] Loaded from storage: ${hasAuth ? 'authenticated' : 'not authenticated'}`);
+            
+            return hasAuth;
+        } catch (error) {
+            console.error('❌ [AuthManager] Load error:', error);
             return false;
         }
     }
 
-    async getAuthToken() {
-        try {
-            const stored = await this.getCredentials(EnhancedAuthManager.ACCOUNT_NAME);
-            if (!stored) return null;
-            const credentials = JSON.parse(stored);
-            const now = Date.now();
-            const tokenAge = now - (credentials.timestamp || 0);
-            const MAX_AGE = 24 * 60 * 60 * 1000;
-            if (tokenAge > MAX_AGE) { await this.logout(); return null; }
-            return credentials.sessionId;
-        } catch (error) { console.error('Failed to get auth token:', error); return null; }
-    }
-
-    async refreshToken(serverUrl, oldToken) {
-        try {
-            const response = await axios.post(`${serverUrl}/api/method/ai_assistant.api.endpoints.refresh_session`, { session_id: oldToken }, { timeout: 5000 });
-            if (response.data && response.data.success) {
-                const stored = await this.getCredentials(EnhancedAuthManager.ACCOUNT_NAME);
-                if (stored) {
-                    const credentials = JSON.parse(stored);
-                    credentials.sessionId = response.data.new_session_id;
-                    credentials.timestamp = Date.now();
-                    await this.setCredentials(EnhancedAuthManager.ACCOUNT_NAME, JSON.stringify(credentials));
-                }
-                return true;
-            }
-            return false;
-        } catch (error) { console.error('Token refresh failed:', error); return false; }
-    }
-
-    startTokenRefresh(serverUrl, sessionId) {
-        this.refreshTimer = setInterval(async () => {
-            const success = await this.refreshToken(serverUrl, sessionId);
-            if (!success) {
-                this.updateStatusBar(false, '');
-                const selection = await vscode.window.showWarningMessage('Session expired. Please re-authenticate.', 'Login');
-                if (selection === 'Login') { await this.authenticate(); }
-            }
-        }, 6 * 60 * 60 * 1000);
-    }
-
+    /**
+     * Clear all authentication data
+     */
     async logout() {
         try {
-            await this.deleteCredentials(EnhancedAuthManager.ACCOUNT_NAME);
-            await this.context.globalState.update('serverUrl', undefined);
-            await this.context.globalState.update('currentUser', undefined);
-            if (this.refreshTimer) { clearInterval(this.refreshTimer); }
-            this.updateStatusBar(false, '');
-            vscode.window.showInformationMessage('✅ Logged out successfully');
-        } catch (error) { console.error('Logout failed:', error); }
-    }
+            await this._context.secrets.delete('oropendola_api_key');
+            await this._context.globalState.update('oropendola_user_email', undefined);
+            await this._context.globalState.update('oropendola_subscription', undefined);
+            
+            this._apiKey = null;
+            this._userEmail = null;
+            this._subscription = null;
 
-    updateStatusBar(authenticated, userName) {
-        if (authenticated) {
-            this.statusBarItem.text = `$(account) ${userName}`;
-            this.statusBarItem.tooltip = 'Oropendola: Connected';
-            this.statusBarItem.command = 'oropendola.showAccountMenu';
-        } else {
-            this.statusBarItem.text = '$(account) Sign in';
-            this.statusBarItem.tooltip = 'Oropendola: Not connected';
-            this.statusBarItem.command = 'oropendola.authenticate';
+            console.log('🚪 [AuthManager] Logged out');
+            vscode.window.showInformationMessage('Logged out successfully');
+        } catch (error) {
+            console.error('❌ [AuthManager] Logout error:', error);
         }
-        this.statusBarItem.show();
     }
 
-    async isAuthenticated() {
-        const token = await this.getAuthToken();
-        return token !== null;
+    /**
+     * Get current API key
+     */
+    getApiKey() {
+        return this._apiKey;
     }
 
-    dispose() { if (this.refreshTimer) clearInterval(this.refreshTimer); this.statusBarItem.dispose(); }
+    /**
+     * Get current user email
+     */
+    getUserEmail() {
+        return this._userEmail;
+    }
+
+    /**
+     * Get subscription info
+     */
+    getSubscription() {
+        return this._subscription;
+    }
+
+    /**
+     * Check if authenticated
+     */
+    isAuthenticated() {
+        return !!(this._apiKey && this._userEmail);
+    }
 }
 
-module.exports = { EnhancedAuthManager };
+// Export both for compatibility
+module.exports = AuthManager;
+module.exports.EnhancedAuthManager = AuthManager; // Alias for backward compatibility

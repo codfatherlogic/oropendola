@@ -1,0 +1,92 @@
+.agent-model-badge {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--vscode-badge-background);
+  border: 1px solid var(--vscode-badge-foreground);
+  margin: 4px 0;
+}
+
+.agent-model-badge.compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+}
+
+.agent-model-badge .model-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-model-badge .model-icon {
+  font-size: 14px;
+}
+
+.agent-model-badge .model-name {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.agent-model-badge .agent-badge {
+  margin-left: auto;
+  padding: 2px 6px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-radius: 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.agent-model-badge .selection-reason {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* Model-specific colors */
+.agent-model-badge.model-claude {
+  background: rgba(155, 89, 182, 0.15);
+  border-color: rgba(155, 89, 182, 0.5);
+}
+
+.agent-model-badge.model-gpt {
+  background: rgba(52, 152, 219, 0.15);
+  border-color: rgba(52, 152, 219, 0.5);
+}
+
+.agent-model-badge.model-deepseek {
+  background: rgba(46, 204, 113, 0.15);
+  border-color: rgba(46, 204, 113, 0.5);
+}
+
+.agent-model-badge.model-grok {
+  background: rgba(241, 196, 15, 0.15);
+  border-color: rgba(241, 196, 15, 0.5);
+}
+
+.agent-model-badge.model-gemini {
+  background: rgba(230, 126, 34, 0.15);
+  border-color: rgba(230, 126, 34, 0.5);
+}
+
+.agent-model-badge.model-other {
+  background: rgba(149, 165, 166, 0.15);
+  border-color: rgba(149, 165, 166, 0.5);
+}
+
+/* Compact mode adjustments */
+.agent-model-badge.compact .model-header {
+  gap: 4px;
+}
+
+.agent-model-badge.compact .agent-badge {
+  display: none;
+}
