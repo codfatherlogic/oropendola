@@ -1,0 +1,163 @@
+/**
+ * Followup Question Prompt Styles
+ */
+
+.followup-question-prompt {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 16px;
+  margin: 12px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.followup-question-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.followup-question-icon {
+  font-size: 18px;
+}
+
+.followup-question-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  flex: 1;
+}
+
+.followup-question-timer {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  padding: 2px 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 4px;
+}
+
+.followup-question-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.followup-question-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--vscode-foreground);
+  margin: 0;
+  padding: 8px 0;
+}
+
+/* Progress bar for timeout visualization */
+.followup-question-progress-container {
+  height: 3px;
+  background: var(--vscode-input-background);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.followup-question-progress-bar {
+  height: 100%;
+  background: var(--vscode-button-background);
+  transition: width 0.1s linear;
+}
+
+/* Suggested answers section */
+.followup-question-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.followup-question-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+}
+
+.followup-question-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.followup-question-button {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--vscode-font-family);
+}
+
+.followup-question-button:hover {
+  background: var(--vscode-button-hoverBackground);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.followup-question-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Custom answer input */
+.followup-question-custom {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.followup-question-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--vscode-font-family);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.followup-question-input:focus {
+  border-color: var(--vscode-focusBorder);
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.followup-question-submit {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--vscode-font-family);
+  white-space: nowrap;
+}
+
+.followup-question-submit:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.followup-question-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.followup-question-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}

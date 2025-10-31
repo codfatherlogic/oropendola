@@ -8,8 +8,10 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { ClineMessage, ToolCall } from '../types/cline-message'
 import { AutoApproveToggles, AutoApproveSetting } from '../types/auto-approve'
+import { BranchId, ConversationBranch } from '../types/conversation-fork'
 import { formatToolDescription } from '../utils/tool-formatter'
 import { vscodeApiClient } from '../api/vscode-client'
+import { useConversationForks } from '../hooks/useConversationForks'
 import vscode from '../vscode-api'
 
 export interface TodoItem {
@@ -37,6 +39,12 @@ interface ChatContextValue {
   // UI Preferences
   reasoningBlockCollapsed: boolean
 
+  // Conversation Forks
+  activeBranch: ConversationBranch | undefined
+  allBranches: ConversationBranch[]
+  hasForks: boolean
+  branchCount: number
+
   // Actions
   sendMessage: (text: string, images?: string[]) => Promise<void>
   approveMessage: (messageTs: number) => Promise<void>
@@ -46,6 +54,14 @@ interface ChatContextValue {
   setReasoningBlockCollapsed: (collapsed: boolean) => void
   clearError: () => void
   startNewTask: () => void
+
+  // Fork Actions
+  createFork: (messageTs: number, branchName?: string) => Promise<BranchId>
+  switchBranch: (branchId: BranchId) => Promise<void>
+  renameBranch: (branchId: BranchId, newName: string) => Promise<void>
+  deleteBranch: (branchId: BranchId) => Promise<void>
+  getChildBranches: (branchId: BranchId) => ConversationBranch[]
+  getBranchPath: (branchId: BranchId) => BranchId[]
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined)
@@ -66,12 +82,11 @@ console.log('🔥🔥🔥 [ChatProvider] Module is loading!');
 
 export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   console.log('🔥 [ChatProvider] Component rendering!');
-  const [messages, setMessages] = useState<ClineMessage[]>([])
   const [taskMessage, setTaskMessage] = useState<ClineMessage | null>(null)
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Authentication state - start as false, backend will send status
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
@@ -79,6 +94,26 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [autoApprovalEnabled, setAutoApprovalEnabledState] = useState(false)
   const [autoApproveToggles, setAutoApproveToggles] = useState<AutoApproveToggles>({})
   const [reasoningBlockCollapsed, setReasoningBlockCollapsedState] = useState(false)
+
+  // Conversation fork management
+  const {
+    messages: forkMessages,
+    activeBranch,
+    allBranches,
+    hasForks,
+    branchCount,
+    createFork,
+    switchBranch,
+    renameBranch,
+    deleteBranch,
+    getChildBranches,
+    getBranchPath,
+    updateBranchMessages,
+    clearForks,
+  } = useConversationForks([])
+
+  // Use fork messages as the source of truth
+  const messages = forkMessages
 
   // Load auto-approval settings on mount
   useEffect(() => {
@@ -118,18 +153,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
             say: 'sign_in_required',
             text: message.message || 'Please sign in to use Oropendola AI'
           }
-          setMessages(prev => [...prev, signInMessage])
+          updateBranchMessages([...messages, signInMessage])
           setIsLoading(false)
           break
 
         case 'addMessage':
           if (message.message) {
             const isAssistant = message.message.role === 'assistant'
-            
+            let newMessages = [...messages]
+
             // Check if message contains tool_calls that need approval
             if (message.message.tool_calls && message.message.tool_calls.length > 0) {
               console.log(`📋 [ChatContext] Received ${message.message.tool_calls.length} tool(s) for approval`)
-              
+
               // Create approval messages for each tool
               const toolMessages: ClineMessage[] = message.message.tool_calls.map((toolCall: ToolCall, index: number) => ({
                 ts: Date.now() + index,
@@ -138,11 +174,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
                 text: formatToolDescription(toolCall),
                 tool: toolCall,
               }))
-              
+
               // Add tool approval messages
-              setMessages(prev => [...prev, ...toolMessages])
+              newMessages = [...newMessages, ...toolMessages]
             }
-            
+
             // Add the AI's text response (if any)
             if (message.message.content) {
               const clineMsg: ClineMessage = {
@@ -157,13 +193,18 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
                 // Include metrics if provided by backend
                 apiMetrics: message.message.apiMetrics || message.message.metrics
               }
-              setMessages(prev => {
-                // Set as task message if first message
-                if (!taskMessage && prev.length === 0) {
-                  setTaskMessage(clineMsg)
-                }
-                return [...prev, clineMsg]
-              })
+
+              // Set as task message if first message
+              if (!taskMessage && messages.length === 0) {
+                setTaskMessage(clineMsg)
+              }
+
+              newMessages = [...newMessages, clineMsg]
+            }
+
+            // Update fork messages
+            if (newMessages.length > messages.length) {
+              updateBranchMessages(newMessages)
             }
           }
           break
@@ -194,7 +235,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [])
+  }, [messages, updateBranchMessages, taskMessage])
 
   // Send message to backend (through extension)
   const sendMessage = useCallback(async (text: string, images: string[] = []) => {
@@ -211,13 +252,13 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         images,
       }
 
-      setMessages(prev => {
-        // If this is the first message, set it as the task message
-        if (prev.length === 0) {
-          setTaskMessage(userMessage)
-        }
-        return [...prev, userMessage]
-      })
+      // If this is the first message, set it as the task message
+      if (messages.length === 0) {
+        setTaskMessage(userMessage)
+      }
+
+      // Add to fork messages
+      updateBranchMessages([...messages, userMessage])
 
       // Send message through extension (responses will come via message events)
       vscode.postMessage({
@@ -230,7 +271,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       setError(err instanceof Error ? err.message : 'Failed to send message')
       setIsLoading(false)
     }
-  }, [])
+  }, [messages, updateBranchMessages])
 
   // Approve a message
   const approveMessage = useCallback(async (messageTs: number) => {
@@ -238,19 +279,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       // Find the message to check if it's a tool approval
       const message = messages.find(m => m.ts === messageTs)
-      
+
       if (message?.ask === 'tool' && message.tool) {
         console.log(`✅ [ChatContext] Approving tool: ${message.tool.action}`)
-        
+
         // Send tool execution approval to extension
         window.postMessage({
           type: 'approveTool',
           messageTs: messageTs,
           tool: message.tool,
         }, '*')
-        
+
         // Remove the approval message from UI (tool will execute)
-        setMessages(prev => prev.filter(m => m.ts !== messageTs))
+        updateBranchMessages(messages.filter(m => m.ts !== messageTs))
       } else {
         // Regular approval (non-tool)
         await vscodeApiClient.approve({
@@ -262,7 +303,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       console.error('Approve error:', err)
       setError(err instanceof Error ? err.message : 'Failed to approve')
     }
-  }, [messages])
+  }, [messages, updateBranchMessages])
 
   // Reject a message
   const rejectMessage = useCallback(async (messageTs: number) => {
@@ -270,19 +311,19 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       // Find the message to check if it's a tool rejection
       const message = messages.find(m => m.ts === messageTs)
-      
+
       if (message?.ask === 'tool' && message.tool) {
         console.log(`❌ [ChatContext] Rejecting tool: ${message.tool.action}`)
-        
+
         // Send tool rejection to extension
         window.postMessage({
           type: 'rejectTool',
           messageTs: messageTs,
           tool: message.tool,
         }, '*')
-        
+
         // Remove the approval message from UI
-        setMessages(prev => prev.filter(m => m.ts !== messageTs))
+        updateBranchMessages(messages.filter(m => m.ts !== messageTs))
       } else {
         // Regular rejection (non-tool)
         await vscodeApiClient.approve({
@@ -294,7 +335,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       console.error('Reject error:', err)
       setError(err instanceof Error ? err.message : 'Failed to reject')
     }
-  }, [messages])
+  }, [messages, updateBranchMessages])
 
   // Set auto-approval enabled
   const setAutoApprovalEnabled = useCallback((enabled: boolean) => {
@@ -324,11 +365,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   // Start a new task
   const startNewTask = useCallback(() => {
-    setMessages([])
+    clearForks()
     setTaskMessage(null)
     setTodos([])
     setError(null)
-  }, [])
+  }, [clearForks])
 
   // Set reasoning block collapsed preference
   const setReasoningBlockCollapsed = useCallback((collapsed: boolean) => {
@@ -364,6 +405,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     autoApprovalEnabled,
     autoApproveToggles,
     reasoningBlockCollapsed,
+    activeBranch,
+    allBranches,
+    hasForks,
+    branchCount,
     sendMessage,
     approveMessage,
     rejectMessage,
@@ -372,6 +417,12 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     setReasoningBlockCollapsed,
     clearError,
     startNewTask,
+    createFork,
+    switchBranch,
+    renameBranch,
+    deleteBranch,
+    getChildBranches,
+    getBranchPath,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

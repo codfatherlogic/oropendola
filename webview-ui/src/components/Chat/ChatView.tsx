@@ -10,7 +10,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { ClineMessage } from '../../types/cline-message'
 import { AutoApproveSetting, AutoApproveToggles } from '../../types/auto-approve'
-import { TodoItem } from '../../context/ChatContext'
+import { TodoItem, useChatContext } from '../../context/ChatContext'
 import { getApiMetrics } from '../../utils/api-metrics'
 import { getTaskMetrics, getTotalTokens } from '../../utils/getApiMetrics'
 import { processMessagesForDisplay, shouldAutoApprove, isApprovalMessage } from '../../utils/message-combining'
@@ -20,6 +20,20 @@ import { ChatRow } from './ChatRow'
 import { TaskMetrics } from './TaskMetrics'
 import { ContextWindowProgress } from './ContextWindowProgress'
 import { EnhancePromptButton } from './EnhancePromptButton'
+import { FollowupQuestionPrompt } from './FollowupQuestionPrompt'
+import { BranchSelector } from '../Fork'
+import { ShortcutsPanel } from '../Shortcuts'
+import { ContextPanel } from '../Context'
+import { CommandAutocomplete } from '../Commands'
+import { MentionAutocomplete } from '../Mentions'
+import { useShortcutHandlers } from '../../hooks/useKeyboardShortcuts'
+import { useAutoCondense } from '../../hooks/useAutoCondense'
+import { useSoundNotifications } from '../../hooks/useSoundNotifications'
+import { commandService } from '../../services/CommandService'
+import { mentionService } from '../../services/MentionService'
+import { initializeBuiltInCommands } from '../../services/initializeCommands'
+import { Command } from '../../types/commands'
+import { MentionSuggestion } from '../../types/mentions'
 import './ChatView.css'
 import './SimpleTaskHeader.css'
 
@@ -50,6 +64,14 @@ interface ChatViewProps {
   onAutoApprovalEnabledChange?: (enabled: boolean) => void
   onAutoApproveToggleChange?: (key: AutoApproveSetting, value: boolean) => void
   onCondenseContext?: () => void
+  onFollowupAnswer?: (answer: string) => void
+
+  // Followup question state
+  followupQuestion?: {
+    question: string
+    suggestedAnswers?: string[]
+    timeout?: number
+  }
 
   // Navigation callbacks (Roo Code pattern)
   onOpenHistory?: () => void
@@ -72,15 +94,94 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onAutoApprovalEnabledChange,
   onAutoApproveToggleChange,
   onCondenseContext,
+  onFollowupAnswer,
+  followupQuestion,
 }) => {
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
   const [inputValue, setInputValue] = useState('')
   const [selectedImages, setSelectedImages] = useState<string[]>([])
   const [mode, setMode] = useState('agent')
   const [didClickCancel, setDidClickCancel] = useState(false)
+
+  // Feature panels state
+  const [showShortcutsPanel, setShowShortcutsPanel] = useState(false)
+  const [showContextPanel, setShowContextPanel] = useState(false)
+
+  // Autocomplete state
+  const [commandSuggestions, setCommandSuggestions] = useState<Command[]>([])
+  const [mentionSuggestions, setMentionSuggestions] = useState<MentionSuggestion[]>([])
+  const [cursorPosition, setCursorPosition] = useState(0)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messageListRef = useRef<HTMLDivElement>(null)
   const userRespondedRef = useRef(false)
+  const prevMessagesLengthRef = useRef(messages.length)
+  const prevApprovalMessageRef = useRef<number | null>(null)
+
+  // Sound notifications
+  const soundNotifications = useSoundNotifications({ enabled: true, volume: 0.3 })
+
+  // Get fork state from context
+  const {
+    allBranches,
+    activeBranch,
+    hasForks,
+    createFork,
+    switchBranch,
+    renameBranch,
+    deleteBranch,
+    getChildBranches,
+  } = useChatContext()
+
+  // Initialize built-in commands once
+  useEffect(() => {
+    initializeBuiltInCommands({
+      onClear: () => {
+        setInputValue('')
+        setSelectedImages([])
+      },
+      onReset: () => {
+        setInputValue('')
+        setSelectedImages([])
+      },
+      onShowShortcuts: () => setShowShortcutsPanel(true),
+      onShowCost: () => setShowContextPanel(true),
+      onShowContext: () => setShowContextPanel(true),
+      onCondense: () => setShowContextPanel(true),
+      onCreateFork: (name?: string) => {
+        if (messages.length > 0) {
+          const lastMessage = messages[messages.length - 1]
+          createFork(lastMessage.ts, name)
+        }
+      },
+      onShowBranches: () => {
+        console.log('[Commands] Branches are shown in the UI when available')
+      },
+      onToggleAutoApprove: () => {
+        if (onAutoApprovalEnabledChange) {
+          onAutoApprovalEnabledChange(!autoApprovalEnabled)
+        }
+      },
+      onApprove: () => {
+        if (lastApprovalMessage && onApproveMessage) {
+          onApproveMessage(lastApprovalMessage.ts)
+        }
+      },
+      onReject: () => {
+        if (lastApprovalMessage && onRejectMessage) {
+          onRejectMessage(lastApprovalMessage.ts)
+        }
+      },
+    })
+  }, [
+    autoApprovalEnabled,
+    createFork,
+    lastApprovalMessage,
+    messages,
+    onApproveMessage,
+    onAutoApprovalEnabledChange,
+    onRejectMessage,
+  ])
 
   // Dynamic placeholder based on mode
   const getPlaceholderForMode = (currentMode: string): string => {
@@ -110,6 +211,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const totalTokens = getTotalTokens(taskMetrics)
   const contextLimit = 200000 // Default context window (can be made configurable)
 
+  // Auto-condense when approaching context limit
+  const autoCondense = useAutoCondense(totalTokens, {
+    contextLimit,
+    threshold: 0.75, // Trigger at 75% usage
+    enabled: true,
+    onCondense: onCondenseContext,
+  })
+
   // Find the last message that needs approval
   const lastApprovalMessage = visibleMessages
     .slice()
@@ -118,6 +227,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
       autoApprovalEnabled,
       ...autoApproveToggles
     }))
+
+  // Listen for images selected from extension
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data
+      if (message.type === 'imagesSelected' && message.images) {
+        setSelectedImages(prev => [...prev, ...message.images].slice(0, 5))
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -132,6 +254,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
       userRespondedRef.current = false
     }
   }, [lastApprovalMessage?.ts])
+
+  // Play sound when new approval message arrives
+  useEffect(() => {
+    if (lastApprovalMessage && lastApprovalMessage.ts !== prevApprovalMessageRef.current) {
+      soundNotifications.playSound('approvalNeeded')
+      prevApprovalMessageRef.current = lastApprovalMessage.ts
+    }
+  }, [lastApprovalMessage?.ts, soundNotifications])
+
+  // Play sound when AI completes a response (new message added and not streaming)
+  useEffect(() => {
+    if (messages.length > prevMessagesLengthRef.current && !isStreaming) {
+      const lastMessage = messages[messages.length - 1]
+      // Play sound if it's an assistant message (not user message)
+      if (lastMessage.type === 'say' && lastMessage.say === 'assistant') {
+        soundNotifications.playSound('taskComplete')
+      }
+    }
+    prevMessagesLengthRef.current = messages.length
+  }, [messages.length, isStreaming, messages, soundNotifications])
 
   // Auto-approve timeout effect (Roo Code pattern)
   useEffect(() => {
@@ -168,18 +310,52 @@ export const ChatView: React.FC<ChatViewProps> = ({
   }, [])
 
   // Handle send message
-  const handleSendMessage = useCallback(() => {
-    if ((inputValue.trim() || selectedImages.length > 0) && onSendMessage) {
-      onSendMessage(inputValue.trim(), selectedImages)
+  const handleSendMessage = useCallback(async () => {
+    const trimmedInput = inputValue.trim()
+
+    if (!trimmedInput && selectedImages.length === 0) {
+      return
+    }
+
+    // Check if it's a command (starts with /)
+    if (trimmedInput.startsWith('/')) {
+      const executed = await commandService.execute(trimmedInput)
+      if (executed) {
+        // Command was executed, clear input
+        setInputValue('')
+        setCommandSuggestions([])
+        return
+      }
+      // If command not found, continue to send as regular message
+    }
+
+    // Resolve @mentions in the message
+    let messageToSend = trimmedInput
+    if (trimmedInput.includes('@')) {
+      try {
+        messageToSend = await mentionService.replaceMentions(trimmedInput)
+      } catch (error) {
+        console.error('[ChatView] Failed to resolve mentions:', error)
+        // Continue with original message if mention resolution fails
+      }
+    }
+
+    // Send the message
+    if (onSendMessage) {
+      onSendMessage(messageToSend, selectedImages)
       setInputValue('')
       setSelectedImages([])
+      setMentionSuggestions([])
     }
   }, [inputValue, selectedImages, onSendMessage])
 
   // Handle select images
   const handleSelectImages = useCallback(() => {
-    // TODO: Implement image selection dialog
-    console.log('Image selection not yet implemented')
+    // Send message to extension to open file picker
+    window.postMessage({
+      type: 'selectImages',
+      maxImages: 5
+    }, '*')
   }, [])
 
   // Handle approve
@@ -214,6 +390,132 @@ export const ChatView: React.FC<ChatViewProps> = ({
       onRejectMessage(lastApprovalMessage.ts)
     }
   }, [lastApprovalMessage, onRejectMessage])
+
+  // Handle enhance prompt
+  const handleEnhancePrompt = useCallback(() => {
+    if (!inputValue.trim()) return
+
+    // Simple local enhancement - add context if prompt is short
+    if (inputValue.length < 100) {
+      const enhanced = `${inputValue}
+
+Please provide a detailed response with:
+- Clear explanations
+- Code examples if relevant
+- Best practices and considerations`
+      setInputValue(enhanced)
+    }
+  }, [inputValue])
+
+  // Handle input change for autocomplete
+  const handleInputChange = useCallback(async (value: string, cursor: number) => {
+    setInputValue(value)
+    setCursorPosition(cursor)
+
+    // Check for command autocomplete (starts with /)
+    if (value.startsWith('/')) {
+      const suggestions = commandService.getSuggestions(value)
+      setCommandSuggestions(suggestions)
+      setMentionSuggestions([])
+    }
+    // Check for mention autocomplete (contains @)
+    else if (value.includes('@')) {
+      const suggestions = await mentionService.getSuggestions(value, cursor)
+      setMentionSuggestions(suggestions)
+      setCommandSuggestions([])
+    }
+    // Clear autocomplete
+    else {
+      setCommandSuggestions([])
+      setMentionSuggestions([])
+    }
+  }, [])
+
+  // Handle command selection
+  const handleCommandSelect = useCallback((command: Command) => {
+    // Replace /command with the selected command
+    setInputValue(`/${command.name} `)
+    setCommandSuggestions([])
+  }, [])
+
+  // Handle mention selection
+  const handleMentionSelect = useCallback((mention: MentionSuggestion) => {
+    // Find the @ position and replace with the selected mention
+    const lastAtIndex = inputValue.lastIndexOf('@', cursorPosition)
+    if (lastAtIndex !== -1) {
+      const before = inputValue.slice(0, lastAtIndex)
+      const after = inputValue.slice(cursorPosition)
+      setInputValue(before + mention.text + ' ' + after)
+    }
+    setMentionSuggestions([])
+  }, [inputValue, cursorPosition])
+
+  // Handle context condensing
+  const handleCondenseFromPanel = useCallback((condensedMessages: ClineMessage[]) => {
+    // This would need to be integrated with the extension
+    console.log('Context condensed:', condensedMessages.length, 'messages')
+    setShowContextPanel(false)
+  }, [])
+
+  // Keyboard shortcuts
+  useShortcutHandlers([
+    {
+      action: 'show_shortcuts',
+      handler: () => setShowShortcutsPanel(true),
+      enabled: true,
+    },
+    {
+      action: 'show_context',
+      handler: () => setShowContextPanel(true),
+      enabled: true,
+    },
+    {
+      action: 'send_message',
+      handler: () => {
+        if (inputValue.trim() || selectedImages.length > 0) {
+          handleSendMessage()
+        }
+      },
+      enabled: true,
+    },
+    {
+      action: 'new_conversation',
+      handler: () => {
+        // Clear conversation
+        setInputValue('')
+        setSelectedImages([])
+      },
+      enabled: true,
+    },
+    {
+      action: 'create_fork',
+      handler: () => {
+        if (messages.length > 0) {
+          const lastMessage = messages[messages.length - 1]
+          createFork(lastMessage.ts)
+        }
+      },
+      enabled: true,
+    },
+    {
+      action: 'approve_tool',
+      handler: () => {
+        if (lastApprovalMessage) {
+          handleApprove()
+        }
+      },
+      enabled: !!lastApprovalMessage,
+    },
+    {
+      action: 'reject_tool',
+      handler: () => {
+        if (lastApprovalMessage) {
+          handleReject()
+        }
+      },
+      enabled: !!lastApprovalMessage,
+    },
+  ])
 
   // Determine button text based on message type
   const getButtonText = (message: ClineMessage | undefined): { approve: string, reject: string } => {
@@ -262,17 +564,33 @@ export const ChatView: React.FC<ChatViewProps> = ({
       {/* Header with task info and metrics */}
       {taskMessage && (
         <div className="chat-view-header">
-          <SimpleTaskHeader
-            task={taskMessage}
-            tokensIn={metrics.tokensIn}
-            tokensOut={metrics.tokensOut}
-            totalCost={metrics.totalCost}
-            contextTokens={metrics.contextTokens}
-            contextWindow={200000}
-            todos={todos}
-            onCondenseContext={onCondenseContext}
-          />
-          
+          <div className="chat-view-header-top">
+            <SimpleTaskHeader
+              task={taskMessage}
+              tokensIn={metrics.tokensIn}
+              tokensOut={metrics.tokensOut}
+              totalCost={metrics.totalCost}
+              contextTokens={metrics.contextTokens}
+              contextWindow={200000}
+              todos={todos}
+              onCondenseContext={onCondenseContext}
+            />
+
+            {/* Branch Selector - Show when multiple branches exist */}
+            {hasForks && (
+              <div className="chat-view-branch-selector">
+                <BranchSelector
+                  branches={allBranches}
+                  activeBranchId={activeBranch?.id || 'root'}
+                  onSwitchBranch={switchBranch}
+                  onRenameBranch={renameBranch}
+                  onDeleteBranch={deleteBranch}
+                  getChildBranches={getChildBranches}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Task Metrics Display - Roo-Code pattern */}
           {taskMetrics && (
             <div className="chat-view-metrics">
@@ -326,6 +644,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
           className="chat-view-context-progress"
         />
         
+        {/* Followup question prompt */}
+        {followupQuestion && onFollowupAnswer && (
+          <FollowupQuestionPrompt
+            question={followupQuestion.question}
+            suggestedAnswers={followupQuestion.suggestedAnswers}
+            timeout={followupQuestion.timeout}
+            autoApproveEnabled={autoApprovalEnabled}
+            onAnswer={onFollowupAnswer}
+          />
+        )}
+
         {/* Cancel button during streaming (even without approval message) */}
         {isStreaming && !lastApprovalMessage && (
           <div className="chat-view-approval-buttons">
@@ -403,8 +732,46 @@ export const ChatView: React.FC<ChatViewProps> = ({
           autoApproveToggles={autoApproveToggles}
           onAutoApprovalEnabledChange={onAutoApprovalEnabledChange || (() => {})}
           onAutoApproveToggleChange={onAutoApproveToggleChange || (() => {})}
+          onInputChange={handleInputChange}
+          onEnhance={handleEnhancePrompt}
         />
+
+        {/* Command Autocomplete */}
+        {commandSuggestions.length > 0 && (
+          <CommandAutocomplete
+            input={inputValue}
+            commands={commandSuggestions}
+            onSelect={handleCommandSelect}
+            onClose={() => setCommandSuggestions([])}
+          />
+        )}
+
+        {/* Mention Autocomplete */}
+        {mentionSuggestions.length > 0 && (
+          <MentionAutocomplete
+            input={inputValue}
+            cursorPosition={cursorPosition}
+            suggestions={mentionSuggestions}
+            onSelect={handleMentionSelect}
+            onClose={() => setMentionSuggestions([])}
+          />
+        )}
       </div>
+
+      {/* Shortcuts Panel */}
+      <ShortcutsPanel
+        isOpen={showShortcutsPanel}
+        onClose={() => setShowShortcutsPanel(false)}
+      />
+
+      {/* Context Intelligence Panel */}
+      <ContextPanel
+        messages={messages}
+        modelId="claude-sonnet-3-5-20241022"
+        isOpen={showContextPanel}
+        onClose={() => setShowContextPanel(false)}
+        onCondense={handleCondenseFromPanel}
+      />
     </div>
   )
 }

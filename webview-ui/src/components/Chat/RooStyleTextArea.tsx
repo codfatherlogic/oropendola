@@ -10,6 +10,7 @@ import DynamicTextArea from 'react-textarea-autosize'
 import { Image, Sparkles, Send } from 'lucide-react'
 import { Tooltip } from '../ui'
 import vscode from '../../vscode-api'
+import { usePromptHistory } from '../../hooks/usePromptHistory'
 
 interface RooStyleTextAreaProps {
   inputValue: string
@@ -29,9 +30,22 @@ interface RooStyleTextAreaProps {
   // Auto-approval props (simplified for Roo Code style)
   autoApprovalEnabled: boolean
   onAutoApprovalEnabledChange: (enabled: boolean) => void
-  // Unused but kept for compatibility
-  autoApproveToggles?: any
+  // Auto-approve toggles for detailed display
+  autoApproveToggles?: {
+    alwaysAllowReadOnly?: boolean
+    alwaysAllowWrite?: boolean
+    alwaysAllowExecute?: boolean
+    alwaysAllowBrowser?: boolean
+    alwaysAllowMcp?: boolean
+    alwaysAllowSubtasks?: boolean
+  }
   onAutoApproveToggleChange?: any
+  // Autocomplete support
+  onInputChange?: (value: string, cursorPosition: number) => void
+  // Enhancement
+  onEnhance?: () => void
+  // Prompt history callback - called when message is sent
+  onPromptSent?: (prompt: string) => void
 }
 
 export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextAreaProps>(
@@ -52,12 +66,82 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
       authMessage = null,
       autoApprovalEnabled,
       onAutoApprovalEnabledChange,
+      autoApproveToggles,
+      onInputChange,
+      onEnhance,
+      onPromptSent,
     },
     ref
   ) => {
+    // ALL HOOKS MUST BE CALLED UNCONDITIONALLY AT THE TOP
     const [isDraggingOver, setIsDraggingOver] = useState(false)
     const [isFocused, setIsFocused] = useState(false)
     const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
+
+    // Prompt history navigation
+    const promptHistory = usePromptHistory({
+      value: inputValue,
+      onChange: setInputValue,
+      enabled: true,
+    })
+
+    // Calculate enabled operations count for auto-approve
+    const enabledCount = useMemo(() => {
+      if (!autoApprovalEnabled || !autoApproveToggles) return 0
+      return [
+        autoApproveToggles.alwaysAllowReadOnly,
+        autoApproveToggles.alwaysAllowWrite,
+        autoApproveToggles.alwaysAllowExecute,
+        autoApproveToggles.alwaysAllowBrowser,
+        autoApproveToggles.alwaysAllowMcp,
+        autoApproveToggles.alwaysAllowSubtasks,
+      ].filter(Boolean).length
+    }, [autoApprovalEnabled, autoApproveToggles])
+
+    // Memoized check for whether the input has content
+    const hasInputContent = useMemo(() => {
+      return inputValue.trim().length > 0 || selectedImages.length > 0
+    }, [inputValue, selectedImages])
+
+    const handleKeyDown = useCallback(
+      (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Handle Enter to send message
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault()
+          // Add to history before sending
+          if (inputValue.trim()) {
+            promptHistory.addToHistory(inputValue.trim())
+            if (onPromptSent) {
+              onPromptSent(inputValue.trim())
+            }
+          }
+          onSend()
+        }
+        // Handle Arrow Up for previous prompt
+        else if (event.key === 'ArrowUp' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+          const textarea = event.currentTarget
+          const cursorAtStart = textarea.selectionStart === 0
+
+          // Only navigate history if cursor is at start of input
+          if (cursorAtStart) {
+            event.preventDefault()
+            promptHistory.navigatePrevious()
+          }
+        }
+        // Handle Arrow Down for next prompt
+        else if (event.key === 'ArrowDown' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+          const textarea = event.currentTarget
+          const cursorAtEnd = textarea.selectionStart === textarea.value.length
+
+          // Only navigate history if cursor is at end of input
+          if (cursorAtEnd) {
+            event.preventDefault()
+            promptHistory.navigateNext()
+          }
+        }
+      },
+      [onSend, inputValue, promptHistory, onPromptSent]
+    )
 
     // If not authenticated, show Sign In button instead of textarea
     console.log('🔐 [RooStyleTextArea] isAuthenticated:', isAuthenticated, 'authMessage:', authMessage)
@@ -109,21 +193,6 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
         </div>
       )
     }
-
-    // Memoized check for whether the input has content
-    const hasInputContent = useMemo(() => {
-      return inputValue.trim().length > 0 || selectedImages.length > 0
-    }, [inputValue, selectedImages])
-
-    const handleKeyDown = useCallback(
-      (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault()
-          onSend()
-        }
-      },
-      [onSend]
-    )
 
     // Available modes - Ask and Agent
     const availableModes = [
@@ -197,7 +266,14 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
                   textAreaRef.current = el
                 }}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  const cursorPos = e.target.selectionStart || 0
+                  setInputValue(value)
+                  if (onInputChange) {
+                    onInputChange(value, cursorPos)
+                  }
+                }}
                 onFocus={() => setIsFocused(true)}
                 onKeyDown={handleKeyDown}
                 onBlur={() => setIsFocused(false)}
@@ -300,8 +376,8 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
                 <Tooltip content="Enhance prompt">
                   <button
                     aria-label="Enhance prompt"
-                    disabled={false}
-                    onClick={() => {}}  // TODO: Implement enhance prompt
+                    disabled={!inputValue.trim()}
+                    onClick={() => onEnhance && onEnhance()}
                     style={{
                       position: "relative",
                       display: "inline-flex",
@@ -450,15 +526,19 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
               ))}
             </select>
 
-            {/* Auto-approve status - simple badge like Roo Code */}
+            {/* Auto-approve status - enhanced with count */}
             <button
               onClick={() => onAutoApprovalEnabledChange(!autoApprovalEnabled)}
               style={{
                 fontSize: "11px",
                 padding: "2px 8px",
                 borderRadius: "4px",
-                background: "var(--vscode-badge-background)",
-                color: "var(--vscode-badge-foreground)",
+                background: autoApprovalEnabled
+                  ? "var(--vscode-button-background)"
+                  : "var(--vscode-badge-background)",
+                color: autoApprovalEnabled
+                  ? "var(--vscode-button-foreground)"
+                  : "var(--vscode-badge-foreground)",
                 border: "none",
                 outline: "none",
                 cursor: "pointer",
@@ -469,8 +549,12 @@ export const RooStyleTextArea = forwardRef<HTMLTextAreaElement, RooStyleTextArea
               onMouseLeave={(e) => {
                 e.currentTarget.style.opacity = "1";
               }}
-              title="Toggle auto-approval">
-              {autoApprovalEnabled ? '✓ Auto-approve on' : '✕ Auto-approve off'}
+              title={autoApprovalEnabled
+                ? `Auto-approve enabled (${enabledCount} operations)`
+                : "Auto-approve disabled - Click to enable"}>
+              {autoApprovalEnabled
+                ? `⚡ Auto ${enabledCount > 0 ? `(${enabledCount})` : ''}`
+                : '✕ Auto-approve'}
             </button>
           </div>
         </div>

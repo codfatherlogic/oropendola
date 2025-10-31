@@ -24,6 +24,19 @@
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
+.chat-view-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+}
+
+.chat-view-branch-selector {
+  flex-shrink: 0;
+  padding: 12px 0;
+}
+
 /* Task Metrics in Header - Roo-Code pattern */
 .chat-view-metrics {
   padding: 8px 15px;

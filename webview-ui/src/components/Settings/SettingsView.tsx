@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import vscode from '../../vscode-api'
+import { AutoApproveSettings } from './AutoApproveSettings'
 import './SettingsView.css'
 
 interface Language {
@@ -22,6 +23,29 @@ interface AppSettings {
   notifications: boolean
   telemetry: boolean
   theme: 'system' | 'light' | 'dark'
+  mcpEnabled: boolean
+  autoApprove?: {
+    enabled: boolean
+    readOnly: boolean
+    readOnlyOutsideWorkspace: boolean
+    write: boolean
+    writeOutsideWorkspace: boolean
+    writeProtected: boolean
+    execute: boolean
+    browser: boolean
+    mcp: boolean
+    modeSwitch: boolean
+    subtasks: boolean
+    followupQuestions: boolean
+    updateTodoList: boolean
+    resubmit: boolean
+    allowedCommands: string[]
+    deniedCommands: string[]
+    maxRequests: number
+    maxCost: number
+    requestDelay: number
+    followupTimeout: number
+  }
 }
 
 // Roo Code pattern: onDone callback to return to chat
@@ -37,7 +61,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDone }) => {
     autoSave: true,
     notifications: true,
     telemetry: false,
-    theme: 'system'
+    theme: 'system',
+    mcpEnabled: false,
+    autoApprove: {
+      enabled: false,
+      readOnly: false,
+      readOnlyOutsideWorkspace: false,
+      write: false,
+      writeOutsideWorkspace: false,
+      writeProtected: false,
+      execute: false,
+      browser: false,
+      mcp: false,
+      modeSwitch: true,
+      subtasks: false,
+      followupQuestions: false,
+      updateTodoList: true,
+      resubmit: false,
+      allowedCommands: [],
+      deniedCommands: ['rm -rf *', 'rm -rf /', 'dd if=*', 'mkfs.*', ':(){ :|:& };:', '> /dev/sda', 'mv * /dev/null'],
+      maxRequests: 0,
+      maxCost: 0,
+      requestDelay: 0,
+      followupTimeout: 30000
+    }
   })
   const [saving, setSaving] = useState(false)
 
@@ -277,6 +324,65 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onDone }) => {
             </button>
           </div>
         </section>
+
+        {/* MCP Servers */}
+        <section className="settings-section">
+          <h3 className="section-title">🔌 MCP Servers</h3>
+
+          <div className="setting-group">
+            <p className="setting-description" style={{ marginBottom: '16px' }}>
+              The <strong>Model Context Protocol</strong> enables communication with locally running MCP servers that provide
+              additional tools and resources to extend AI capabilities. You can use community-made servers or ask
+              AI to create new tools specific to your workflow (e.g., "add a tool that gets the latest npm docs").
+            </p>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <label className="setting-label">Enable MCP Servers</label>
+                <p className="setting-description">
+                  Turn this ON to let AI use tools from connected MCP servers. This gives AI more capabilities.
+                  If you don't plan to use these extra tools, turn it OFF to help reduce API token use.
+                </p>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={settings.mcpEnabled}
+                  onChange={(e) => updateSetting('mcpEnabled', e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div className="setting-group">
+            <button
+              className="button-secondary"
+              onClick={() => {
+                vscode.postMessage({ type: 'openMcpConfig' })
+              }}
+              disabled={!settings.mcpEnabled}
+              style={{ opacity: settings.mcpEnabled ? 1 : 0.5 }}
+            >
+              Configure MCP Servers
+            </button>
+            <p className="setting-description">
+              Add, remove, or configure MCP server connections
+            </p>
+          </div>
+        </section>
+
+        {/* Auto-Approve Settings */}
+        {settings.autoApprove && (
+          <AutoApproveSettings
+            settings={settings.autoApprove as any}
+            onUpdate={(key: string, value: any) => {
+              const autoApproveKey = key.replace('autoApprove.', '')
+              const newAutoApprove = { ...settings.autoApprove!, [autoApproveKey]: value }
+              updateSetting('autoApprove', newAutoApprove as any)
+            }}
+          />
+        )}
 
         {/* About */}
         <section className="settings-section">

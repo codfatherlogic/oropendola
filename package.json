@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.7.2: Cancel/Terminate Buttons + Performance Optimizations",
-  "version": "3.7.2",
+  "description": "AI-powered assistant - v3.12.0: Complete Feature Parity (Auto-Condense, Sound Notifications, Full Roo-Code UX)",
+  "version": "3.12.0",
   "publisher": "oropendola",
   "repository": {
     "type": "git",
@@ -1009,6 +1009,128 @@
           "minimum": 500,
           "maximum": 30000,
           "description": "Initial reconnect interval in milliseconds (uses exponential backoff)"
+        },
+        "oropendola.autoApprove.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Enable auto-approval system for tool operations. **Warning**: Auto-approving all operations can be risky. Use granular controls below for safety."
+        },
+        "oropendola.autoApprove.readOnly": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve read-only operations (reading files within workspace)"
+        },
+        "oropendola.autoApprove.readOnlyOutsideWorkspace": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Auto-approve reading files **outside** the workspace. **Use with caution!**"
+        },
+        "oropendola.autoApprove.write": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve write operations (creating/editing files within workspace)"
+        },
+        "oropendola.autoApprove.writeOutsideWorkspace": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Auto-approve writing files **outside** the workspace. **Use with caution!**"
+        },
+        "oropendola.autoApprove.writeProtected": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Auto-approve writing to **protected files** (`.env`, credentials, etc.). **Very risky!**"
+        },
+        "oropendola.autoApprove.execute": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Auto-approve command execution. **Use command allowlist/denylist for safety!**"
+        },
+        "oropendola.autoApprove.browser": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve browser automation actions"
+        },
+        "oropendola.autoApprove.mcp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve MCP tool and resource access"
+        },
+        "oropendola.autoApprove.modeSwitch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-approve mode switching (safe operation)"
+        },
+        "oropendola.autoApprove.subtasks": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve subtask creation"
+        },
+        "oropendola.autoApprove.followupQuestions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve followup questions after timeout"
+        },
+        "oropendola.autoApprove.updateTodoList": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-approve todo list updates (safe operation)"
+        },
+        "oropendola.autoApprove.resubmit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-approve resubmit operations after errors"
+        },
+        "oropendola.autoApprove.allowedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "**Whitelist** of allowed commands (patterns supported). Example: `git status`, `npm test`, `ls *`"
+        },
+        "oropendola.autoApprove.deniedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "rm -rf *",
+            "rm -rf /",
+            "dd if=*",
+            "mkfs.*",
+            ":(){ :|:& };:",
+            "> /dev/sda",
+            "mv * /dev/null"
+          ],
+          "markdownDescription": "**Blacklist** of dangerous commands (patterns supported). These will **never** be auto-approved."
+        },
+        "oropendola.autoApprove.maxRequests": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1000,
+          "markdownDescription": "Maximum auto-approved requests per task (0 = unlimited). Prevents runaway operations."
+        },
+        "oropendola.autoApprove.maxCost": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100,
+          "markdownDescription": "Maximum auto-approved cost per task in USD (0 = unlimited). Budget protection."
+        },
+        "oropendola.autoApprove.requestDelay": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Delay in seconds between auto-approved requests (prevents rapid-fire operations)"
+        },
+        "oropendola.autoApprove.followupTimeout": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "maximum": 300000,
+          "description": "Timeout in milliseconds before auto-answering followup questions"
         }
       }
     },
@@ -1211,6 +1333,7 @@
     "better-sqlite3": "^12.4.1",
     "cheerio": "^1.1.2",
     "exceljs": "^4.4.0",
+    "fastest-levenshtein": "^1.0.16",
     "i18next": "^25.6.0",
     "i18next-browser-languagedetector": "^8.2.0",
     "lru-cache": "^11.2.2",

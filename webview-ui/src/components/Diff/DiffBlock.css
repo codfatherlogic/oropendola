@@ -1,0 +1,204 @@
+/**
+ * DiffBlock Styles - Unified and Split Views
+ */
+
+.diff-block {
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  line-height: var(--vscode-editor-line-height);
+}
+
+/* Table styles */
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--vscode-editor-background);
+}
+
+.diff-table tbody {
+  background: var(--vscode-editor-background);
+}
+
+/* Unified view styles */
+.diff-block-unified .diff-line {
+  border: none;
+}
+
+.diff-line-number {
+  padding: 0 8px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--vscode-editorLineNumber-foreground);
+  background: var(--vscode-editorGutter-background);
+  border-right: 1px solid var(--vscode-panel-border);
+  user-select: none;
+  min-width: 40px;
+  vertical-align: top;
+}
+
+.diff-line-number-old {
+  border-right-color: var(--vscode-panel-border);
+}
+
+.diff-line-number-new {
+  border-right-color: var(--vscode-panel-border);
+}
+
+.diff-line-indicator {
+  padding: 0 8px;
+  text-align: center;
+  font-weight: bold;
+  user-select: none;
+  width: 20px;
+  vertical-align: top;
+  background: var(--vscode-editorGutter-background);
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.diff-line-content {
+  padding: 0 12px;
+  white-space: pre;
+  overflow-x: auto;
+  vertical-align: top;
+}
+
+/* Line type colors */
+.diff-line-add {
+  background: color-mix(in srgb, var(--vscode-diffEditor-insertedTextBackground, #1e4620) 30%, transparent);
+}
+
+.diff-line-add .diff-line-number {
+  background: color-mix(in srgb, var(--vscode-diffEditor-insertedTextBackground, #1e4620) 50%, var(--vscode-editorGutter-background));
+}
+
+.diff-line-add .diff-line-indicator {
+  color: var(--vscode-diffEditor-insertedTextBorder, #4b9e4b);
+  background: color-mix(in srgb, var(--vscode-diffEditor-insertedTextBackground, #1e4620) 50%, var(--vscode-editorGutter-background));
+}
+
+.diff-line-remove {
+  background: color-mix(in srgb, var(--vscode-diffEditor-removedTextBackground, #5c1f1f) 30%, transparent);
+}
+
+.diff-line-remove .diff-line-number {
+  background: color-mix(in srgb, var(--vscode-diffEditor-removedTextBackground, #5c1f1f) 50%, var(--vscode-editorGutter-background));
+}
+
+.diff-line-remove .diff-line-indicator {
+  color: var(--vscode-diffEditor-removedTextBorder, #d16c6c);
+  background: color-mix(in srgb, var(--vscode-diffEditor-removedTextBackground, #5c1f1f) 50%, var(--vscode-editorGutter-background));
+}
+
+.diff-line-context {
+  background: var(--vscode-editor-background);
+}
+
+.diff-line-context .diff-line-indicator {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Split view styles */
+.diff-block-split {
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-table-split {
+  display: table;
+  width: 100%;
+}
+
+.diff-table-split thead {
+  display: table-header-group;
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.diff-split-header {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  width: 50%;
+  color: var(--vscode-foreground);
+}
+
+.diff-split-header-old {
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.diff-line-pair {
+  display: table-row;
+}
+
+.diff-split-cell {
+  display: table-cell;
+  width: 50%;
+  vertical-align: top;
+  padding: 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.diff-split-cell-old {
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.diff-split-cell-content {
+  display: flex;
+  align-items: flex-start;
+  min-height: 22px;
+}
+
+.diff-split-cell-content .diff-line-number {
+  flex-shrink: 0;
+  padding: 0 8px;
+  min-width: 40px;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.diff-split-cell-content .diff-line-indicator {
+  flex-shrink: 0;
+  padding: 0 8px;
+  width: 20px;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.diff-split-cell-content .code-line-text {
+  flex: 1;
+  padding: 0 12px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* Split view cell backgrounds */
+.diff-split-cell-old.diff-line-remove {
+  background: color-mix(in srgb, var(--vscode-diffEditor-removedTextBackground, #5c1f1f) 30%, transparent);
+}
+
+.diff-split-cell-old.diff-line-remove .diff-line-number,
+.diff-split-cell-old.diff-line-remove .diff-line-indicator {
+  background: color-mix(in srgb, var(--vscode-diffEditor-removedTextBackground, #5c1f1f) 50%, var(--vscode-editorGutter-background));
+}
+
+.diff-split-cell-new.diff-line-add {
+  background: color-mix(in srgb, var(--vscode-diffEditor-insertedTextBackground, #1e4620) 30%, transparent);
+}
+
+.diff-split-cell-new.diff-line-add .diff-line-number,
+.diff-split-cell-new.diff-line-add .diff-line-indicator {
+  background: color-mix(in srgb, var(--vscode-diffEditor-insertedTextBackground, #1e4620) 50%, var(--vscode-editorGutter-background));
+}
+
+.diff-split-cell.diff-line-context {
+  background: var(--vscode-editor-background);
+}
+
+.diff-split-cell-empty {
+  background: var(--vscode-editorGutter-background);
+}
+
+/* Code line text */
+.code-line-text {
+  font-family: inherit;
+  color: var(--vscode-editor-foreground);
+}

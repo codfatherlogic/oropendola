@@ -19,3 +19,20 @@ export { ToolUseBlock, ToolUseBlockHeader } from './ToolUseBlock'
 export { TaskMetrics } from './TaskMetrics'
 export { ContextWindowProgress } from './ContextWindowProgress'
 export { EnhancePromptButton } from './EnhancePromptButton'
+
+// NEW: Checkpoint components (v3.10.0)
+export {
+  CheckpointRestoreDialog,
+  EditMessageWithCheckpointDialog,
+  DeleteMessageWithCheckpointDialog
+} from './CheckpointRestoreDialog'
+
+// NEW: Editable Todo List in Chat (v3.10.0)
+export { UpdateTodoListToolBlock } from './UpdateTodoListToolBlock'
+
+// NEW: Context Condense Display (v3.10.0)
+export {
+  ContextCondenseRow,
+  CondensingContextRow,
+  CondenseContextErrorRow
+} from './ContextCondenseRow'

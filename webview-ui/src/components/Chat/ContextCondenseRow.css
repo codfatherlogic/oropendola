@@ -1,0 +1,151 @@
+/**
+ * Context Condense Row Styles
+ */
+
+.context-condense-row {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.context-condense-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.context-condense-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+}
+
+.context-condense-check-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.context-condense-check-icon .codicon {
+  color: var(--vscode-charts-green);
+  font-size: 16px;
+}
+
+.context-condense-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-grow: 1;
+}
+
+.context-condense-icon {
+  color: var(--vscode-textLink-foreground);
+  font-size: 16px;
+}
+
+.context-condense-title {
+  font-weight: bold;
+  color: var(--vscode-foreground);
+  font-size: 14px;
+}
+
+.context-condense-tokens {
+  color: var(--vscode-descriptionForeground);
+  font-size: 13px;
+}
+
+.context-condense-cost {
+  padding: 2px 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.context-condense-chevron {
+  color: var(--vscode-foreground);
+  opacity: 0.6;
+  font-size: 12px;
+  transition: opacity 0.15s ease;
+}
+
+.context-condense-header:hover .context-condense-chevron {
+  opacity: 1;
+}
+
+.context-condense-summary {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--vscode-textBlockQuote-background);
+  border-left: 3px solid var(--vscode-textBlockQuote-border);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  line-height: 1.5;
+}
+
+/* Condensing in progress row */
+.context-condensing-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 12px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+}
+
+.context-condensing-icon {
+  color: var(--vscode-textLink-foreground);
+  font-size: 16px;
+}
+
+.context-condensing-title {
+  font-weight: bold;
+  color: var(--vscode-foreground);
+  font-size: 14px;
+}
+
+/* Error row */
+.context-condense-error-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 12px;
+  background: var(--vscode-inputValidation-errorBackground, rgba(244, 71, 71, 0.1));
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+  border-radius: 6px;
+}
+
+.context-condense-error-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.context-condense-error-icon {
+  color: var(--vscode-editorWarning-foreground);
+  opacity: 0.8;
+  font-size: 16px;
+}
+
+.context-condense-error-title {
+  font-weight: bold;
+  color: var(--vscode-foreground);
+  font-size: 14px;
+}
+
+.context-condense-error-text {
+  color: var(--vscode-descriptionForeground);
+  font-size: 13px;
+  margin-left: 24px;
+}

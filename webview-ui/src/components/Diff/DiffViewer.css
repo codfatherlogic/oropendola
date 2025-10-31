@@ -1,0 +1,183 @@
+/**
+ * DiffViewer Styles
+ */
+
+.diff-viewer {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+/* Header */
+.diff-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.diff-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.diff-file-count {
+  color: var(--vscode-descriptionForeground);
+}
+
+.diff-file-name {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-textLink-foreground);
+}
+
+/* Controls */
+.diff-viewer-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.diff-view-mode-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.diff-view-mode-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  border-right: 1px solid var(--vscode-button-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diff-view-mode-btn:last-child {
+  border-right: none;
+}
+
+.diff-view-mode-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.diff-view-mode-btn.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font-weight: 600;
+}
+
+/* Batch actions */
+.diff-batch-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.diff-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diff-approve-btn,
+.diff-approve-all-btn {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.diff-approve-btn:hover,
+.diff-approve-all-btn:hover {
+  background: var(--vscode-button-hoverBackground);
+  transform: translateY(-1px);
+}
+
+.diff-reject-btn,
+.diff-reject-all-btn {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.diff-reject-btn:hover,
+.diff-reject-all-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+  transform: translateY(-1px);
+}
+
+/* Content */
+.diff-viewer-content {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+/* File sections */
+.diff-file-section {
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.diff-file-section:last-child {
+  border-bottom: none;
+}
+
+.diff-file-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--vscode-editorGroupHeader-tabsBackground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.diff-file-header.collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.diff-file-header.collapsible:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.diff-file-toggle {
+  display: flex;
+  align-items: center;
+  color: var(--vscode-icon-foreground);
+}
+
+.diff-file-path {
+  flex: 1;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.diff-file-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.diff-file-content {
+  background: var(--vscode-editor-background);
+}
+
+/* Empty state */
+.diff-viewer-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+}

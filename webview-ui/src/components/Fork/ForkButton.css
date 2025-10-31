@@ -1,0 +1,88 @@
+/**
+ * Fork Button Styles
+ */
+
+.fork-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fork-button:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+  transform: translateY(-1px);
+}
+
+.fork-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fork-button-inline {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* Fork input container */
+.fork-button-input-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+}
+
+.fork-button-name-input {
+  flex: 1;
+  min-width: 150px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--vscode-input-foreground);
+  border: none;
+  outline: none;
+}
+
+.fork-button-name-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.fork-button-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.fork-button-create {
+  color: var(--vscode-button-foreground);
+}
+
+.fork-button-create:hover {
+  background: var(--vscode-button-background);
+}
+
+.fork-button-cancel {
+  color: var(--vscode-descriptionForeground);
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.fork-button-cancel:hover {
+  background: var(--vscode-list-hoverBackground);
+}

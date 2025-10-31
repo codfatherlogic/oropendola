@@ -1,0 +1,158 @@
+/**
+ * Branch Selector Styles
+ */
+
+.branch-selector {
+  position: relative;
+  display: inline-block;
+}
+
+.branch-selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.branch-selector-trigger:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.branch-selector-name {
+  font-weight: 500;
+}
+
+.branch-selector-count {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.branch-selector-chevron {
+  transition: transform 0.2s ease;
+}
+
+.branch-selector-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Dropdown */
+.branch-selector-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 250px;
+  max-width: 400px;
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.branch-selector-list {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+/* Branch items */
+.branch-selector-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  position: relative;
+}
+
+.branch-selector-item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.branch-selector-item.active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.branch-selector-item.active .branch-selector-item-icon {
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.branch-selector-item-icon {
+  flex-shrink: 0;
+  color: var(--vscode-icon-foreground);
+}
+
+.branch-selector-item-name {
+  flex: 1;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branch-selector-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.branch-selector-item:hover .branch-selector-item-actions {
+  opacity: 1;
+}
+
+.branch-selector-item-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  color: var(--vscode-icon-foreground);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.branch-selector-item-action:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.branch-selector-item-delete:hover {
+  background: var(--vscode-inputValidation-errorBackground);
+  color: var(--vscode-inputValidation-errorForeground);
+}
+
+/* Edit mode */
+.branch-selector-item-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.branch-selector-item-input {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 13px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 3px;
+  outline: none;
+}
+
+.branch-selector-item-input:focus {
+  border-color: var(--vscode-focusBorder);
+}

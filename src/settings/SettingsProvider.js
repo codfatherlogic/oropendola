@@ -113,6 +113,125 @@ class SettingsProvider {
         return this.config.get('debug', false);
     }
 
+    // Auto-Approve settings
+    getAutoApproveEnabled() {
+        return this.config.get('autoApprove.enabled', false);
+    }
+
+    setAutoApproveEnabled(enabled) {
+        return this.config.update('autoApprove.enabled', enabled, vscode.ConfigurationTarget.Global);
+    }
+
+    getAutoApproveReadOnly() {
+        return this.config.get('autoApprove.readOnly', false);
+    }
+
+    getAutoApproveReadOnlyOutsideWorkspace() {
+        return this.config.get('autoApprove.readOnlyOutsideWorkspace', false);
+    }
+
+    getAutoApproveWrite() {
+        return this.config.get('autoApprove.write', false);
+    }
+
+    getAutoApproveWriteOutsideWorkspace() {
+        return this.config.get('autoApprove.writeOutsideWorkspace', false);
+    }
+
+    getAutoApproveWriteProtected() {
+        return this.config.get('autoApprove.writeProtected', false);
+    }
+
+    getAutoApproveExecute() {
+        return this.config.get('autoApprove.execute', false);
+    }
+
+    getAutoApproveBrowser() {
+        return this.config.get('autoApprove.browser', false);
+    }
+
+    getAutoApproveMcp() {
+        return this.config.get('autoApprove.mcp', false);
+    }
+
+    getAutoApproveModeSwitch() {
+        return this.config.get('autoApprove.modeSwitch', true);
+    }
+
+    getAutoApproveSubtasks() {
+        return this.config.get('autoApprove.subtasks', false);
+    }
+
+    getAutoApproveFollowupQuestions() {
+        return this.config.get('autoApprove.followupQuestions', false);
+    }
+
+    getAutoApproveUpdateTodoList() {
+        return this.config.get('autoApprove.updateTodoList', true);
+    }
+
+    getAutoApproveResubmit() {
+        return this.config.get('autoApprove.resubmit', false);
+    }
+
+    getAutoApproveAllowedCommands() {
+        return this.config.get('autoApprove.allowedCommands', []);
+    }
+
+    getAutoApproveDeniedCommands() {
+        return this.config.get('autoApprove.deniedCommands', [
+            'rm -rf *',
+            'rm -rf /',
+            'dd if=*',
+            'mkfs.*',
+            ':(){ :|:& };:',
+            '> /dev/sda',
+            'mv * /dev/null'
+        ]);
+    }
+
+    getAutoApproveMaxRequests() {
+        return this.config.get('autoApprove.maxRequests', 0);
+    }
+
+    getAutoApproveMaxCost() {
+        return this.config.get('autoApprove.maxCost', 0);
+    }
+
+    getAutoApproveRequestDelay() {
+        return this.config.get('autoApprove.requestDelay', 0);
+    }
+
+    getAutoApproveFollowupTimeout() {
+        return this.config.get('autoApprove.followupTimeout', 30000);
+    }
+
+    // Get all auto-approve settings as object
+    getAllAutoApproveSettings() {
+        return {
+            enabled: this.getAutoApproveEnabled(),
+            readOnly: this.getAutoApproveReadOnly(),
+            readOnlyOutsideWorkspace: this.getAutoApproveReadOnlyOutsideWorkspace(),
+            write: this.getAutoApproveWrite(),
+            writeOutsideWorkspace: this.getAutoApproveWriteOutsideWorkspace(),
+            writeProtected: this.getAutoApproveWriteProtected(),
+            execute: this.getAutoApproveExecute(),
+            browser: this.getAutoApproveBrowser(),
+            mcp: this.getAutoApproveMcp(),
+            modeSwitch: this.getAutoApproveModeSwitch(),
+            subtasks: this.getAutoApproveSubtasks(),
+            followupQuestions: this.getAutoApproveFollowupQuestions(),
+            updateTodoList: this.getAutoApproveUpdateTodoList(),
+            resubmit: this.getAutoApproveResubmit(),
+            allowedCommands: this.getAutoApproveAllowedCommands(),
+            deniedCommands: this.getAutoApproveDeniedCommands(),
+            maxRequests: this.getAutoApproveMaxRequests(),
+            maxCost: this.getAutoApproveMaxCost(),
+            requestDelay: this.getAutoApproveRequestDelay(),
+            followupTimeout: this.getAutoApproveFollowupTimeout()
+        };
+    }
+
     // Get all settings as object
     getAllSettings() {
         return {
@@ -147,6 +266,7 @@ class SettingsProvider {
                 enabled: this.getCodeActionsEnabled(),
                 autoFixOnSave: this.getAutoFixOnSave()
             },
+            autoApprove: this.getAllAutoApproveSettings(),
             debug: this.getDebugMode()
         };
     }

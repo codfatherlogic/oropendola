@@ -59,6 +59,9 @@ class OropendolaSidebarProvider {
         // Advanced features: Subtask orchestration and semantic search
         this._subtaskOrchestrator = null; // Initialized with TaskManager
         this._semanticSearchProvider = null; // Lazy-loaded
+
+        // Checkpoint service for conversation state management
+        this._checkpointService = null; // Initialized when task is created
     }
 
     /**
@@ -129,10 +132,11 @@ class OropendolaSidebarProvider {
         };
 
         // Load authentication status from OAuth storage
-        const isAuthenticated = await this._authManager.loadFromStorage();
-        this._isLoggedIn = isAuthenticated;
-        
-        if (isAuthenticated) {
+        const authResult = await this._authManager.loadFromStorage();
+        // Handle both object {authenticated: true} and boolean return types
+        this._isLoggedIn = typeof authResult === 'object' ? authResult.authenticated : authResult;
+
+        if (this._isLoggedIn) {
             const userEmail = this._authManager.getUserEmail();
             const apiKey = this._authManager.getApiKey();
             console.log(`✅ Loaded OAuth authentication for: ${userEmail}`);
@@ -502,6 +506,39 @@ class OropendolaSidebarProvider {
                         break;
                     case 'getUserProfile':
                         await this._handleGetUserProfile();
+                        break;
+
+                    // Workspace handlers for @mentions feature
+                    case 'getWorkspaceFiles':
+                        await this._handleGetWorkspaceFiles(message.id);
+                        break;
+                    case 'getWorkspaceFolders':
+                        await this._handleGetWorkspaceFolders(message.id);
+                        break;
+                    case 'getFileContent':
+                        await this._handleGetFileContent(message.id, message.path);
+                        break;
+
+                    // Image selection handler
+                    case 'selectImages':
+                        await this._handleSelectImages(message.maxImages || 5);
+                        break;
+
+                    // Checkpoint handlers
+                    case 'saveCheckpoint':
+                        await this._handleSaveCheckpoint(message.conversationState);
+                        break;
+                    case 'restoreCheckpoint':
+                        await this._handleRestoreCheckpoint(message.checkpointId);
+                        break;
+                    case 'listCheckpoints':
+                        await this._handleListCheckpoints();
+                        break;
+                    case 'deleteCheckpoint':
+                        await this._handleDeleteCheckpoint(message.checkpointId);
+                        break;
+                    case 'getCheckpointDiff':
+                        await this._handleGetCheckpointDiff(message.checkpointId);
                         break;
                 }
             } catch (error) {
@@ -5204,6 +5241,400 @@ ${fileContent.substring(0, 500)}${fileContent.length > 500 ? '...' : ''}
                 this._view.webview.postMessage({
                     type: 'error',
                     message: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle getWorkspaceFiles - returns all files in workspace
+     */
+    async _handleGetWorkspaceFiles(messageId) {
+        try {
+            const vscode = require('vscode');
+            const path = require('path');
+
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'workspaceFilesResponse',
+                        id: messageId,
+                        files: []
+                    });
+                }
+                return;
+            }
+
+            // Get all files from workspace
+            const files = await vscode.workspace.findFiles(
+                '**/*',
+                '**/node_modules/**'
+            );
+
+            const fileList = files.map(uri => {
+                const relativePath = vscode.workspace.asRelativePath(uri);
+                const fileName = path.basename(uri.fsPath);
+                return {
+                    path: uri.fsPath,
+                    name: fileName,
+                    relativePath: relativePath,
+                    isDirectory: false
+                };
+            });
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'workspaceFilesResponse',
+                    id: messageId,
+                    files: fileList
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting workspace files:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'workspaceFilesResponse',
+                    id: messageId,
+                    files: [],
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle getWorkspaceFolders - returns all folders in workspace
+     */
+    async _handleGetWorkspaceFolders(messageId) {
+        try {
+            const vscode = require('vscode');
+            const path = require('path');
+            const fs = require('fs').promises;
+
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'workspaceFoldersResponse',
+                        id: messageId,
+                        folders: []
+                    });
+                }
+                return;
+            }
+
+            // Recursively get all directories
+            const getAllDirs = async (dirPath) => {
+                const dirs = [];
+                try {
+                    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                    for (const entry of entries) {
+                        if (entry.isDirectory() && entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
+                            const fullPath = path.join(dirPath, entry.name);
+                            const relativePath = vscode.workspace.asRelativePath(fullPath);
+                            dirs.push({
+                                path: fullPath,
+                                name: entry.name,
+                                relativePath: relativePath,
+                                isDirectory: true
+                            });
+                            // Recursively get subdirectories
+                            const subdirs = await getAllDirs(fullPath);
+                            dirs.push(...subdirs);
+                        }
+                    }
+                } catch (error) {
+                    // Skip directories we can't read
+                    console.warn('⚠️ Could not read directory:', dirPath, error.message);
+                }
+                return dirs;
+            };
+
+            const allFolders = [];
+            for (const folder of workspaceFolders) {
+                const folders = await getAllDirs(folder.uri.fsPath);
+                allFolders.push(...folders);
+            }
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'workspaceFoldersResponse',
+                    id: messageId,
+                    folders: allFolders
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting workspace folders:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'workspaceFoldersResponse',
+                    id: messageId,
+                    folders: [],
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle getFileContent - returns content of a specific file
+     */
+    async _handleGetFileContent(messageId, filePath) {
+        try {
+            const vscode = require('vscode');
+            const fs = require('fs').promises;
+            const path = require('path');
+
+            // Resolve relative paths
+            let resolvedPath = filePath;
+            if (!path.isAbsolute(filePath)) {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    resolvedPath = path.join(workspaceFolders[0].uri.fsPath, filePath);
+                }
+            }
+
+            const content = await fs.readFile(resolvedPath, 'utf8');
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'fileContentResponse',
+                    id: messageId,
+                    content: content,
+                    path: filePath
+                });
+            }
+        } catch (error) {
+            console.error('❌ Error getting file content:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'fileContentResponse',
+                    id: messageId,
+                    content: '',
+                    error: error.message
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle selectImages - opens file picker for image selection
+     */
+    async _handleSelectImages(maxImages) {
+        try {
+            const vscode = require('vscode');
+
+            const options = {
+                canSelectMany: maxImages > 1,
+                canSelectFiles: true,
+                canSelectFolders: false,
+                filters: {
+                    'Images': ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg']
+                },
+                openLabel: 'Select Images'
+            };
+
+            const fileUris = await vscode.window.showOpenDialog(options);
+
+            if (fileUris && fileUris.length > 0) {
+                const selectedImages = fileUris
+                    .slice(0, maxImages)
+                    .map(uri => uri.fsPath);
+
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'imagesSelected',
+                        images: selectedImages
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error selecting images:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: `Failed to select images: ${error.message}`
+                });
+            }
+        }
+    }
+
+    /**
+     * Initialize checkpoint service for current task
+     */
+    _initializeCheckpointService() {
+        if (!this._currentTask) {
+            console.warn('⚠️ [Checkpoint] Cannot initialize: no active task');
+            return;
+        }
+
+        const CheckpointService = require('../services/CheckpointService');
+        const vscode = require('vscode');
+
+        const taskId = this._currentTask.id || 'default';
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || process.cwd();
+        const storageRoot = this._context.globalStorageUri.fsPath;
+
+        this._checkpointService = new CheckpointService(taskId, workspaceRoot, storageRoot);
+        console.log(`✅ [Checkpoint] Service initialized for task ${taskId}`);
+    }
+
+    /**
+     * Handle save checkpoint request
+     */
+    async _handleSaveCheckpoint(conversationState) {
+        try {
+            if (!this._checkpointService) {
+                this._initializeCheckpointService();
+            }
+
+            if (!this._checkpointService) {
+                throw new Error('Checkpoint service not available');
+            }
+
+            const result = await this._checkpointService.save(conversationState);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'checkpointSaved',
+                    checkpoint: result
+                });
+            }
+
+            console.log(`💾 [Checkpoint] Saved: ${result.checkpointId}`);
+        } catch (error) {
+            console.error('❌ Error saving checkpoint:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: `Failed to save checkpoint: ${error.message}`
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle restore checkpoint request
+     */
+    async _handleRestoreCheckpoint(checkpointId) {
+        try {
+            if (!this._checkpointService) {
+                throw new Error('Checkpoint service not initialized');
+            }
+
+            const conversationState = await this._checkpointService.restore(checkpointId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'checkpointRestored',
+                    conversationState: conversationState,
+                    checkpointId: checkpointId
+                });
+            }
+
+            console.log(`🔄 [Checkpoint] Restored: ${checkpointId}`);
+        } catch (error) {
+            console.error('❌ Error restoring checkpoint:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: `Failed to restore checkpoint: ${error.message}`
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle list checkpoints request
+     */
+    async _handleListCheckpoints() {
+        try {
+            if (!this._checkpointService) {
+                this._initializeCheckpointService();
+            }
+
+            if (!this._checkpointService) {
+                throw new Error('Checkpoint service not available');
+            }
+
+            const checkpoints = await this._checkpointService.listCheckpoints();
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'checkpointsList',
+                    checkpoints: checkpoints
+                });
+            }
+
+            console.log(`📋 [Checkpoint] Listed ${checkpoints.length} checkpoints`);
+        } catch (error) {
+            console.error('❌ Error listing checkpoints:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: `Failed to list checkpoints: ${error.message}`
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle delete checkpoint request
+     */
+    async _handleDeleteCheckpoint(checkpointId) {
+        try {
+            if (!this._checkpointService) {
+                throw new Error('Checkpoint service not initialized');
+            }
+
+            await this._checkpointService.deleteCheckpoint(checkpointId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'checkpointDeleted',
+                    checkpointId: checkpointId
+                });
+            }
+
+            console.log(`🗑️ [Checkpoint] Deleted: ${checkpointId}`);
+        } catch (error) {
+            console.error('❌ Error deleting checkpoint:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: `Failed to delete checkpoint: ${error.message}`
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle get checkpoint diff request
+     */
+    async _handleGetCheckpointDiff(checkpointId) {
+        try {
+            if (!this._checkpointService) {
+                throw new Error('Checkpoint service not initialized');
+            }
+
+            const diff = await this._checkpointService.getDiff(checkpointId);
+
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'checkpointDiff',
+                    diff: diff,
+                    checkpointId: checkpointId
+                });
+            }
+
+            console.log(`📊 [Checkpoint] Got diff for: ${checkpointId}`);
+        } catch (error) {
+            console.error('❌ Error getting checkpoint diff:', error);
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'error',
+                    message: `Failed to get checkpoint diff: ${error.message}`
                 });
             }
         }

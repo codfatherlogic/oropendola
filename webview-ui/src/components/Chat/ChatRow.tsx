@@ -16,6 +16,7 @@ import { MarkdownBlock } from './MarkdownBlock'
 import { ProgressIndicator } from './ProgressIndicator'
 import { ReasoningBlock } from './ReasoningBlock'
 import { AgentModelBadge } from './AgentModelBadge'
+import { DiffViewer } from '../Diff'
 import vscode from '../../vscode-api'
 import './ChatRow.css'
 
@@ -126,6 +127,12 @@ export const ChatRow: React.FC<ChatRowProps> = ({
 
   // ✅ Render tool approval message - SHOWS INLINE IN CHAT
   if (isToolApproval && message.tool) {
+    // Check if this is an apply_diff tool with diff content
+    const isApplyDiff = message.tool.action === 'apply_diff' && message.tool.diff
+    const isDiffTool = isApplyDiff ||
+                       message.tool.action === 'edit_file' ||
+                       message.tool.action === 'editedExistingFile'
+
     return (
       <div className="chat-row chat-row-tool-approval" style={{
         border: '1px solid var(--vscode-notifications-border)',
@@ -136,14 +143,37 @@ export const ChatRow: React.FC<ChatRowProps> = ({
       }}>
         <div style={headerStyle}>
           <AlertCircle className="w-4 h-4" style={{ color: 'var(--vscode-notificationsWarningIcon-foreground)' }} />
-          <span style={{ fontWeight: 'bold' }}>Tool Requires Approval</span>
+          <span style={{ fontWeight: 'bold' }}>
+            {isDiffTool ? 'File Changes Require Approval' : 'Tool Requires Approval'}
+          </span>
         </div>
-        <div className="chat-row-tool-content" style={{ marginBottom: '12px' }}>
-          <MarkdownBlock markdown={message.text} />
-        </div>
+
+        {/* Show diff viewer for apply_diff */}
+        {isApplyDiff ? (
+          <>
+            <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--vscode-descriptionForeground)' }}>
+              {message.tool.description || 'Review the changes below'}
+            </div>
+            <DiffViewer
+              diff={message.tool.diff}
+              path={message.tool.path}
+              language={message.tool.language}
+              viewMode="unified"
+              showLineNumbers={true}
+              collapsible={false}
+              defaultExpanded={true}
+              showFileActions={false}
+            />
+          </>
+        ) : (
+          <div className="chat-row-tool-content" style={{ marginBottom: '12px' }}>
+            <MarkdownBlock markdown={message.text} />
+          </div>
+        )}
+
         {/* Note: Approval buttons are rendered by ChatView at bottom of chat */}
-        <div style={{ 
-          fontSize: '0.9em', 
+        <div style={{
+          fontSize: '0.9em',
           color: 'var(--vscode-descriptionForeground)',
           fontStyle: 'italic'
         }}>

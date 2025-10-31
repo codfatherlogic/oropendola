@@ -1,0 +1,152 @@
+/**
+ * Mention Autocomplete Styles
+ */
+
+.mention-autocomplete {
+  position: absolute;
+  background: var(--vscode-editorSuggestWidget-background);
+  border: 1px solid var(--vscode-editorSuggestWidget-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  max-height: 400px;
+  width: 450px;
+  overflow-y: auto;
+  z-index: 1000;
+  animation: slideUpFade 0.15s ease;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mention-section {
+  padding: 4px 0;
+}
+
+.mention-section:not(:last-child) {
+  border-bottom: 1px solid var(--vscode-editorSuggestWidget-border);
+}
+
+.mention-section-title {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.mention-item:hover,
+.mention-item.selected {
+  background: var(--vscode-editorSuggestWidget-selectedBackground);
+}
+
+.mention-item.selected {
+  border-left: 2px solid var(--vscode-editorSuggestWidget-focusBorder, var(--vscode-focusBorder));
+  padding-left: 10px;
+}
+
+.mention-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.mention-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mention-text {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  color: var(--vscode-editorSuggestWidget-foreground);
+  font-weight: 500;
+}
+
+.mention-description {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.4;
+}
+
+.mention-path {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mention-autocomplete-footer {
+  padding: 6px 12px;
+  border-top: 1px solid var(--vscode-editorSuggestWidget-border);
+  background: var(--vscode-editorWidget-background);
+}
+
+.mention-help-text {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mention-help-text kbd {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 10px;
+  color: var(--vscode-textPreformat-foreground);
+  background: var(--vscode-textBlockQuote-background);
+  padding: 2px 4px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-textBlockQuote-border);
+}
+
+/* Scrollbar */
+.mention-autocomplete::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mention-autocomplete::-webkit-scrollbar-track {
+  background: var(--vscode-scrollbarSlider-background);
+}
+
+.mention-autocomplete::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+  border-radius: 4px;
+}
+
+.mention-autocomplete::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* Empty state */
+.mention-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}

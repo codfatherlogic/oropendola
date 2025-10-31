@@ -15,7 +15,11 @@ const vscode = require('vscode');
 const FileChangeTracker = require('../utils/file-change-tracker');
 const RealtimeManager = require('./RealtimeManager');
 const { MessageQueueService } = require('./MessageQueueService');
+const SearchReplaceDiffStrategy = require('./diff/SearchReplaceDiffStrategy');
 const CheckpointService = require('../services/CheckpointService');
+const McpHub = require('../services/McpHub');
+const { AutoApproveManager } = require('../services/AutoApproveManager');
+const { SettingsProvider } = require('../settings/SettingsProvider');
 const {
     saveApiMessages,
     saveTaskMessages,
@@ -78,6 +82,9 @@ class ConversationTask extends EventEmitter {
         this.taskEndTime = null;
         this.errors = [];
 
+        // Diff strategy for apply_diff tool
+        this.diffStrategy = new SearchReplaceDiffStrategy();
+
         // Real-time WebSocket connection
         this.realtimeManager = null;
         this.realtimeConnected = false;
@@ -87,6 +94,10 @@ class ConversationTask extends EventEmitter {
         this.checkpointService = null;  // Initialized on first use
         this.isPaused = false;          // Pause/resume support
         this.storageDir = options.storageDir;  // For persistence
+
+        // MCP Hub for Model Context Protocol integration
+        this.mcpHub = null;  // Initialized on first use
+        this.mcpEnabled = options.mcpEnabled || false;
 
         // v3.2.7: Conversation context tracking (Copilot-style)
         this.contextTracker = new ConversationContextTracker();
@@ -124,6 +135,11 @@ class ConversationTask extends EventEmitter {
         this.useAgentMode = options.useAgentMode !== false; // Default to true
         this.selectedModel = null;  // Track which model was auto-selected
         this.modelSelectionReason = null;  // Why this model was chosen
+
+        // Auto-Approve Manager for granular operation approval
+        this.settingsProvider = new SettingsProvider();
+        this.autoApproveManager = new AutoApproveManager(this.settingsProvider);
+        this.autoApproveManager.initializeTask(this.taskId);
 
         // Initialize realtime connection if session cookies provided
         console.log('🔥 [ConversationTask] Checking realtime connection requirements...');
@@ -1053,6 +1069,16 @@ ${dynamicContext}\`;
             console.error('[ConversationTask] Error disposing file tracker:', error);
         }
 
+        // 5. Clean up auto-approve manager
+        try {
+            if (this.autoApproveManager) {
+                this.autoApproveManager.cleanupTask(this.taskId);
+                console.log('✅ [ConversationTask] Cleaned up auto-approve manager');
+            }
+        } catch (error) {
+            console.error('[ConversationTask] Error cleaning up auto-approve manager:', error);
+        }
+
         // 5. Clear provider reference (WeakRef cleanup)
         try {
             if (this.providerRef) {
@@ -1813,11 +1839,114 @@ ${dynamicContext}\`;
     }
 
     /**
+     * Check if tool execution should be auto-approved
+     * Returns { approved, reason, requiresApproval }
+     */
+    async _checkToolApproval(toolCall) {
+        const { action, path, command } = toolCall;
+
+        // Determine operation type for auto-approve check
+        let operation = action;
+        let checkOptions = {
+            operation: action,
+            taskId: this.taskId,
+            cost: 0  // Could estimate based on operation
+        };
+
+        // Add context-specific parameters
+        if (path) {
+            checkOptions.filePath = path;
+        }
+        if (command) {
+            checkOptions.command = command;
+        }
+
+        // Check auto-approval
+        const approval = await this.autoApproveManager.shouldAutoApprove(checkOptions);
+
+        return {
+            approved: approval.approved,
+            reason: approval.reason,
+            requiresApproval: !approval.approved,
+            metrics: approval.metrics,
+            limitExceeded: approval.limitExceeded
+        };
+    }
+
+    /**
+     * Request user approval for a tool operation
+     */
+    async _requestUserApproval(toolCall, approvalCheck) {
+        const { action, path, command, description } = toolCall;
+
+        // Build approval message
+        let message = `**Tool Approval Required**\n\n`;
+        message += `**Operation**: ${action}\n`;
+        if (path) message += `**File**: ${path}\n`;
+        if (command) message += `**Command**: \`${command}\`\n`;
+        if (description) message += `**Description**: ${description}\n`;
+        message += `\n**Reason**: ${approvalCheck.reason}\n`;
+
+        if (approvalCheck.metrics) {
+            message += `\n**Metrics**:\n`;
+            message += `- Requests: ${approvalCheck.metrics.requestCount}`;
+            const maxReq = this.settingsProvider.getAutoApproveMaxRequests();
+            if (maxReq > 0) message += ` / ${maxReq}`;
+            message += `\n`;
+            message += `- Cost: $${approvalCheck.metrics.totalCost.toFixed(4)}`;
+            const maxCost = this.settingsProvider.getAutoApproveMaxCost();
+            if (maxCost > 0) message += ` / $${maxCost}`;
+            message += `\n`;
+        }
+
+        if (approvalCheck.limitExceeded) {
+            message += `\n⚠️ **Limit Exceeded** - This operation exceeds safety limits.\n`;
+        }
+
+        message += `\nApprove this operation?`;
+
+        // Send approval request to UI
+        this.emit('toolApprovalRequired', {
+            taskId: this.taskId,
+            toolCall,
+            message,
+            approvalCheck
+        });
+
+        // Wait for user response (this would need to be implemented in the UI)
+        // For now, return a pending approval structure
+        return {
+            approved: false,
+            userResponse: 'pending'
+        };
+    }
+
+    /**
      * Execute a single tool call
      */
     async _executeSingleTool(toolCall) {
         const { action, path, content, description, command, old_string, new_string } = toolCall;
 
+        // Check auto-approval before execution
+        const approvalCheck = await this._checkToolApproval(toolCall);
+
+        if (!approvalCheck.approved) {
+            // Tool requires approval
+            const userApproval = await this._requestUserApproval(toolCall, approvalCheck);
+
+            if (!userApproval.approved) {
+                // User denied or approval is pending
+                return {
+                    tool_use_id: toolCall.id || this.taskId,
+                    tool_name: action,
+                    content: `Operation ${action} requires approval. ${approvalCheck.reason}`,
+                    success: false,
+                    approvalRequired: true
+                };
+            }
+        }
+
+        // Tool is approved (either auto or manual), proceed with execution
         switch (action) {
             case 'create_file':
                 return await this._executeCreateFile(path, content, description);
@@ -1855,6 +1984,42 @@ ${dynamicContext}\`;
 
             case 'codebase_search':
                 return await this._executeCodebaseSearch(toolCall);
+
+            case 'apply_diff':
+                return await this._executeApplyDiff(toolCall);
+
+            case 'update_todo_list':
+                return await this._executeUpdateTodoList(toolCall);
+
+            case 'list_code_definition_names':
+                return await this._executeListCodeDefinitionNames(toolCall);
+
+            case 'insert_content':
+                return await this._executeInsertContent(toolCall);
+
+            case 'use_mcp_tool':
+                return await this._executeUseMcpTool(toolCall);
+
+            case 'access_mcp_resource':
+                return await this._executeAccessMcpResource(toolCall);
+
+            case 'switch_mode':
+                return await this._executeSwitchMode(toolCall);
+
+            case 'new_task':
+                return await this._executeNewTask(toolCall);
+
+            case 'save_checkpoint':
+                return await this._executeSaveCheckpoint(toolCall);
+
+            case 'restore_checkpoint':
+                return await this._executeRestoreCheckpoint(toolCall);
+
+            case 'list_checkpoints':
+                return await this._executeListCheckpoints(toolCall);
+
+            case 'ask_followup_question':
+                return await this._executeAskFollowupQuestion(toolCall);
 
             default:
                 throw new Error(`Unknown tool action: ${action}`);
@@ -2053,6 +2218,966 @@ ${dynamicContext}\`;
             this.errors.push(error);
 
             throw new Error(`Failed to replace string in ${filePath}: ${error.message}`);
+        }
+    }
+
+    /**
+     * Execute apply_diff tool - SEARCH/REPLACE based code editing
+     * More precise and flexible than string replacement
+     */
+    async _executeApplyDiff(toolCall) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        const { path: filePath, diff, description } = toolCall;
+
+        if (!filePath) {
+            throw new Error('apply_diff requires a path parameter');
+        }
+
+        if (!diff) {
+            throw new Error('apply_diff requires a diff parameter with SEARCH/REPLACE blocks');
+        }
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            // Track file change - GENERATING
+            const change = this.fileChangeTracker.addChange(filePath, 'edit', {
+                description: description || `Apply diff to ${filePath}`,
+                diff
+            });
+            this.emit('fileChangeAdded', change);
+
+            // Update status - APPLYING
+            this.fileChangeTracker.updateStatus(filePath, 'applying');
+            this.emit('fileChangeUpdated', change);
+
+            // Check if file exists
+            let fileExists = true;
+            try {
+                await fs.access(fullPath);
+            } catch (error) {
+                fileExists = false;
+                throw new Error(`File does not exist: ${filePath}. Use create_file to create new files.`);
+            }
+
+            // Read original content
+            const originalContent = await fs.readFile(fullPath, 'utf8');
+
+            // Apply diff using SearchReplaceDiffStrategy
+            const diffResult = await this.diffStrategy.applyDiff(originalContent, diff);
+
+            if (!diffResult.success) {
+                // Increment consecutive mistake count
+                this.consecutiveMistakeCount++;
+
+                // Track error
+                this.fileChangeTracker.updateStatus(filePath, 'failed', {
+                    error: diffResult.error
+                });
+                this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+                // Format error message
+                let errorMessage = `Unable to apply diff to file: ${filePath}\n\n${diffResult.error}`;
+
+                if (diffResult.failParts && diffResult.failParts.length > 0) {
+                    errorMessage += '\n\nFailed blocks:\n';
+                    diffResult.failParts.forEach((part, index) => {
+                        errorMessage += `\nBlock ${index + 1}:\n${part.error}\n`;
+                        if (part.details) {
+                            errorMessage += `Details: ${JSON.stringify(part.details, null, 2)}\n`;
+                        }
+                    });
+                }
+
+                errorMessage += '\n\nSuggestions:\n';
+                errorMessage += '- Use read_file to verify the exact content\n';
+                errorMessage += '- Ensure SEARCH content exactly matches existing code\n';
+                errorMessage += '- Check whitespace and indentation\n';
+                errorMessage += '- Use :start_line: hint for better matching\n';
+
+                throw new Error(errorMessage);
+            }
+
+            // Reset consecutive mistake count on success
+            this.consecutiveMistakeCount = 0;
+
+            // Write new content
+            await fs.writeFile(fullPath, diffResult.content, 'utf8');
+
+            // Update status - APPLIED
+            this.fileChangeTracker.updateStatus(filePath, 'applied', {
+                newContent: diffResult.content,
+                blocksApplied: diffResult.appliedBlocks ? diffResult.appliedBlocks.length : 0
+            });
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            // Open file in editor
+            const document = await vscode.workspace.openTextDocument(fullPath);
+            await vscode.window.showTextDocument(document);
+
+            console.log(`✅ Applied diff to file: ${filePath}`);
+
+            // Build success message
+            let successMessage = `Successfully applied diff to ${filePath}`;
+
+            if (diffResult.appliedBlocks && diffResult.appliedBlocks.length > 0) {
+                successMessage += `\n\nApplied ${diffResult.appliedBlocks.length} SEARCH/REPLACE block(s)`;
+            }
+
+            if (diffResult.failParts && diffResult.failParts.length > 0) {
+                successMessage += `\n\nNote: ${diffResult.failParts.length} block(s) failed to apply. Use read_file to verify the current state and re-apply failed blocks.`;
+            }
+
+            // Suggest using multiple blocks for efficiency
+            const searchBlockCount = (diff.match(/<<<<<<< SEARCH/g) || []).length;
+            if (searchBlockCount === 1) {
+                successMessage += '\n\nTip: Making multiple related changes in a single apply_diff is more efficient. If other changes are needed in this file, include them as additional SEARCH/REPLACE blocks.';
+            }
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'apply_diff',
+                content: successMessage,
+                success: true,
+                details: {
+                    blocksApplied: diffResult.appliedBlocks ? diffResult.appliedBlocks.length : 0,
+                    blocksFailed: diffResult.failParts ? diffResult.failParts.length : 0
+                }
+            };
+
+        } catch (error) {
+            // Track error
+            this.fileChangeTracker.updateStatus(filePath, 'failed', {
+                error: error.message
+            });
+            this.errors.push(error);
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            throw error;
+        }
+    }
+
+    /**
+     * Execute update_todo_list tool - AI can dynamically manage the todo list
+     * Accepts markdown checklist format for simplicity
+     */
+    async _executeUpdateTodoList(toolCall) {
+        const crypto = require('crypto');
+        const { todos } = toolCall;
+
+        if (!todos) {
+            throw new Error('update_todo_list requires a todos parameter (markdown checklist format)');
+        }
+
+        try {
+            // Get provider reference to access TodoManager
+            const provider = this.providerRef?.deref?.();
+            if (!provider || !provider._todoManager) {
+                throw new Error('TodoManager not available. Cannot update todos.');
+            }
+
+            const todoManager = provider._todoManager;
+
+            // Parse markdown checklist
+            // Format: [ ] Pending task, [-] In progress task, [x] Completed task
+            const parsedTodos = this._parseMarkdownTodos(todos);
+
+            if (parsedTodos.length === 0) {
+                throw new Error('No valid todos found in the provided markdown checklist. Expected format:\n[ ] Task 1\n[-] Task 2 (in progress)\n[x] Task 3 (completed)');
+            }
+
+            // Clear existing todos and replace with new ones
+            todoManager.clearAll();
+
+            // Add each parsed todo
+            parsedTodos.forEach(todo => {
+                const newTodo = {
+                    id: crypto.randomUUID(),
+                    text: todo.text,
+                    fullText: todo.text,
+                    type: 'ai_managed',
+                    order: todo.order,
+                    status: todo.status,
+                    completed: todo.status === 'completed',
+                    createdAt: new Date().toISOString(),
+                    completedAt: todo.status === 'completed' ? new Date().toISOString() : null,
+                    startedAt: todo.status === 'in_progress' ? new Date().toISOString() : null,
+                    parentId: null,
+                    level: 0,
+                    relatedFile: null
+                };
+
+                todoManager.todos.push(newTodo);
+            });
+
+            // Emit update event to refresh UI
+            if (provider._view) {
+                provider._view.webview.postMessage({
+                    type: 'todosUpdated',
+                    todos: todoManager.getAllTodos(),
+                    stats: todoManager.getStats()
+                });
+            }
+
+            console.log(`✅ Updated todo list: ${parsedTodos.length} items`);
+
+            // Build success message with summary
+            const stats = todoManager.getStats();
+            let successMessage = `Successfully updated todo list with ${parsedTodos.length} items:\n`;
+            successMessage += `- Pending: ${stats.pending}\n`;
+            successMessage += `- In Progress: ${stats.in_progress}\n`;
+            successMessage += `- Completed: ${stats.completed}\n`;
+            successMessage += `\nCurrent todos:\n${todos}`;
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'update_todo_list',
+                content: successMessage,
+                success: true,
+                details: {
+                    totalTodos: parsedTodos.length,
+                    stats
+                }
+            };
+
+        } catch (error) {
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Parse markdown checklist into todo items
+     * Format: [ ] Task, [-] In progress, [x] Completed
+     */
+    _parseMarkdownTodos(markdown) {
+        if (typeof markdown !== 'string') {
+            return [];
+        }
+
+        const lines = markdown.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const todos = [];
+        let order = 1;
+
+        for (const line of lines) {
+            // Match checkbox format: [ ], [-], [x], [X]
+            // Support with or without leading dash: "- [ ] Task" or "[ ] Task"
+            const match = line.match(/^(?:-\s*)?\[\s*([ xX\-~])\s*\]\s+(.+)$/);
+
+            if (!match) {
+                continue;
+            }
+
+            const checkbox = match[1].toLowerCase();
+            const text = match[2].trim();
+
+            let status = 'pending';
+            if (checkbox === 'x') {
+                status = 'completed';
+            } else if (checkbox === '-' || checkbox === '~') {
+                status = 'in_progress';
+            }
+
+            todos.push({
+                text,
+                status,
+                order: order++
+            });
+        }
+
+        return todos;
+    }
+    /**
+     * Execute delete_file tool
+    /**
+     * Execute list_code_definition_names tool - Extract functions, classes, methods from code
+     * Uses regex-based parsing for common languages
+     */
+    async _executeListCodeDefinitionNames(toolCall) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+        const CodeDefinitionParser = require('../utils/CodeDefinitionParser');
+
+        const { path: filePath } = toolCall;
+
+        if (!filePath) {
+            throw new Error('list_code_definition_names requires a path parameter');
+        }
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            // Check if file exists
+            try {
+                await fs.access(fullPath);
+            } catch (error) {
+                throw new Error(`File does not exist: ${filePath}`);
+            }
+
+            // Read file content
+            const content = await fs.readFile(fullPath, 'utf8');
+
+            // Parse definitions
+            const parser = new CodeDefinitionParser();
+            const result = parser.parseFile(content, filePath);
+
+            console.log(`✅ Extracted code definitions from: ${filePath}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_code_definition_names',
+                content: result,
+                success: true
+            };
+
+        } catch (error) {
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute insert_content tool - Insert content at specific line in file
+     * Useful for adding code at precise locations without replacing existing content
+     */
+    async _executeInsertContent(toolCall) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        const { path: filePath, line, content, description } = toolCall;
+
+        if (!filePath) {
+            throw new Error('insert_content requires a path parameter');
+        }
+
+        if (line === undefined || line === null) {
+            throw new Error('insert_content requires a line parameter (line number where to insert)');
+        }
+
+        if (content === undefined) {
+            throw new Error('insert_content requires a content parameter (text to insert)');
+        }
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const fullPath = pathModule.join(workspacePath, filePath);
+
+            const lineNumber = parseInt(line, 10);
+            if (isNaN(lineNumber) || lineNumber < 0) {
+                throw new Error(`Invalid line number: ${line}. Must be a non-negative integer.`);
+            }
+
+            // Check if file exists
+            let fileExists = true;
+            let fileContent = '';
+            try {
+                fileContent = await fs.readFile(fullPath, 'utf8');
+            } catch (error) {
+                fileExists = false;
+                // For new files, only allow line 0 or 1
+                if (lineNumber > 1) {
+                    throw new Error(`Cannot insert content at line ${lineNumber} into a non-existent file. For new files, line must be 0 (append) or 1 (insert at beginning).`);
+                }
+            }
+
+            // Track file change
+            const change = this.fileChangeTracker.addChange(filePath, fileExists ? 'edit' : 'create', {
+                description: description || `Insert content at line ${lineNumber}`,
+                lineNumber
+            });
+            this.emit('fileChangeAdded', change);
+
+            // Update status - APPLYING
+            this.fileChangeTracker.updateStatus(filePath, 'applying');
+            this.emit('fileChangeUpdated', change);
+
+            // Split into lines
+            const lines = fileExists ? fileContent.split('\n') : [];
+            const contentLines = content.split('\n');
+
+            // Insert at specified line (1-based index)
+            // Line 1 = insert at beginning (index 0)
+            // Line 2 = insert after first line (index 1)
+            const insertIndex = lineNumber === 0 ? lines.length : lineNumber - 1;
+
+            // Insert content
+            lines.splice(insertIndex, 0, ...contentLines);
+
+            const newContent = lines.join('\n');
+
+            // Write file
+            if (!fileExists) {
+                // Create directory if needed
+                const dirPath = pathModule.dirname(fullPath);
+                await fs.mkdir(dirPath, { recursive: true });
+            }
+
+            await fs.writeFile(fullPath, newContent, 'utf8');
+
+            // Update status - APPLIED
+            this.fileChangeTracker.updateStatus(filePath, 'applied', {
+                newContent,
+                linesInserted: contentLines.length
+            });
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            // Open file in editor
+            const document = await vscode.workspace.openTextDocument(fullPath);
+            await vscode.window.showTextDocument(document);
+
+            console.log(`✅ Inserted ${contentLines.length} line(s) at line ${lineNumber} in ${filePath}`);
+
+            // Reset consecutive mistake count
+            this.consecutiveMistakeCount = 0;
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'insert_content',
+                content: `Successfully inserted ${contentLines.length} line(s) at line ${lineNumber} in ${filePath}`,
+                success: true,
+                details: {
+                    lineNumber,
+                    linesInserted: contentLines.length,
+                    fileCreated: !fileExists
+                }
+            };
+
+        } catch (error) {
+            // Track error
+            this.fileChangeTracker.updateStatus(filePath, 'failed', {
+                error: error.message
+            });
+            this.errors.push(error);
+            this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            throw error;
+        }
+    }
+
+    /**
+     * Execute use_mcp_tool - Call an MCP server tool
+     */
+    async _executeUseMcpTool(toolCall) {
+        const { tool_name, arguments: toolArgs, description } = toolCall;
+
+        if (!tool_name) {
+            throw new Error('use_mcp_tool requires a tool_name parameter');
+        }
+
+        try {
+            // Initialize MCP Hub if needed
+            if (!this.mcpHub && this.mcpEnabled) {
+                await this._initializeMcpHub();
+            }
+
+            if (!this.mcpHub || !this.mcpEnabled) {
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'use_mcp_tool',
+                    content: 'Error: MCP is not enabled. Enable it in Settings > MCP Servers',
+                    success: false
+                };
+            }
+
+            console.log(`🔌 Executing MCP tool: ${tool_name}`);
+
+            // Execute MCP tool
+            const result = await this.mcpHub.executeTool(tool_name, toolArgs || {});
+
+            if (result.isError) {
+                console.error(`❌ MCP tool ${tool_name} failed:`, result.content);
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'use_mcp_tool',
+                    content: `MCP tool error: ${result.content}`,
+                    success: false
+                };
+            }
+
+            console.log(`✅ MCP tool ${tool_name} completed successfully`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'use_mcp_tool',
+                content: typeof result.content === 'string' ? result.content : JSON.stringify(result.content, null, 2),
+                success: true
+            };
+
+        } catch (error) {
+            console.error(`Failed to execute MCP tool ${tool_name}:`, error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute access_mcp_resource - Access an MCP server resource
+     */
+    async _executeAccessMcpResource(toolCall) {
+        const { uri, description } = toolCall;
+
+        if (!uri) {
+            throw new Error('access_mcp_resource requires a uri parameter');
+        }
+
+        try {
+            // Initialize MCP Hub if needed
+            if (!this.mcpHub && this.mcpEnabled) {
+                await this._initializeMcpHub();
+            }
+
+            if (!this.mcpHub || !this.mcpEnabled) {
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'access_mcp_resource',
+                    content: 'Error: MCP is not enabled. Enable it in Settings > MCP Servers',
+                    success: false
+                };
+            }
+
+            console.log(`🔌 Accessing MCP resource: ${uri}`);
+
+            // Access MCP resource
+            const result = await this.mcpHub.accessResource(uri);
+
+            if (result.isError) {
+                console.error(`❌ MCP resource ${uri} access failed:`, result.content);
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'access_mcp_resource',
+                    content: `MCP resource error: ${result.content}`,
+                    success: false
+                };
+            }
+
+            console.log(`✅ MCP resource ${uri} accessed successfully`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'access_mcp_resource',
+                content: typeof result.content === 'string' ? result.content : JSON.stringify(result.content, null, 2),
+                success: true,
+                mimeType: result.mimeType
+            };
+
+        } catch (error) {
+            console.error(`Failed to access MCP resource ${uri}:`, error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Initialize MCP Hub
+     */
+    async _initializeMcpHub() {
+        if (this.mcpHub) {
+            return;
+        }
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders) {
+            throw new Error('No workspace folder open');
+        }
+
+        const workspacePath = workspaceFolders[0].uri.fsPath;
+
+        this.mcpHub = new McpHub();
+        await this.mcpHub.initialize(workspacePath);
+
+        console.log('✅ [ConversationTask] MCP Hub initialized');
+    }
+
+    /**
+     * Execute switch_mode tool - Switch conversation mode dynamically
+     */
+    async _executeSwitchMode(toolCall) {
+        const { mode, description } = toolCall;
+
+        if (!mode) {
+            throw new Error('switch_mode requires a mode parameter');
+        }
+
+        const validModes = ['code', 'architect', 'ask', 'debug'];
+        if (!validModes.includes(mode.toLowerCase())) {
+            throw new Error(`Invalid mode: ${mode}. Valid modes: ${validModes.join(', ')}`);
+        }
+
+        try {
+            console.log(`🔄 Switching mode to: ${mode}`);
+
+            // Store current mode
+            const previousMode = this.mode || 'code';
+            this.mode = mode.toLowerCase();
+
+            // Notify UI about mode change
+            const provider = this.providerRef?.deref?.();
+            if (provider && provider._view) {
+                provider._view.webview.postMessage({
+                    type: 'modeChanged',
+                    mode: this.mode
+                });
+            }
+
+            console.log(`✅ Mode switched from ${previousMode} to ${this.mode}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'switch_mode',
+                content: `Mode switched to ${this.mode}. Previous mode: ${previousMode}\n\nThe conversation will now follow ${this.mode} mode guidelines.`,
+                success: true,
+                details: {
+                    previousMode,
+                    newMode: this.mode
+                }
+            };
+
+        } catch (error) {
+            console.error('Failed to switch mode:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute new_task tool - Create a sub-task in a different mode
+     */
+    async _executeNewTask(toolCall) {
+        const { mode, description, prompt } = toolCall;
+
+        if (!mode) {
+            throw new Error('new_task requires a mode parameter');
+        }
+
+        if (!prompt && !description) {
+            throw new Error('new_task requires either a prompt or description parameter');
+        }
+
+        const validModes = ['code', 'architect', 'ask', 'debug'];
+        if (!validModes.includes(mode.toLowerCase())) {
+            throw new Error(`Invalid mode: ${mode}. Valid modes: ${validModes.join(', ')}`);
+        }
+
+        try {
+            console.log(`📋 Creating new sub-task in ${mode} mode`);
+
+            const taskPrompt = prompt || description;
+            const provider = this.providerRef?.deref?.();
+
+            if (!provider) {
+                throw new Error('No provider reference available');
+            }
+
+            // Create a new task with the specified mode
+            const subtaskId = `${this.taskId}-subtask-${Date.now()}`;
+
+            // Notify UI to create new task
+            if (provider._view) {
+                provider._view.webview.postMessage({
+                    type: 'createSubtask',
+                    subtaskId,
+                    mode: mode.toLowerCase(),
+                    prompt: taskPrompt,
+                    parentTaskId: this.taskId
+                });
+            }
+
+            console.log(`✅ Sub-task ${subtaskId} created in ${mode} mode`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'new_task',
+                content: `Created new sub-task in ${mode} mode.\n\nTask ID: ${subtaskId}\nPrompt: ${taskPrompt}\n\nThe sub-task will execute independently and return results.`,
+                success: true,
+                details: {
+                    subtaskId,
+                    mode: mode.toLowerCase(),
+                    parentTaskId: this.taskId,
+                    prompt: taskPrompt
+                }
+            };
+
+        } catch (error) {
+            console.error('Failed to create new task:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute save_checkpoint - Save current conversation state
+     */
+    async _executeSaveCheckpoint(toolCall) {
+        const { description, force } = toolCall;
+
+        try {
+            // Initialize checkpoint service if needed
+            if (!this.checkpointService) {
+                await this._initializeCheckpointService();
+            }
+
+            console.log('💾 Saving checkpoint...');
+
+            const checkpointId = await this.checkpointService.save({
+                description: description || 'Manual checkpoint',
+                force: force || false,
+                suppressMessage: false
+            });
+
+            if (!checkpointId) {
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'save_checkpoint',
+                    content: 'No changes to checkpoint. Workspace is clean.',
+                    success: true
+                };
+            }
+
+            console.log(`✅ Checkpoint saved: ${checkpointId}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'save_checkpoint',
+                content: `Checkpoint saved successfully!\n\nCheckpoint ID: ${checkpointId}\nDescription: ${description || 'Manual checkpoint'}\nTimestamp: ${new Date().toISOString()}\n\nYou can restore this checkpoint later using restore_checkpoint.`,
+                success: true,
+                details: {
+                    checkpointId,
+                    description: description || 'Manual checkpoint'
+                }
+            };
+
+        } catch (error) {
+            console.error('Failed to save checkpoint:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute restore_checkpoint - Restore conversation state from checkpoint
+     */
+    async _executeRestoreCheckpoint(toolCall) {
+        const { checkpoint_id } = toolCall;
+
+        if (!checkpoint_id) {
+            throw new Error('restore_checkpoint requires a checkpoint_id parameter');
+        }
+
+        try {
+            // Initialize checkpoint service if needed
+            if (!this.checkpointService) {
+                await this._initializeCheckpointService();
+            }
+
+            console.log(`🔄 Restoring checkpoint: ${checkpoint_id}`);
+
+            await this.checkpointService.restore(checkpoint_id);
+
+            console.log(`✅ Checkpoint restored: ${checkpoint_id}`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'restore_checkpoint',
+                content: `Checkpoint restored successfully!\n\nCheckpoint ID: ${checkpoint_id}\n\nWorkspace has been reset to the state saved in this checkpoint.`,
+                success: true,
+                details: {
+                    checkpointId: checkpoint_id
+                }
+            };
+
+        } catch (error) {
+            console.error(`Failed to restore checkpoint ${checkpoint_id}:`, error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute list_checkpoints - List all available checkpoints
+     */
+    async _executeListCheckpoints(toolCall) {
+        try {
+            // Initialize checkpoint service if needed
+            if (!this.checkpointService) {
+                await this._initializeCheckpointService();
+            }
+
+            console.log('📋 Listing checkpoints...');
+
+            const checkpoints = await this.checkpointService.listCheckpoints();
+
+            if (checkpoints.length === 0) {
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'list_checkpoints',
+                    content: 'No checkpoints found for this task.\n\nCreate a checkpoint using save_checkpoint to save the current state.',
+                    success: true,
+                    checkpoints: []
+                };
+            }
+
+            // Format checkpoint list
+            const checkpointList = checkpoints.map((cp, index) => {
+                const date = new Date(cp.timestamp).toLocaleString();
+                return `${index + 1}. ${cp.id}\n   Description: ${cp.description || 'No description'}\n   Created: ${date}`;
+            }).join('\n\n');
+
+            console.log(`✅ Found ${checkpoints.length} checkpoint(s)`);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_checkpoints',
+                content: `Found ${checkpoints.length} checkpoint(s):\n\n${checkpointList}\n\nUse restore_checkpoint with the checkpoint ID to restore any of these states.`,
+                success: true,
+                checkpoints
+            };
+
+        } catch (error) {
+            console.error('Failed to list checkpoints:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute ask_followup_question tool
+     * Allows AI to ask interactive questions with suggested answers
+     */
+    async _executeAskFollowupQuestion(toolCall) {
+        try {
+            const { question, suggested_answers, timeout, description } = toolCall;
+
+            if (!question) {
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'ask_followup_question',
+                    content: 'Error: question parameter is required',
+                    success: false
+                };
+            }
+
+            console.log('❓ [AskFollowupQuestion] Asking user:', question);
+
+            // Format suggested answers if provided
+            let suggestedAnswersText = '';
+            if (suggested_answers && Array.isArray(suggested_answers) && suggested_answers.length > 0) {
+                suggestedAnswersText = '\n\n**Suggested answers:**\n';
+                suggested_answers.forEach((answer, index) => {
+                    suggestedAnswersText += `${index + 1}. ${answer}\n`;
+                });
+                suggestedAnswersText += '\nOr provide your own answer.';
+            }
+
+            const fullQuestion = `${question}${suggestedAnswersText}`;
+
+            // Emit event to UI for interactive display
+            this.emit('followupQuestion', {
+                taskId: this.taskId,
+                question,
+                suggestedAnswers: suggested_answers || [],
+                timeout: timeout || this.settingsProvider.getAutoApproveFollowupTimeout(),
+                description
+            });
+
+            // Check if auto-approve is enabled for followup questions
+            const autoApproveEnabled = this.settingsProvider.getAutoApproveFollowupQuestions();
+            const followupTimeout = timeout || this.settingsProvider.getAutoApproveFollowupTimeout();
+
+            // Create promise that will resolve with user's answer
+            const answerPromise = new Promise((resolve, reject) => {
+                // Store resolver for later use
+                this._followupQuestionResolver = resolve;
+                this._followupQuestionRejector = reject;
+
+                // If auto-approve enabled, set timeout
+                if (autoApproveEnabled && followupTimeout > 0) {
+                    setTimeout(() => {
+                        console.log(`⏰ [AskFollowupQuestion] Timeout reached (${followupTimeout}ms), auto-selecting first suggested answer`);
+
+                        // Auto-select first suggested answer or return default response
+                        const defaultAnswer = suggested_answers && suggested_answers.length > 0
+                            ? suggested_answers[0]
+                            : 'Continue';
+
+                        resolve({
+                            answer: defaultAnswer,
+                            autoApproved: true,
+                            timedOut: true
+                        });
+                    }, followupTimeout);
+                }
+            });
+
+            // Wait for user response or timeout
+            const result = await answerPromise;
+
+            // Clean up resolver
+            delete this._followupQuestionResolver;
+            delete this._followupQuestionRejector;
+
+            console.log('✅ [AskFollowupQuestion] Received answer:', result.answer);
+
+            // Format response
+            let responseContent = `User's answer: ${result.answer}`;
+            if (result.autoApproved) {
+                responseContent += '\n\n(Auto-approved after timeout)';
+            }
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'ask_followup_question',
+                content: responseContent,
+                success: true,
+                answer: result.answer,
+                autoApproved: result.autoApproved || false,
+                timedOut: result.timedOut || false
+            };
+
+        } catch (error) {
+            console.error('❌ [AskFollowupQuestion] Error:', error);
+            this.errors.push(error);
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'ask_followup_question',
+                content: `Error asking followup question: ${error.message}`,
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Handle user's answer to followup question
+     * Called from UI when user responds
+     */
+    respondToFollowupQuestion(answer) {
+        if (this._followupQuestionResolver) {
+            this._followupQuestionResolver({
+                answer,
+                autoApproved: false,
+                timedOut: false
+            });
+        } else {
+            console.warn('⚠️ [AskFollowupQuestion] No pending followup question to respond to');
         }
     }
 
