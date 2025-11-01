@@ -558,6 +558,30 @@
         "title": "Insert Folder Mention",
         "category": "Oropendola",
         "icon": "$(folder)"
+      },
+      {
+        "command": "oropendola.showHistory",
+        "title": "History",
+        "category": "Oropendola",
+        "icon": "$(history)"
+      },
+      {
+        "command": "oropendola.showSettings",
+        "title": "Settings",
+        "category": "Oropendola",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "oropendola.showAccount",
+        "title": "Account",
+        "category": "Oropendola",
+        "icon": "$(account)"
+      },
+      {
+        "command": "oropendola.showMoreOptions",
+        "title": "More Options",
+        "category": "Oropendola",
+        "icon": "$(kebab-vertical)"
       }
     ],
     "views": {
@@ -1131,10 +1155,487 @@
           "minimum": 1000,
           "maximum": 300000,
           "description": "Timeout in milliseconds before auto-answering followup questions"
+        },
+        "oropendola.ai.model": {
+          "type": "string",
+          "enum": [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+            "claude-3-haiku-20240307",
+            "gpt-4-turbo-preview",
+            "gpt-4",
+            "gpt-3.5-turbo"
+          ],
+          "default": "claude-3-5-sonnet-20241022",
+          "description": "AI model to use (only applies when Agent Mode is disabled)",
+          "enumDescriptions": [
+            "Claude 3.5 Sonnet - Best overall (200K context)",
+            "Claude 3 Opus - Most capable (200K context)",
+            "Claude 3 Sonnet - Balanced (200K context)",
+            "Claude 3 Haiku - Fastest (200K context)",
+            "GPT-4 Turbo - Extended context (128K)",
+            "GPT-4 - Standard (8K context)",
+            "GPT-3.5 Turbo - Fast and economical (16K context)"
+          ]
+        },
+        "oropendola.ai.apiProvider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai",
+            "auto"
+          ],
+          "default": "auto",
+          "description": "AI API provider (auto = determined by selected model)",
+          "enumDescriptions": [
+            "Anthropic (Claude models)",
+            "OpenAI (GPT models)",
+            "Auto-detect from model selection"
+          ]
+        },
+        "oropendola.ai.streamingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable streaming responses for faster feedback"
+        },
+        "oropendola.ai.cacheEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable prompt caching for faster responses and lower costs"
+        },
+        "oropendola.cost.trackingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Track API usage and costs"
+        },
+        "oropendola.cost.budgetLimit": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Monthly budget limit in USD (0 = unlimited)"
+        },
+        "oropendola.cost.alertThreshold": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Alert when reaching this percentage of budget limit (0.8 = 80%)"
+        },
+        "oropendola.fileOperations.maxFileSize": {
+          "type": "number",
+          "default": 1048576,
+          "minimum": 1024,
+          "maximum": 104857600,
+          "description": "Maximum file size in bytes that can be read or written (default: 1MB)"
+        },
+        "oropendola.fileOperations.maxLineCount": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 100,
+          "maximum": 100000,
+          "description": "Maximum number of lines that can be read from a file"
+        },
+        "oropendola.fileOperations.protectedPatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "*.env",
+            ".env*",
+            "*.key",
+            "*.pem",
+            "*.crt",
+            "package.json",
+            "package-lock.json",
+            "yarn.lock"
+          ],
+          "description": "File patterns that require manual approval (glob patterns)"
+        },
+        "oropendola.commandExecution.timeout": {
+          "type": "number",
+          "default": 120,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "Maximum command execution time in seconds"
+        },
+        "oropendola.commandExecution.allowedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Whitelist of commands that can be executed without approval (empty = allow all)"
+        },
+        "oropendola.commandExecution.deniedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "rm -rf *",
+            "rm -rf /",
+            "dd if=*",
+            "mkfs.*",
+            ":(){ :|:& };:",
+            "> /dev/sda",
+            "mv * /dev/null"
+          ],
+          "description": "Blacklist of dangerous commands that should never be executed"
+        },
+        "oropendola.commandExecution.requireApproval": {
+          "type": "boolean",
+          "default": true,
+          "description": "Always ask before executing commands"
+        },
+        "oropendola.browserAutomation.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable browser automation for testing and web scraping"
+        },
+        "oropendola.browserAutomation.headless": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run browser in headless mode (no visible UI)"
+        },
+        "oropendola.browserAutomation.timeout": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Browser operation timeout in seconds"
+        },
+        "oropendola.browserAutomation.maxSessions": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of concurrent browser sessions"
+        },
+        "oropendola.imageGeneration.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable AI image generation capabilities"
+        },
+        "oropendola.imageGeneration.provider": {
+          "type": "string",
+          "enum": [
+            "dall-e",
+            "stable-diffusion",
+            "midjourney"
+          ],
+          "default": "dall-e",
+          "description": "Image generation service provider",
+          "enumDescriptions": [
+            "DALL-E (OpenAI) - High-quality images",
+            "Stable Diffusion - Open-source",
+            "Midjourney - Artistic images"
+          ]
+        },
+        "oropendola.imageGeneration.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for image generation service"
+        },
+        "oropendola.imageGeneration.maxImages": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of images to generate per request"
+        },
+        "oropendola.mcpServers.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Model Context Protocol servers"
+        },
+        "oropendola.mcpServers.autoConnect": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically connect to MCP servers on startup"
+        },
+        "oropendola.mcpServers.reconnectAttempts": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Number of reconnection attempts if server crashes"
+        },
+        "oropendola.ui.theme": {
+          "type": "string",
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ],
+          "default": "system",
+          "description": "Color theme for the extension UI"
+        },
+        "oropendola.ui.fontSize": {
+          "type": "number",
+          "default": 14,
+          "minimum": 10,
+          "maximum": 24,
+          "description": "Font size in pixels for the chat interface"
+        },
+        "oropendola.ui.syntaxHighlighting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable syntax highlighting in code blocks"
+        },
+        "oropendola.ui.diffView": {
+          "type": "object",
+          "default": {
+            "inline": true,
+            "showLineNumbers": true,
+            "wordWrap": false,
+            "contextLines": 3
+          },
+          "description": "Diff view preferences for code changes"
+        },
+        "oropendola.ui.notifications": {
+          "type": "object",
+          "default": {
+            "enabled": true,
+            "taskComplete": true,
+            "taskError": true,
+            "desktop": false,
+            "sound": true
+          },
+          "description": "Notification preferences"
+        },
+        "oropendola.ui.soundEffects": {
+          "type": "object",
+          "default": {
+            "enabled": true,
+            "volume": 0.5,
+            "messageReceived": true,
+            "taskComplete": true,
+            "error": true
+          },
+          "description": "Sound effects settings"
+        },
+        "oropendola.ui.panelPosition": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right",
+            "bottom"
+          ],
+          "default": "left",
+          "description": "Panel position in VS Code"
+        },
+        "oropendola.ui.keyboardShortcuts": {
+          "type": "object",
+          "default": {},
+          "description": "Custom keyboard shortcuts"
+        },
+        "oropendola.workspace.rooignore": {
+          "type": "object",
+          "default": {
+            "enabled": true,
+            "patterns": [
+              "node_modules/",
+              ".git/",
+              "dist/",
+              "build/",
+              "*.log",
+              ".env",
+              ".DS_Store",
+              "coverage/",
+              "__pycache__/",
+              "*.pyc"
+            ]
+          },
+          "description": ".rooignore configuration for workspace operations"
+        },
+        "oropendola.workspace.protectedFiles": {
+          "type": "object",
+          "default": {
+            "enabled": true,
+            "patterns": [
+              "*.env",
+              ".env*",
+              "*.key",
+              "*.pem",
+              "secrets/*",
+              "config/production.*"
+            ],
+            "warnBeforeEdit": true,
+            "requireApproval": true
+          },
+          "description": "Protected file patterns and settings"
+        },
+        "oropendola.workspace.autoSave": {
+          "type": "object",
+          "default": {
+            "enabled": true,
+            "delay": 1000,
+            "onFocusChange": true,
+            "onWindowChange": false
+          },
+          "description": "Auto-save preferences after AI changes"
+        },
+        "oropendola.workspace.git": {
+          "type": "object",
+          "default": {
+            "enabled": false,
+            "autoStage": false,
+            "autoCommit": false,
+            "commitMessageTemplate": "feat: {description}\n\nGenerated by Oropendola AI",
+            "showDiffBeforeCommit": true
+          },
+          "description": "Git integration settings"
+        },
+        "oropendola.workspace.indexing": {
+          "type": "object",
+          "default": {
+            "enabled": true,
+            "autoIndex": true,
+            "indexOnSave": true,
+            "excludePatterns": [
+              "test/*",
+              "*.test.js",
+              "*.spec.js"
+            ],
+            "includeFileTypes": [
+              "js",
+              "jsx",
+              "ts",
+              "tsx",
+              "py",
+              "java",
+              "c",
+              "cpp",
+              "go",
+              "rs"
+            ],
+            "maxFileSize": 5242880
+          },
+          "description": "Workspace indexing configuration"
+        },
+        "oropendola.advanced.debug": {
+          "type": "object",
+          "default": {
+            "enabled": false,
+            "verboseLogging": false,
+            "logToFile": false,
+            "logFilePath": "",
+            "showTimestamps": true
+          },
+          "description": "Debug mode configuration"
+        },
+        "oropendola.advanced.logging": {
+          "type": "object",
+          "default": {
+            "level": "info",
+            "includeSources": [],
+            "excludeSources": [],
+            "maxLogSize": 10485760,
+            "rotateOnSize": true
+          },
+          "description": "Logging configuration"
+        },
+        "oropendola.advanced.performance": {
+          "type": "object",
+          "default": {
+            "enabled": false,
+            "trackMemoryUsage": true,
+            "trackResponseTime": true,
+            "trackTokenUsage": true,
+            "displayInStatusBar": false,
+            "alertOnHighUsage": false,
+            "memoryThreshold": 524288000,
+            "responseTimeThreshold": 5000
+          },
+          "description": "Performance monitoring settings"
+        },
+        "oropendola.advanced.experimental": {
+          "type": "object",
+          "default": {
+            "enableAll": false,
+            "features": {
+              "enhancedCodeAnalysis": false,
+              "advancedRefactoring": false,
+              "multiFileEditing": false,
+              "smartSuggestions": false,
+              "codeGeneration": false,
+              "testGeneration": false,
+              "documentationGeneration": false,
+              "voiceInput": false
+            }
+          },
+          "description": "Experimental features configuration"
+        },
+        "oropendola.prompts.currentMode": {
+          "type": "string",
+          "default": "code",
+          "description": "Currently active mode"
+        },
+        "oropendola.prompts.customModes": {
+          "type": "array",
+          "default": [],
+          "description": "User-created custom modes with prompts and variables"
+        },
+        "oropendola.codeIndex.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable advanced code indexing with Qdrant"
+        },
+        "oropendola.codeIndex.qdrantUrl": {
+          "type": "string",
+          "default": "http://localhost:6333",
+          "description": "Qdrant vector database URL"
+        },
+        "oropendola.codeIndex.embeddingProvider": {
+          "type": "string",
+          "enum": [
+            "openai"
+          ],
+          "default": "openai",
+          "description": "Embedding provider for code vectorization"
+        },
+        "oropendola.codeIndex.embeddingApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for embedding provider"
+        },
+        "oropendola.codeIndex.autoIndex": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically index files on save"
+        },
+        "oropendola.codeIndex.indexOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Index workspace when VS Code starts"
         }
       }
     },
     "menus": {
+      "view/title": [
+        {
+          "command": "oropendola.showHistory",
+          "when": "view == oropendola.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "oropendola.showSettings",
+          "when": "view == oropendola.chatView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "oropendola.showAccount",
+          "when": "view == oropendola.chatView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "oropendola.showMoreOptions",
+          "when": "view == oropendola.chatView",
+          "group": "navigation@4"
+        }
+      ],
       "commandPalette": [
         {
           "command": "oropendola.setup",
@@ -1316,12 +1817,24 @@
     "test:nolint": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:performance": "node tests/performance/benchmarks.js",
+    "test:a11y": "playwright test tests/a11y",
+    "test:all": "npm run test && npm run test:e2e && npm run test:performance && npm run test:a11y",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && node esbuild.config.js",
     "build:production": "npm run typecheck && NODE_ENV=production node esbuild.config.js",
     "build:webview": "cd webview-ui && npm run build",
     "watch": "node esbuild.config.js --watch",
     "clean": "rimraf dist out",
+    "version:bump": "./scripts/version-bump.sh",
+    "version:bump:minor": "./scripts/version-bump.sh minor",
+    "version:bump:major": "./scripts/version-bump.sh major",
+    "prerelease": "./scripts/pre-release-check.sh",
+    "deploy": "./scripts/deploy.sh",
+    "deploy:dry-run": "./scripts/deploy.sh --dry-run",
     "vscode:prepublish": "npm run build:production",
     "package": "npm run vscode:prepublish && vsce package",
     "publish": "npm run vscode:prepublish && vsce publish"
@@ -1340,6 +1853,7 @@
     "mammoth": "^1.11.0",
     "minimatch": "^9.0.5",
     "pdf-parse": "^2.4.5",
+    "puppeteer": "^24.27.0",
     "simple-git": "^3.21.0",
     "socket.io-client": "^4.8.1",
     "sqlite": "^5.1.1",
@@ -1348,6 +1862,7 @@
     "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/exceljs": "^0.5.3",
     "@types/jest": "^30.0.0",
@@ -1357,8 +1872,11 @@
     "@vitest/coverage-v8": "^3.2.3",
     "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^2.22.0",
+    "axe-core": "^4.8.0",
+    "axe-playwright": "^1.2.3",
     "esbuild": "^0.25.0",
     "eslint": "^8.55.0",
+    "playwright": "^1.56.1",
     "prettier": "^3.1.0",
     "rimraf": "^6.0.1",
     "sharp": "^0.34.4",

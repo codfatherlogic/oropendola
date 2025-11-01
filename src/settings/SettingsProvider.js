@@ -15,7 +15,7 @@ class SettingsProvider {
 
     onConfigChanged() {
         // Notify listeners or trigger actions based on settings changes
-        vscode.window.showInformationMessage('Oropendola settings updated');
+        console.log('Oropendola settings updated');
     }
 
     // Server settings

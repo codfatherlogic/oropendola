@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './AppIntegrated.css';
 import './styles/App.css';
 import './styles/RooCode.css';
 import './styles/EnhancedTodo.css';

@@ -20,6 +20,17 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed'
 }
 
+export interface Subscription {
+  plan_name: string
+  status: 'Active' | 'Trial' | 'Expired' | 'Cancelled' | 'Pending'
+  start_date: string
+  end_date: string
+  is_active: boolean
+  is_trial: boolean
+  days_remaining: number
+  expired_days_ago?: number
+}
+
 interface ChatContextValue {
   // Messages
   messages: ClineMessage[]
@@ -31,6 +42,9 @@ interface ChatContextValue {
   // Authentication
   isAuthenticated: boolean
   authMessage: string | null
+
+  // Subscription
+  subscription: Subscription | null
 
   // Auto-approval
   autoApprovalEnabled: boolean
@@ -91,6 +105,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authMessage, setAuthMessage] = useState<string | null>(null)
 
+  // Subscription state
+  const [subscription, setSubscription] = useState<Subscription | null>(null)
+
   const [autoApprovalEnabled, setAutoApprovalEnabledState] = useState(false)
   const [autoApproveToggles, setAutoApproveToggles] = useState<AutoApproveToggles>({})
   const [reasoningBlockCollapsed, setReasoningBlockCollapsedState] = useState(false)
@@ -143,6 +160,14 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           setIsAuthenticated(message.isAuthenticated)
           setAuthMessage(message.message || null)
           console.log(`🔐 [ChatContext] Set isAuthenticated=${message.isAuthenticated}, authMessage="${message.message}"`)
+          break
+
+        case 'accountData':
+          // Update subscription data from account data
+          if (message.data?.subscription) {
+            console.log('📊 [ChatContext] Received subscription data:', message.data.subscription)
+            setSubscription(message.data.subscription)
+          }
           break
 
         case 'showSignInPrompt':
@@ -402,6 +427,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     error,
     isAuthenticated,
     authMessage,
+    subscription,
     autoApprovalEnabled,
     autoApproveToggles,
     reasoningBlockCollapsed,

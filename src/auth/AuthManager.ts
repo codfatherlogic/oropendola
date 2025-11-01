@@ -128,7 +128,7 @@ export class EnhancedAuthManager implements vscode.Disposable {
             await this.context.globalState.update('currentUser', undefined);
         if (this.refreshTimer) { clearInterval(this.refreshTimer as unknown as number); }
             this.updateStatusBar(false, '');
-            vscode.window.showInformationMessage('✅ Logged out successfully');
+            console.log('✅ Logged out successfully');
         } catch (error) { console.error('Logout failed:', error); }
     }
 

@@ -18,6 +18,7 @@ import { SimpleTaskHeader } from './SimpleTaskHeader'
 import { RooStyleTextArea } from './RooStyleTextArea'
 import { ChatRow } from './ChatRow'
 import { TaskMetrics } from './TaskMetrics'
+import vscode from '../../vscode-api'
 import { ContextWindowProgress } from './ContextWindowProgress'
 import { EnhancePromptButton } from './EnhancePromptButton'
 import { FollowupQuestionPrompt } from './FollowupQuestionPrompt'
@@ -26,6 +27,7 @@ import { ShortcutsPanel } from '../Shortcuts'
 import { ContextPanel } from '../Context'
 import { CommandAutocomplete } from '../Commands'
 import { MentionAutocomplete } from '../Mentions'
+import { SubscriptionBanner } from './SubscriptionBanner'
 import { useShortcutHandlers } from '../../hooks/useKeyboardShortcuts'
 import { useAutoCondense } from '../../hooks/useAutoCondense'
 import { useSoundNotifications } from '../../hooks/useSoundNotifications'
@@ -74,8 +76,7 @@ interface ChatViewProps {
   }
 
   // Navigation callbacks (Roo Code pattern)
-  onOpenHistory?: () => void
-  onOpenSettings?: () => void
+  onOpenAccount?: () => void
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -96,6 +97,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onCondenseContext,
   onFollowupAnswer,
   followupQuestion,
+  onOpenAccount,
 }) => {
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
   const [inputValue, setInputValue] = useState('')
@@ -121,17 +123,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
   // Sound notifications
   const soundNotifications = useSoundNotifications({ enabled: true, volume: 0.3 })
 
-  // Get fork state from context
+  // Get fork state and subscription from context
   const {
     allBranches,
     activeBranch,
     hasForks,
+    subscription,
     createFork,
     switchBranch,
     renameBranch,
     deleteBranch,
     getChildBranches,
   } = useChatContext()
+
+  // Process messages for display (moved up for use in effects)
+  const visibleMessages = processMessagesForDisplay(messages)
+
+  // Find the last message that needs approval (moved up to fix hoisting issue)
+  const lastApprovalMessage = visibleMessages
+    .slice()
+    .reverse()
+    .find(msg => isApprovalMessage(msg) && !shouldAutoApprove(msg, {
+      autoApprovalEnabled,
+      ...autoApproveToggles
+    }))
 
   // Initialize built-in commands once
   useEffect(() => {
@@ -197,15 +212,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const placeholderText = getPlaceholderForMode(mode)
 
-  // Process messages for display (combining, filtering)
-  const visibleMessages = processMessagesForDisplay(messages)
-
   // Detect if AI is currently streaming a response
   const isStreaming = visibleMessages.some(msg => msg.partial === true)
 
   // Calculate metrics from all messages
   const metrics = getApiMetrics(messages)
-  
+
   // Calculate task-specific metrics (Roo-Code pattern)
   const taskMetrics = getTaskMetrics(messages, taskMessage?.ts)
   const totalTokens = getTotalTokens(taskMetrics)
@@ -218,15 +230,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     enabled: true,
     onCondense: onCondenseContext,
   })
-
-  // Find the last message that needs approval
-  const lastApprovalMessage = visibleMessages
-    .slice()
-    .reverse()
-    .find(msg => isApprovalMessage(msg) && !shouldAutoApprove(msg, {
-      autoApprovalEnabled,
-      ...autoApproveToggles
-    }))
 
   // Listen for images selected from extension
   useEffect(() => {
@@ -457,6 +460,11 @@ Please provide a detailed response with:
     setShowContextPanel(false)
   }, [])
 
+  // Handle subscription renewal
+  const handleRenewSubscription = useCallback(() => {
+    vscode.postMessage({ type: 'openPricingPage' })
+  }, [])
+
   // Keyboard shortcuts
   useShortcutHandlers([
     {
@@ -599,6 +607,12 @@ Please provide a detailed response with:
           )}
         </div>
       )}
+
+      {/* Subscription Banner - Show when subscription/trial expired */}
+      <SubscriptionBanner
+        subscription={subscription}
+        onRenew={handleRenewSubscription}
+      />
 
       {/* Message list */}
       <div className="chat-view-messages" ref={messageListRef}>

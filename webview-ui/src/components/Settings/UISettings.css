@@ -1,0 +1,498 @@
+/* UI/UX Settings Styles */
+
+.ui-settings {
+  margin-bottom: 32px;
+}
+
+/* Theme Selector */
+.theme-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.theme-card {
+  padding: 16px;
+  border: 2px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--vscode-editor-background);
+  text-align: center;
+}
+
+.theme-card:hover {
+  border-color: var(--vscode-focusBorder);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.theme-card.selected {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+.theme-preview {
+  width: 100%;
+  height: 80px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.system-preview {
+  display: flex;
+}
+
+.system-preview .preview-section {
+  flex: 1;
+}
+
+.system-preview .light {
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+}
+
+.system-preview .dark {
+  background: linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%);
+}
+
+.light-preview {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+}
+
+.dark-preview {
+  background: linear-gradient(135deg, #1e1e1e 0%, #0d0d0d 100%);
+}
+
+.theme-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--vscode-foreground);
+  margin-bottom: 4px;
+}
+
+.theme-description {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Font Size Slider */
+.font-size-slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.font-size-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.font-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--vscode-button-background);
+  cursor: pointer;
+}
+
+.font-size-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--vscode-button-background);
+  cursor: pointer;
+  border: none;
+}
+
+.font-size-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+  min-width: 50px;
+  text-align: right;
+}
+
+.font-size-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* Volume Slider */
+.volume-slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.volume-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--vscode-button-background);
+  cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--vscode-button-background);
+  cursor: pointer;
+  border: none;
+}
+
+.slider-label {
+  font-size: 14px;
+  color: var(--vscode-descriptionForeground);
+  min-width: 30px;
+  text-align: center;
+}
+
+.slider-label:first-child {
+  text-align: right;
+}
+
+/* Sound Events */
+.sound-events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.sound-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--vscode-editor-background);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.sound-event-label {
+  font-size: 13px;
+  color: var(--vscode-foreground);
+}
+
+/* Panel Position Cards */
+.panel-position-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.position-card {
+  padding: 16px;
+  border: 2px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--vscode-editor-background);
+  text-align: center;
+}
+
+.position-card:hover {
+  border-color: var(--vscode-focusBorder);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.position-card.selected {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+.position-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.position-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  margin-bottom: 4px;
+}
+
+.position-description {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Diff View Settings */
+.diff-view-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding-left: 16px;
+  border-left: 2px solid var(--vscode-panel-border);
+}
+
+.diff-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diff-setting-label {
+  font-size: 13px;
+  color: var(--vscode-foreground);
+}
+
+.context-lines-input {
+  width: 80px;
+  padding: 6px 10px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+}
+
+.context-lines-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* Notification Settings */
+.notification-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding-left: 16px;
+  border-left: 2px solid var(--vscode-panel-border);
+}
+
+.notification-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notification-label {
+  font-size: 13px;
+  color: var(--vscode-foreground);
+}
+
+.notification-label.disabled {
+  color: var(--vscode-disabledForeground);
+}
+
+/* Keyboard Shortcuts */
+.shortcuts-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shortcuts-category {
+  background: var(--vscode-editor-background);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.shortcuts-category-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.shortcuts-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--vscode-input-background);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.shortcut-name {
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  flex: 1;
+}
+
+.shortcut-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcut-key {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  padding: 4px 10px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  color: var(--vscode-textLink-foreground);
+  min-width: 100px;
+  text-align: center;
+}
+
+.shortcut-input {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  padding: 4px 10px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  min-width: 100px;
+  text-align: center;
+}
+
+.shortcut-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.shortcut-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.shortcut-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.shortcut-btn.save {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.shortcut-btn.save:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.shortcut-btn.reset {
+  color: var(--vscode-errorForeground);
+}
+
+.shortcuts-footer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vscode-panel-border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reset-all-btn {
+  padding: 8px 16px;
+  font-size: 12px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-all-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Preset Buttons (shared) */
+.preset-btn {
+  padding: 6px 12px;
+  font-size: 11px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.preset-btn.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .theme-cards,
+  .panel-position-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .font-size-slider-wrapper,
+  .volume-slider-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .slider-label {
+    text-align: left !important;
+  }
+
+  .font-size-value {
+    text-align: left;
+  }
+
+  .shortcut-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .shortcut-controls {
+    justify-content: space-between;
+  }
+
+  .shortcut-key,
+  .shortcut-input {
+    min-width: 0;
+    flex: 1;
+  }
+}

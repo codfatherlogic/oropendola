@@ -13,6 +13,7 @@
 const EventEmitter = require('events');
 const vscode = require('vscode');
 const FileChangeTracker = require('../utils/file-change-tracker');
+const FileContextTracker = require('./FileContextTracker');
 const RealtimeManager = require('./RealtimeManager');
 const { MessageQueueService } = require('./MessageQueueService');
 const SearchReplaceDiffStrategy = require('./diff/SearchReplaceDiffStrategy');
@@ -81,6 +82,9 @@ class ConversationTask extends EventEmitter {
         this.taskStartTime = null;
         this.taskEndTime = null;
         this.errors = [];
+
+        // File context tracking (Roo-Code pattern)
+        this.fileContextTracker = new FileContextTracker();
 
         // Diff strategy for apply_diff tool
         this.diffStrategy = new SearchReplaceDiffStrategy();
@@ -1962,7 +1966,7 @@ ${dynamicContext}\`;
                 return await this._executeDeleteFile(path, description);
 
             case 'read_file':
-                return await this._executeReadFile(path);
+                return await this._executeReadFile(toolCall);
 
             case 'run_terminal':
             case 'run_terminal_command':
@@ -1994,6 +1998,12 @@ ${dynamicContext}\`;
             case 'list_code_definition_names':
                 return await this._executeListCodeDefinitionNames(toolCall);
 
+            case 'list_files':
+                return await this._executeListFiles(toolCall);
+
+            case 'search_files':
+                return await this._executeSearchFiles(toolCall);
+
             case 'insert_content':
                 return await this._executeInsertContent(toolCall);
 
@@ -2018,8 +2028,20 @@ ${dynamicContext}\`;
             case 'list_checkpoints':
                 return await this._executeListCheckpoints(toolCall);
 
+            case 'get_checkpoint_diff':
+                return await this._executeGetCheckpointDiff(toolCall);
+
             case 'ask_followup_question':
                 return await this._executeAskFollowupQuestion(toolCall);
+
+            case 'browser_action':
+                return await this._executeBrowserAction(toolCall);
+
+            case 'generate_image':
+                return await this._executeGenerateImage(toolCall);
+
+            case 'run_slash_command':
+                return await this._executeRunSlashCommand(toolCall);
 
             default:
                 throw new Error(`Unknown tool action: ${action}`);
@@ -2027,44 +2049,91 @@ ${dynamicContext}\`;
     }
 
     /**
-     * Execute create_file tool
+     * Emit streaming progress update
+     * Used by tools to send partial updates to UI
+     *
+     * @param {string} toolName - Name of the tool
+     * @param {string} status - Status message
+     * @param {object} data - Additional data
+     */
+    _emitStreamingUpdate(toolName, status, data = {}) {
+        this.emit('toolProgress', {
+            taskId: this.taskId,
+            toolName,
+            status,
+            timestamp: Date.now(),
+            ...data
+        });
+    }
+
+    /**
+     * Track file access in context tracker
+     *
+     * @param {string} filePath - Path to file
+     * @param {string} operation - Operation type (read, write, modify, delete)
+     * @param {object} metadata - Additional metadata
+     */
+    _trackFileAccess(filePath, operation, metadata = {}) {
+        return this.fileContextTracker.trackAccess(filePath, operation, {
+            taskId: this.taskId,
+            timestamp: Date.now(),
+            ...metadata
+        });
+    }
+
+    /**
+     * Execute create_file tool - Enhanced with validation and line number stripping
      */
     async _executeCreateFile(filePath, content, description) {
         const fs = require('fs').promises;
         const pathModule = require('path');
 
         try {
-            // Track file change - GENERATING
-            const change = this.fileChangeTracker.addChange(filePath, 'create', {
-                description,
-                newContent: typeof content === 'object' ? JSON.stringify(content, null, 2) : content
-            });
-            this.emit('fileChangeAdded', change);
-
-            // Update status - APPLYING
-            this.fileChangeTracker.updateStatus(filePath, 'applying');
-            this.emit('fileChangeUpdated', change);
+            // Emit streaming start
+            this._emitStreamingUpdate('create_file', 'started', { filePath, description });
 
             // Get workspace path
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
                 throw new Error('No workspace folder open');
             }
-
             const workspacePath = workspaceFolders[0].uri.fsPath;
             const fullPath = pathModule.join(workspacePath, filePath);
+
+            // Handle content - convert object to string if needed
+            this._emitStreamingUpdate('create_file', 'processing', { filePath, step: 'preparing content' });
+            let fileContent = content || '';
+            if (typeof fileContent === 'object') {
+                fileContent = JSON.stringify(fileContent, null, 2);
+                console.log(`ℹ️ Converted object content to JSON string for ${filePath}`);
+            }
+
+            // Strip line numbers if present (AI sometimes adds them)
+            fileContent = this._stripLineNumbers(fileContent);
+
+            // Track file change - GENERATING
+            const change = this.fileChangeTracker.addChange(filePath, 'create', {
+                description,
+                newContent: fileContent
+            });
+            this.emit('fileChangeAdded', change);
+
+            // Track file context
+            this._trackFileAccess(filePath, 'create', {
+                tool: 'create_file',
+                description,
+                lineCount: fileContent.split('\n').length,
+                size: fileContent.length
+            });
+
+            // Update status - APPLYING
+            this._emitStreamingUpdate('create_file', 'writing', { filePath, step: 'creating file' });
+            this.fileChangeTracker.updateStatus(filePath, 'applying');
+            this.emit('fileChangeUpdated', change);
 
             // Create directory if needed
             const dirPath = pathModule.dirname(fullPath);
             await fs.mkdir(dirPath, { recursive: true });
-
-            // Handle content - convert object to string if needed
-            let fileContent = content || '';
-            if (typeof fileContent === 'object') {
-                // AI sometimes sends JSON objects instead of strings for package.json
-                fileContent = JSON.stringify(fileContent, null, 2);
-                console.log(`ℹ️ Converted object content to JSON string for ${filePath}`);
-            }
 
             // Write file
             await fs.writeFile(fullPath, fileContent, 'utf8');
@@ -2076,15 +2145,17 @@ ${dynamicContext}\`;
             this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
 
             // Open file in editor
+            this._emitStreamingUpdate('create_file', 'opening', { filePath, step: 'opening in editor' });
             const document = await vscode.workspace.openTextDocument(fullPath);
             await vscode.window.showTextDocument(document);
 
-            console.log(`✅ Created file: ${filePath}`);
+            this._emitStreamingUpdate('create_file', 'completed', { filePath, success: true });
+            console.log(`✅ Created file: ${filePath} (${fileContent.split('\n').length} lines)`);
 
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'create_file',
-                content: `Successfully created file: ${filePath}`,
+                content: `Successfully created file: ${filePath} with ${fileContent.split('\n').length} lines`,
                 success: true
             };
 
@@ -2095,42 +2166,232 @@ ${dynamicContext}\`;
             });
             this.errors.push(error);
             this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+            this._emitStreamingUpdate('create_file', 'failed', { filePath, error: error.message });
 
             throw new Error(`Failed to create file ${filePath}: ${error.message}`);
         }
     }
 
     /**
-     * Execute modify_file tool
+     * Execute modify_file tool - Enhanced with validation and code omission detection
      */
-    async _executeModifyFile(filePath, newContent, _description) {
+    async _executeModifyFile(filePath, newContent, description) {
         const fs = require('fs').promises;
         const pathModule = require('path');
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('modify_file', 'started', {
+                filePath,
+                description
+            });
+
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
                 throw new Error('No workspace folder open');
             }
-
             const workspacePath = workspaceFolders[0].uri.fsPath;
             const fullPath = pathModule.join(workspacePath, filePath);
 
-            // Write updated content
-            await fs.writeFile(fullPath, newContent, 'utf8');
+            // Emit streaming update - reading original
+            this._emitStreamingUpdate('modify_file', 'processing', {
+                filePath,
+                step: 'reading original content'
+            });
 
-            console.log(`✅ Modified file: ${filePath}`);
+            // Read original content for comparison
+            let originalContent = '';
+            try {
+                originalContent = await fs.readFile(fullPath, 'utf8');
+            } catch (error) {
+                // File might not exist, that's okay for modify
+            }
+
+            // Emit streaming update - processing content
+            this._emitStreamingUpdate('modify_file', 'processing', {
+                filePath,
+                step: 'processing content'
+            });
+
+            // Strip line numbers if present
+            let processedContent = this._stripLineNumbers(newContent);
+
+            // Detect code omissions
+            const omissionDetected = this._detectCodeOmission(processedContent);
+            if (omissionDetected) {
+                console.warn(`⚠️ Code omission detected in ${filePath}: ${omissionDetected}`);
+
+                // Create warning but don't block - show diff instead
+                const lines = processedContent.split('\n');
+                const omissionInfo = `\n\n⚠️ WARNING: Detected possible code omission:\n"${omissionDetected}"\n\nFile has ${lines.length} lines. Please verify completeness before applying.`;
+
+                // Track change with warning
+                this.fileChangeTracker.addChange(filePath, 'modify', {
+                    description: description || 'Modify file',
+                    oldContent: originalContent,
+                    newContent: processedContent,
+                    warning: omissionInfo
+                });
+            }
+
+            // Track file change
+            this.fileChangeTracker.addChange(filePath, 'modify', {
+                description: description || 'Modify file',
+                oldContent: originalContent,
+                newContent: processedContent
+            });
+            this.fileChangeTracker.updateStatus(filePath, 'applying');
+
+            // Emit streaming update - writing
+            this._emitStreamingUpdate('modify_file', 'writing', {
+                filePath,
+                step: 'writing file'
+            });
+
+            // Write updated content
+            await fs.writeFile(fullPath, processedContent, 'utf8');
+
+            // Update status
+            this.fileChangeTracker.updateStatus(filePath, 'applied', {
+                newContent: processedContent
+            });
+
+            // Track file access for context
+            const lineCount = processedContent.split('\n').length;
+            this._trackFileAccess(filePath, 'modify', {
+                tool: 'modify_file',
+                description,
+                lineCount,
+                size: processedContent.length,
+                hasOmissionWarning: !!omissionDetected
+            });
+
+            // Emit streaming update - opening
+            this._emitStreamingUpdate('modify_file', 'opening', {
+                filePath,
+                step: 'opening in editor'
+            });
+
+            // Open file in editor to show changes
+            const document = await vscode.workspace.openTextDocument(fullPath);
+            await vscode.window.showTextDocument(document);
+
+            console.log(`✅ Modified file: ${filePath} (${lineCount} lines)`);
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('modify_file', 'completed', {
+                filePath,
+                success: true,
+                lineCount
+            });
 
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'modify_file',
-                content: `Successfully modified file: ${filePath}`,
+                content: `Successfully modified file: ${filePath} (${lineCount} lines)` +
+                        (omissionDetected ? `\n⚠️ Warning: Possible code omission detected` : ''),
                 success: true
             };
 
         } catch (error) {
+            // Track error
+            this.fileChangeTracker.updateStatus(filePath, 'failed', {
+                error: error.message
+            });
+
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('modify_file', 'failed', {
+                filePath,
+                error: error.message
+            });
+
             throw new Error(`Failed to modify file ${filePath}: ${error.message}`);
         }
+    }
+
+    /**
+     * Strip line numbers from content
+     * Detects and removes line numbers that AI sometimes adds
+     */
+    _stripLineNumbers(content) {
+        if (!content || typeof content !== 'string') {
+            return content;
+        }
+
+        const lines = content.split('\n');
+
+        // Check if content has line numbers (most lines start with "number: " or "number ")
+        let linesWithNumbers = 0;
+        for (let i = 0; i < Math.min(10, lines.length); i++) {
+            if (/^\s*\d+[\s:→]\s+/.test(lines[i])) {
+                linesWithNumbers++;
+            }
+        }
+
+        // If more than 70% of first 10 lines have numbers, strip them all
+        if (linesWithNumbers > 7) {
+            return lines.map(line => {
+                // Remove line numbers like "123: ", "123 ", "123→ "
+                return line.replace(/^\s*\d+[\s:→]\s+/, '');
+            }).join('\n');
+        }
+
+        return content;
+    }
+
+    /**
+     * Detect code omission patterns that indicate truncated or incomplete code
+     * Returns the detected pattern or null
+     */
+    _detectCodeOmission(content) {
+        if (!content || typeof content !== 'string') {
+            return null;
+        }
+
+        // Common patterns that indicate omitted code
+        const omissionPatterns = [
+            // Comments indicating omission
+            /\/\/\s*\.\.\.rest of.*code/i,
+            /\/\/\s*rest of.*code/i,
+            /\/\/\s*previous.*code/i,
+            /\/\/\s*existing.*code/i,
+            /\/\/\s*unchanged.*code/i,
+            /\/\/\s*same.*as before/i,
+            /\/\/\s*keep.*existing/i,
+
+            // Block comments
+            /\/\*\s*\.\.\.rest of.*code.*\*\//i,
+            /\/\*\s*rest of.*code.*\*\//i,
+            /\/\*\s*previous.*code.*\*\//i,
+            /\/\*\s*existing.*code.*\*\//i,
+
+            // Python/Shell comments
+            /#\s*\.\.\.rest of.*code/i,
+            /#\s*rest of.*code/i,
+            /#\s*previous.*code/i,
+            /#\s*existing.*code/i,
+
+            // Ellipsis alone
+            /^\s*\.\.\.\s*$/m,
+            /^\s*\.\.\.$/m,
+
+            // "etc" or "and so on"
+            /\/\/\s*etc\.*/i,
+            /\/\/\s*and so on/i,
+
+            // Placeholder comments
+            /\/\/\s*\[.*omitted.*\]/i,
+            /\/\/\s*code.*omitted/i,
+        ];
+
+        for (const pattern of omissionPatterns) {
+            const match = content.match(pattern);
+            if (match) {
+                return match[0].trim();
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -2240,6 +2501,12 @@ ${dynamicContext}\`;
         }
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('apply_diff', 'started', {
+                filePath,
+                description
+            });
+
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
                 throw new Error('No workspace folder open');
@@ -2254,6 +2521,12 @@ ${dynamicContext}\`;
                 diff
             });
             this.emit('fileChangeAdded', change);
+
+            // Emit streaming update - reading file
+            this._emitStreamingUpdate('apply_diff', 'processing', {
+                filePath,
+                step: 'reading original file'
+            });
 
             // Update status - APPLYING
             this.fileChangeTracker.updateStatus(filePath, 'applying');
@@ -2271,6 +2544,12 @@ ${dynamicContext}\`;
             // Read original content
             const originalContent = await fs.readFile(fullPath, 'utf8');
 
+            // Emit streaming update - applying diff
+            this._emitStreamingUpdate('apply_diff', 'processing', {
+                filePath,
+                step: 'applying SEARCH/REPLACE blocks'
+            });
+
             // Apply diff using SearchReplaceDiffStrategy
             const diffResult = await this.diffStrategy.applyDiff(originalContent, diff);
 
@@ -2283,6 +2562,12 @@ ${dynamicContext}\`;
                     error: diffResult.error
                 });
                 this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+                // Emit streaming update - failed
+                this._emitStreamingUpdate('apply_diff', 'failed', {
+                    filePath,
+                    error: diffResult.error
+                });
 
                 // Format error message
                 let errorMessage = `Unable to apply diff to file: ${filePath}\n\n${diffResult.error}`;
@@ -2309,6 +2594,12 @@ ${dynamicContext}\`;
             // Reset consecutive mistake count on success
             this.consecutiveMistakeCount = 0;
 
+            // Emit streaming update - writing
+            this._emitStreamingUpdate('apply_diff', 'writing', {
+                filePath,
+                step: 'writing modified file'
+            });
+
             // Write new content
             await fs.writeFile(fullPath, diffResult.content, 'utf8');
 
@@ -2318,6 +2609,20 @@ ${dynamicContext}\`;
                 blocksApplied: diffResult.appliedBlocks ? diffResult.appliedBlocks.length : 0
             });
             this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
+
+            // Track file access for context
+            this._trackFileAccess(filePath, 'modify', {
+                tool: 'apply_diff',
+                description,
+                blocksApplied: diffResult.appliedBlocks ? diffResult.appliedBlocks.length : 0,
+                size: diffResult.content.length
+            });
+
+            // Emit streaming update - opening
+            this._emitStreamingUpdate('apply_diff', 'opening', {
+                filePath,
+                step: 'opening in editor'
+            });
 
             // Open file in editor
             const document = await vscode.workspace.openTextDocument(fullPath);
@@ -2342,6 +2647,13 @@ ${dynamicContext}\`;
                 successMessage += '\n\nTip: Making multiple related changes in a single apply_diff is more efficient. If other changes are needed in this file, include them as additional SEARCH/REPLACE blocks.';
             }
 
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('apply_diff', 'completed', {
+                filePath,
+                success: true,
+                blocksApplied: diffResult.appliedBlocks ? diffResult.appliedBlocks.length : 0
+            });
+
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'apply_diff',
@@ -2361,6 +2673,12 @@ ${dynamicContext}\`;
             this.errors.push(error);
             this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
 
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('apply_diff', 'failed', {
+                filePath,
+                error: error.message
+            });
+
             throw error;
         }
     }
@@ -2378,6 +2696,11 @@ ${dynamicContext}\`;
         }
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('update_todo_list', 'started', {
+                todoCount: todos.split('\n').filter(Boolean).length
+            });
+
             // Get provider reference to access TodoManager
             const provider = this.providerRef?.deref?.();
             if (!provider || !provider._todoManager) {
@@ -2386,6 +2709,11 @@ ${dynamicContext}\`;
 
             const todoManager = provider._todoManager;
 
+            // Emit streaming update - parsing
+            this._emitStreamingUpdate('update_todo_list', 'processing', {
+                step: 'parsing todos'
+            });
+
             // Parse markdown checklist
             // Format: [ ] Pending task, [-] In progress task, [x] Completed task
             const parsedTodos = this._parseMarkdownTodos(todos);
@@ -2393,6 +2721,12 @@ ${dynamicContext}\`;
             if (parsedTodos.length === 0) {
                 throw new Error('No valid todos found in the provided markdown checklist. Expected format:\n[ ] Task 1\n[-] Task 2 (in progress)\n[x] Task 3 (completed)');
             }
+
+            // Emit streaming update - updating
+            this._emitStreamingUpdate('update_todo_list', 'processing', {
+                step: 'updating todo list',
+                todoCount: parsedTodos.length
+            });
 
             // Clear existing todos and replace with new ones
             todoManager.clearAll();
@@ -2437,6 +2771,13 @@ ${dynamicContext}\`;
             successMessage += `- Completed: ${stats.completed}\n`;
             successMessage += `\nCurrent todos:\n${todos}`;
 
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('update_todo_list', 'completed', {
+                success: true,
+                todoCount: parsedTodos.length,
+                stats
+            });
+
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'update_todo_list',
@@ -2449,6 +2790,11 @@ ${dynamicContext}\`;
             };
 
         } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('update_todo_list', 'failed', {
+                error: error.message
+            });
+
             this.errors.push(error);
             throw error;
         }
@@ -2573,6 +2919,13 @@ ${dynamicContext}\`;
         }
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('insert_content', 'started', {
+                filePath,
+                line,
+                description
+            });
+
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
                 throw new Error('No workspace folder open');
@@ -2585,6 +2938,12 @@ ${dynamicContext}\`;
             if (isNaN(lineNumber) || lineNumber < 0) {
                 throw new Error(`Invalid line number: ${line}. Must be a non-negative integer.`);
             }
+
+            // Emit streaming update - reading file
+            this._emitStreamingUpdate('insert_content', 'processing', {
+                filePath,
+                step: 'reading original file'
+            });
 
             // Check if file exists
             let fileExists = true;
@@ -2610,6 +2969,13 @@ ${dynamicContext}\`;
             this.fileChangeTracker.updateStatus(filePath, 'applying');
             this.emit('fileChangeUpdated', change);
 
+            // Emit streaming update - inserting
+            this._emitStreamingUpdate('insert_content', 'processing', {
+                filePath,
+                step: 'inserting content',
+                lineNumber
+            });
+
             // Split into lines
             const lines = fileExists ? fileContent.split('\n') : [];
             const contentLines = content.split('\n');
@@ -2623,6 +2989,12 @@ ${dynamicContext}\`;
             lines.splice(insertIndex, 0, ...contentLines);
 
             const newContent = lines.join('\n');
+
+            // Emit streaming update - writing
+            this._emitStreamingUpdate('insert_content', 'writing', {
+                filePath,
+                step: 'writing file'
+            });
 
             // Write file
             if (!fileExists) {
@@ -2640,6 +3012,21 @@ ${dynamicContext}\`;
             });
             this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
 
+            // Track file access for context
+            this._trackFileAccess(filePath, fileExists ? 'modify' : 'create', {
+                tool: 'insert_content',
+                description,
+                lineNumber,
+                linesInserted: contentLines.length,
+                size: newContent.length
+            });
+
+            // Emit streaming update - opening
+            this._emitStreamingUpdate('insert_content', 'opening', {
+                filePath,
+                step: 'opening in editor'
+            });
+
             // Open file in editor
             const document = await vscode.workspace.openTextDocument(fullPath);
             await vscode.window.showTextDocument(document);
@@ -2648,6 +3035,14 @@ ${dynamicContext}\`;
 
             // Reset consecutive mistake count
             this.consecutiveMistakeCount = 0;
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('insert_content', 'completed', {
+                filePath,
+                success: true,
+                linesInserted: contentLines.length,
+                lineNumber
+            });
 
             return {
                 tool_use_id: this.taskId,
@@ -2669,6 +3064,12 @@ ${dynamicContext}\`;
             this.errors.push(error);
             this.emit('fileChangeUpdated', this.fileChangeTracker.getChange(filePath));
 
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('insert_content', 'failed', {
+                filePath,
+                error: error.message
+            });
+
             throw error;
         }
     }
@@ -2684,12 +3085,27 @@ ${dynamicContext}\`;
         }
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('use_mcp_tool', 'started', {
+                toolName: tool_name,
+                description
+            });
+
             // Initialize MCP Hub if needed
             if (!this.mcpHub && this.mcpEnabled) {
+                this._emitStreamingUpdate('use_mcp_tool', 'processing', {
+                    toolName: tool_name,
+                    step: 'initializing MCP hub'
+                });
                 await this._initializeMcpHub();
             }
 
             if (!this.mcpHub || !this.mcpEnabled) {
+                this._emitStreamingUpdate('use_mcp_tool', 'failed', {
+                    toolName: tool_name,
+                    error: 'MCP not enabled'
+                });
+
                 return {
                     tool_use_id: this.taskId,
                     tool_name: 'use_mcp_tool',
@@ -2700,11 +3116,23 @@ ${dynamicContext}\`;
 
             console.log(`🔌 Executing MCP tool: ${tool_name}`);
 
+            // Emit streaming update - executing
+            this._emitStreamingUpdate('use_mcp_tool', 'processing', {
+                toolName: tool_name,
+                step: 'executing MCP tool'
+            });
+
             // Execute MCP tool
             const result = await this.mcpHub.executeTool(tool_name, toolArgs || {});
 
             if (result.isError) {
                 console.error(`❌ MCP tool ${tool_name} failed:`, result.content);
+
+                this._emitStreamingUpdate('use_mcp_tool', 'failed', {
+                    toolName: tool_name,
+                    error: result.content
+                });
+
                 return {
                     tool_use_id: this.taskId,
                     tool_name: 'use_mcp_tool',
@@ -2715,6 +3143,12 @@ ${dynamicContext}\`;
 
             console.log(`✅ MCP tool ${tool_name} completed successfully`);
 
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('use_mcp_tool', 'completed', {
+                toolName: tool_name,
+                success: true
+            });
+
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'use_mcp_tool',
@@ -2723,6 +3157,12 @@ ${dynamicContext}\`;
             };
 
         } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('use_mcp_tool', 'failed', {
+                toolName: tool_name,
+                error: error.message
+            });
+
             console.error(`Failed to execute MCP tool ${tool_name}:`, error);
             this.errors.push(error);
             throw error;
@@ -2740,12 +3180,27 @@ ${dynamicContext}\`;
         }
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('access_mcp_resource', 'started', {
+                uri,
+                description
+            });
+
             // Initialize MCP Hub if needed
             if (!this.mcpHub && this.mcpEnabled) {
+                this._emitStreamingUpdate('access_mcp_resource', 'processing', {
+                    uri,
+                    step: 'initializing MCP hub'
+                });
                 await this._initializeMcpHub();
             }
 
             if (!this.mcpHub || !this.mcpEnabled) {
+                this._emitStreamingUpdate('access_mcp_resource', 'failed', {
+                    uri,
+                    error: 'MCP not enabled'
+                });
+
                 return {
                     tool_use_id: this.taskId,
                     tool_name: 'access_mcp_resource',
@@ -2756,11 +3211,23 @@ ${dynamicContext}\`;
 
             console.log(`🔌 Accessing MCP resource: ${uri}`);
 
+            // Emit streaming update - accessing
+            this._emitStreamingUpdate('access_mcp_resource', 'processing', {
+                uri,
+                step: 'accessing resource'
+            });
+
             // Access MCP resource
             const result = await this.mcpHub.accessResource(uri);
 
             if (result.isError) {
                 console.error(`❌ MCP resource ${uri} access failed:`, result.content);
+
+                this._emitStreamingUpdate('access_mcp_resource', 'failed', {
+                    uri,
+                    error: result.content
+                });
+
                 return {
                     tool_use_id: this.taskId,
                     tool_name: 'access_mcp_resource',
@@ -2771,6 +3238,13 @@ ${dynamicContext}\`;
 
             console.log(`✅ MCP resource ${uri} accessed successfully`);
 
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('access_mcp_resource', 'completed', {
+                uri,
+                success: true,
+                mimeType: result.mimeType
+            });
+
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'access_mcp_resource',
@@ -2780,6 +3254,12 @@ ${dynamicContext}\`;
             };
 
         } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('access_mcp_resource', 'failed', {
+                uri,
+                error: error.message
+            });
+
             console.error(`Failed to access MCP resource ${uri}:`, error);
             this.errors.push(error);
             throw error;
@@ -2804,7 +3284,538 @@ ${dynamicContext}\`;
         this.mcpHub = new McpHub();
         await this.mcpHub.initialize(workspacePath);
 
+        // Set up sampling request handler
+        this.mcpHub.on('samplingRequest', async (request) => {
+            try {
+                const response = await this._handleMcpSamplingRequest(request);
+                this.mcpHub.emit('samplingResponse', response);
+            } catch (error) {
+                console.error('Failed to handle MCP sampling request:', error);
+                this.mcpHub.emit('samplingResponse', {
+                    error: error.message,
+                    content: `Error processing sampling request: ${error.message}`
+                });
+            }
+        });
+
         console.log('✅ [ConversationTask] MCP Hub initialized');
+    }
+
+    /**
+     * Handle MCP sampling request - MCP server requesting AI completion
+     */
+    async _handleMcpSamplingRequest(request) {
+        const { messages, modelPreferences, systemPrompt, maxTokens } = request;
+
+        console.log('📨 [ConversationTask] Handling MCP sampling request');
+
+        try {
+            // Use the current API handler to create a completion
+            const apiHandler = this.apiHandlerRef?.deref?.();
+            if (!apiHandler) {
+                throw new Error('No API handler available for sampling request');
+            }
+
+            // Format messages for API request
+            const formattedMessages = messages.map(msg => ({
+                role: msg.role,
+                content: msg.content
+            }));
+
+            // Add system prompt if provided
+            if (systemPrompt) {
+                formattedMessages.unshift({
+                    role: 'system',
+                    content: systemPrompt
+                });
+            }
+
+            // Create API request params
+            const requestParams = {
+                messages: formattedMessages,
+                max_tokens: maxTokens || 1000,
+                temperature: 0.7
+            };
+
+            // Use model preferences if provided
+            if (modelPreferences?.hints?.length > 0) {
+                // Use the first hinted model
+                requestParams.model = modelPreferences.hints[0];
+            }
+
+            // Make the API request
+            const response = await apiHandler.createMessage(requestParams);
+
+            // Extract the completion
+            const completion = response.content?.[0]?.text || response.content || '';
+
+            return {
+                role: 'assistant',
+                content: completion,
+                model: response.model,
+                stopReason: response.stop_reason
+            };
+
+        } catch (error) {
+            console.error('Failed to create sampling completion:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute list_mcp_tools - List all available MCP tools
+     */
+    async _executeListMcpTools(toolCall) {
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('list_mcp_tools', 'started', {});
+
+            // Initialize MCP Hub if needed
+            if (!this.mcpHub && this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_tools', 'processing', {
+                    step: 'initializing MCP hub'
+                });
+                await this._initializeMcpHub();
+            }
+
+            if (!this.mcpHub || !this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_tools', 'failed', {
+                    error: 'MCP not enabled'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'list_mcp_tools',
+                    content: 'Error: MCP is not enabled. Enable it in Settings > MCP Servers',
+                    success: false
+                };
+            }
+
+            // Emit streaming update - listing
+            this._emitStreamingUpdate('list_mcp_tools', 'processing', {
+                step: 'listing available tools'
+            });
+
+            // Get tools list
+            const tools = this.mcpHub.listTools();
+
+            // Format output
+            let content = `Available MCP Tools (${tools.length}):\n\n`;
+
+            if (tools.length === 0) {
+                content += 'No MCP tools available. Make sure MCP servers are configured and running.';
+            } else {
+                tools.forEach((tool, index) => {
+                    content += `${index + 1}. **${tool.name}** (${tool.server})\n`;
+                    if (tool.description) {
+                        content += `   ${tool.description}\n`;
+                    }
+                    if (tool.inputSchema) {
+                        const required = tool.inputSchema.required || [];
+                        const props = Object.keys(tool.inputSchema.properties || {});
+                        if (props.length > 0) {
+                            content += `   Parameters: ${props.join(', ')}`;
+                            if (required.length > 0) {
+                                content += ` (required: ${required.join(', ')})`;
+                            }
+                            content += '\n';
+                        }
+                    }
+                    content += '\n';
+                });
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('list_mcp_tools', 'completed', {
+                success: true,
+                toolCount: tools.length
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_mcp_tools',
+                content,
+                success: true,
+                tools
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('list_mcp_tools', 'failed', {
+                error: error.message
+            });
+
+            console.error('Failed to list MCP tools:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute list_mcp_resources - List all available MCP resources
+     */
+    async _executeListMcpResources(toolCall) {
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('list_mcp_resources', 'started', {});
+
+            // Initialize MCP Hub if needed
+            if (!this.mcpHub && this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_resources', 'processing', {
+                    step: 'initializing MCP hub'
+                });
+                await this._initializeMcpHub();
+            }
+
+            if (!this.mcpHub || !this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_resources', 'failed', {
+                    error: 'MCP not enabled'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'list_mcp_resources',
+                    content: 'Error: MCP is not enabled. Enable it in Settings > MCP Servers',
+                    success: false
+                };
+            }
+
+            // Emit streaming update - listing
+            this._emitStreamingUpdate('list_mcp_resources', 'processing', {
+                step: 'listing available resources'
+            });
+
+            // Get resources list
+            const resources = this.mcpHub.listResources();
+
+            // Format output
+            let content = `Available MCP Resources (${resources.length}):\n\n`;
+
+            if (resources.length === 0) {
+                content += 'No MCP resources available. Make sure MCP servers are configured and running.';
+            } else {
+                resources.forEach((resource, index) => {
+                    content += `${index + 1}. **${resource.name || resource.uri}** (${resource.server})\n`;
+                    content += `   URI: ${resource.uri}\n`;
+                    if (resource.description) {
+                        content += `   ${resource.description}\n`;
+                    }
+                    if (resource.mimeType) {
+                        content += `   Type: ${resource.mimeType}\n`;
+                    }
+                    content += '\n';
+                });
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('list_mcp_resources', 'completed', {
+                success: true,
+                resourceCount: resources.length
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_mcp_resources',
+                content,
+                success: true,
+                resources
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('list_mcp_resources', 'failed', {
+                error: error.message
+            });
+
+            console.error('Failed to list MCP resources:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute list_mcp_servers - List all configured MCP servers and their status
+     */
+    async _executeListMcpServers(toolCall) {
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('list_mcp_servers', 'started', {});
+
+            // Initialize MCP Hub if needed
+            if (!this.mcpHub && this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_servers', 'processing', {
+                    step: 'initializing MCP hub'
+                });
+                await this._initializeMcpHub();
+            }
+
+            if (!this.mcpHub || !this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_servers', 'failed', {
+                    error: 'MCP not enabled'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'list_mcp_servers',
+                    content: 'Error: MCP is not enabled. Enable it in Settings > MCP Servers',
+                    success: false
+                };
+            }
+
+            // Emit streaming update - listing
+            this._emitStreamingUpdate('list_mcp_servers', 'processing', {
+                step: 'listing MCP servers'
+            });
+
+            // Get servers list
+            const servers = Array.from(this.mcpHub.servers.values());
+
+            // Format output
+            let content = `Configured MCP Servers (${servers.length}):\n\n`;
+
+            if (servers.length === 0) {
+                content += 'No MCP servers configured.\n\n';
+                content += 'To configure MCP servers:\n';
+                content += '1. Create .mcp-servers.json in workspace root\n';
+                content += '2. Add server configurations\n';
+                content += '3. Restart the extension';
+            } else {
+                servers.forEach((server, index) => {
+                    const statusEmoji = server.status === 'connected' ? '🟢' :
+                                       server.status === 'connecting' ? '🟡' : '🔴';
+                    content += `${index + 1}. ${statusEmoji} **${server.name}** - ${server.status}\n`;
+                    content += `   Command: ${server.config.command}\n`;
+                    content += `   Tools: ${server.tools.length}, Resources: ${server.resources.length}, Prompts: ${server.prompts.length}\n`;
+                    content += '\n';
+                });
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('list_mcp_servers', 'completed', {
+                success: true,
+                serverCount: servers.length
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_mcp_servers',
+                content,
+                success: true,
+                servers: servers.map(s => ({
+                    name: s.name,
+                    status: s.status,
+                    toolCount: s.tools.length,
+                    resourceCount: s.resources.length,
+                    promptCount: s.prompts.length
+                }))
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('list_mcp_servers', 'failed', {
+                error: error.message
+            });
+
+            console.error('Failed to list MCP servers:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute list_mcp_prompts - List all available MCP prompts from connected servers
+     */
+    async _executeListMcpPrompts(toolCall) {
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('list_mcp_prompts', 'started', {});
+
+            // Initialize MCP Hub if needed
+            if (!this.mcpHub && this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_prompts', 'processing', {
+                    step: 'initializing MCP hub'
+                });
+                await this._initializeMcpHub();
+            }
+
+            if (!this.mcpHub || !this.mcpEnabled) {
+                this._emitStreamingUpdate('list_mcp_prompts', 'failed', {
+                    error: 'MCP not enabled'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'list_mcp_prompts',
+                    content: 'Error: MCP is not enabled. Enable it in Settings > MCP Servers',
+                    success: false
+                };
+            }
+
+            // Emit streaming update - listing
+            this._emitStreamingUpdate('list_mcp_prompts', 'processing', {
+                step: 'listing MCP prompts'
+            });
+
+            // Get prompts list
+            const prompts = this.mcpHub.listPrompts();
+
+            // Format output
+            let content = `Available MCP Prompts (${prompts.length}):\n\n`;
+
+            if (prompts.length === 0) {
+                content += 'No MCP prompts available from connected servers.\n\n';
+                content += 'MCP prompts are templates provided by MCP servers that you can use to generate context-aware prompts.';
+            } else {
+                prompts.forEach((prompt, index) => {
+                    content += `${index + 1}. **${prompt.name}** (${prompt.server})\n`;
+                    if (prompt.description) {
+                        content += `   ${prompt.description}\n`;
+                    }
+                    if (prompt.arguments && prompt.arguments.length > 0) {
+                        const argNames = prompt.arguments.map(arg => {
+                            const required = arg.required ? ' (required)' : ' (optional)';
+                            return `${arg.name}${required}`;
+                        });
+                        content += `   Arguments: ${argNames.join(', ')}\n`;
+                    }
+                    content += '\n';
+                });
+
+                content += '\nUse get_mcp_prompt to retrieve a specific prompt with arguments.';
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('list_mcp_prompts', 'completed', {
+                success: true,
+                promptCount: prompts.length
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_mcp_prompts',
+                content,
+                success: true,
+                prompts: prompts.map(p => ({
+                    name: p.name,
+                    server: p.server,
+                    description: p.description,
+                    arguments: p.arguments
+                }))
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('list_mcp_prompts', 'failed', {
+                error: error.message
+            });
+
+            console.error('Failed to list MCP prompts:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute get_mcp_prompt - Get a specific MCP prompt with arguments
+     */
+    async _executeGetMcpPrompt(toolCall) {
+        const { prompt_name, arguments: promptArgs, description } = toolCall;
+
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('get_mcp_prompt', 'started', {
+                promptName: prompt_name,
+                description
+            });
+
+            // Validate prompt_name
+            if (!prompt_name) {
+                throw new Error('get_mcp_prompt requires a prompt_name parameter');
+            }
+
+            // Initialize MCP Hub if needed
+            if (!this.mcpHub && this.mcpEnabled) {
+                this._emitStreamingUpdate('get_mcp_prompt', 'processing', {
+                    promptName: prompt_name,
+                    step: 'initializing MCP hub'
+                });
+                await this._initializeMcpHub();
+            }
+
+            if (!this.mcpHub || !this.mcpEnabled) {
+                this._emitStreamingUpdate('get_mcp_prompt', 'failed', {
+                    error: 'MCP not enabled'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'get_mcp_prompt',
+                    content: 'Error: MCP is not enabled. Enable it in Settings > MCP Servers',
+                    success: false
+                };
+            }
+
+            // Emit streaming update - getting prompt
+            this._emitStreamingUpdate('get_mcp_prompt', 'processing', {
+                promptName: prompt_name,
+                step: 'getting prompt from MCP server'
+            });
+
+            // Get the prompt
+            const result = await this.mcpHub.getPrompt(prompt_name, promptArgs || {});
+
+            if (!result.success) {
+                this._emitStreamingUpdate('get_mcp_prompt', 'failed', {
+                    error: result.content
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'get_mcp_prompt',
+                    content: `Error getting MCP prompt: ${result.content}`,
+                    success: false
+                };
+            }
+
+            // Format the prompt messages
+            let content = `MCP Prompt: ${prompt_name}\n\n`;
+            if (result.description) {
+                content += `Description: ${result.description}\n\n`;
+            }
+
+            if (result.messages && result.messages.length > 0) {
+                content += 'Messages:\n\n';
+                result.messages.forEach((msg, index) => {
+                    content += `${index + 1}. ${msg.role}: ${msg.content}\n\n`;
+                });
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('get_mcp_prompt', 'completed', {
+                promptName: prompt_name,
+                success: true,
+                messageCount: result.messages?.length || 0
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'get_mcp_prompt',
+                content,
+                success: true,
+                messages: result.messages,
+                description: result.description
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('get_mcp_prompt', 'failed', {
+                error: error.message
+            });
+
+            console.error('Failed to get MCP prompt:', error);
+            this.errors.push(error);
+            throw error;
+        }
     }
 
     /**
@@ -2930,42 +3941,103 @@ ${dynamicContext}\`;
         const { description, force } = toolCall;
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('save_checkpoint', 'started', {
+                description: description || 'Manual checkpoint'
+            });
+
             // Initialize checkpoint service if needed
             if (!this.checkpointService) {
+                this._emitStreamingUpdate('save_checkpoint', 'processing', {
+                    step: 'initializing checkpoint service'
+                });
                 await this._initializeCheckpointService();
             }
 
-            console.log('💾 Saving checkpoint...');
+            if (!this.checkpointService) {
+                this._emitStreamingUpdate('save_checkpoint', 'failed', {
+                    error: 'Checkpoint service not available'
+                });
 
-            const checkpointId = await this.checkpointService.save({
-                description: description || 'Manual checkpoint',
-                force: force || false,
-                suppressMessage: false
-            });
-
-            if (!checkpointId) {
                 return {
                     tool_use_id: this.taskId,
                     tool_name: 'save_checkpoint',
-                    content: 'No changes to checkpoint. Workspace is clean.',
+                    content: 'Error: Checkpoint service not available. Ensure workspace and storage directories are configured.',
+                    success: false
+                };
+            }
+
+            // Emit streaming update - capturing state
+            this._emitStreamingUpdate('save_checkpoint', 'processing', {
+                step: 'capturing conversation state'
+            });
+
+            // Capture current conversation state
+            const conversationState = {
+                messages: this.conversationHistory || [],
+                apiHistory: this.apiConversationHistory || [],
+                metadata: {
+                    taskId: this.taskId,
+                    description: description || 'Manual checkpoint',
+                    timestamp: Date.now(),
+                    messageCount: (this.conversationHistory || []).length,
+                    mode: this.mode || 'code',
+                    checkpointType: 'manual'
+                }
+            };
+
+            console.log('💾 Saving checkpoint...');
+
+            // Emit streaming update - saving to git
+            this._emitStreamingUpdate('save_checkpoint', 'processing', {
+                step: 'saving to git repository'
+            });
+
+            const result = await this.checkpointService.save(conversationState);
+
+            if (!result || !result.checkpointId) {
+                this._emitStreamingUpdate('save_checkpoint', 'completed', {
+                    success: true,
+                    noChanges: true
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'save_checkpoint',
+                    content: 'No changes to checkpoint. Conversation state unchanged.',
                     success: true
                 };
             }
 
-            console.log(`✅ Checkpoint saved: ${checkpointId}`);
+            console.log(`✅ Checkpoint saved: ${result.checkpointId}`);
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('save_checkpoint', 'completed', {
+                success: true,
+                checkpointId: result.checkpointId,
+                messageCount: result.messageCount
+            });
 
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'save_checkpoint',
-                content: `Checkpoint saved successfully!\n\nCheckpoint ID: ${checkpointId}\nDescription: ${description || 'Manual checkpoint'}\nTimestamp: ${new Date().toISOString()}\n\nYou can restore this checkpoint later using restore_checkpoint.`,
+                content: `Checkpoint saved successfully!\n\nCheckpoint ID: ${result.checkpointId}\nDescription: ${description || 'Manual checkpoint'}\nTimestamp: ${new Date(result.timestamp).toISOString()}\nMessages saved: ${result.messageCount}\n\nYou can restore this checkpoint later using restore_checkpoint.`,
                 success: true,
                 details: {
-                    checkpointId,
-                    description: description || 'Manual checkpoint'
+                    checkpointId: result.checkpointId,
+                    description: description || 'Manual checkpoint',
+                    timestamp: result.timestamp,
+                    messageCount: result.messageCount,
+                    commit: result.commit
                 }
             };
 
         } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('save_checkpoint', 'failed', {
+                error: error.message
+            });
+
             console.error('Failed to save checkpoint:', error);
             this.errors.push(error);
             throw error;
@@ -2983,28 +4055,90 @@ ${dynamicContext}\`;
         }
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('restore_checkpoint', 'started', {
+                checkpointId: checkpoint_id
+            });
+
             // Initialize checkpoint service if needed
             if (!this.checkpointService) {
+                this._emitStreamingUpdate('restore_checkpoint', 'processing', {
+                    checkpointId: checkpoint_id,
+                    step: 'initializing checkpoint service'
+                });
                 await this._initializeCheckpointService();
+            }
+
+            if (!this.checkpointService) {
+                this._emitStreamingUpdate('restore_checkpoint', 'failed', {
+                    error: 'Checkpoint service not available'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'restore_checkpoint',
+                    content: 'Error: Checkpoint service not available. Ensure workspace and storage directories are configured.',
+                    success: false
+                };
             }
 
             console.log(`🔄 Restoring checkpoint: ${checkpoint_id}`);
 
-            await this.checkpointService.restore(checkpoint_id);
+            // Emit streaming update - loading from git
+            this._emitStreamingUpdate('restore_checkpoint', 'processing', {
+                checkpointId: checkpoint_id,
+                step: 'loading from git repository'
+            });
 
-            console.log(`✅ Checkpoint restored: ${checkpoint_id}`);
+            const conversationState = await this.checkpointService.restore(checkpoint_id);
+
+            // Emit streaming update - restoring conversation
+            this._emitStreamingUpdate('restore_checkpoint', 'processing', {
+                checkpointId: checkpoint_id,
+                step: 'restoring conversation state'
+            });
+
+            // Restore conversation state
+            if (conversationState.messages) {
+                this.conversationHistory = conversationState.messages;
+            }
+            if (conversationState.apiHistory) {
+                this.apiConversationHistory = conversationState.apiHistory;
+            }
+            if (conversationState.metadata) {
+                this.mode = conversationState.metadata.mode || this.mode;
+            }
+
+            const messageCount = conversationState.messages?.length || 0;
+            const timestamp = conversationState.metadata?.timestamp;
+
+            console.log(`✅ Checkpoint restored: ${checkpoint_id} (${messageCount} messages)`);
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('restore_checkpoint', 'completed', {
+                success: true,
+                checkpointId: checkpoint_id,
+                messageCount
+            });
 
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'restore_checkpoint',
-                content: `Checkpoint restored successfully!\n\nCheckpoint ID: ${checkpoint_id}\n\nWorkspace has been reset to the state saved in this checkpoint.`,
+                content: `Checkpoint restored successfully!\n\nCheckpoint ID: ${checkpoint_id}\nMessages restored: ${messageCount}\nTimestamp: ${timestamp ? new Date(timestamp).toISOString() : 'Unknown'}\n\nConversation state has been reset to this checkpoint.`,
                 success: true,
                 details: {
-                    checkpointId: checkpoint_id
+                    checkpointId: checkpoint_id,
+                    messageCount,
+                    timestamp
                 }
             };
 
         } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('restore_checkpoint', 'failed', {
+                error: error.message
+            });
+
             console.error(`Failed to restore checkpoint ${checkpoint_id}:`, error);
             this.errors.push(error);
             throw error;
@@ -3016,16 +4150,46 @@ ${dynamicContext}\`;
      */
     async _executeListCheckpoints(toolCall) {
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('list_checkpoints', 'started', {});
+
             // Initialize checkpoint service if needed
             if (!this.checkpointService) {
+                this._emitStreamingUpdate('list_checkpoints', 'processing', {
+                    step: 'initializing checkpoint service'
+                });
                 await this._initializeCheckpointService();
+            }
+
+            if (!this.checkpointService) {
+                this._emitStreamingUpdate('list_checkpoints', 'failed', {
+                    error: 'Checkpoint service not available'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'list_checkpoints',
+                    content: 'Error: Checkpoint service not available. Ensure workspace and storage directories are configured.',
+                    success: false,
+                    checkpoints: []
+                };
             }
 
             console.log('📋 Listing checkpoints...');
 
+            // Emit streaming update - loading checkpoints
+            this._emitStreamingUpdate('list_checkpoints', 'processing', {
+                step: 'loading checkpoints from git'
+            });
+
             const checkpoints = await this.checkpointService.listCheckpoints();
 
             if (checkpoints.length === 0) {
+                this._emitStreamingUpdate('list_checkpoints', 'completed', {
+                    success: true,
+                    checkpointCount: 0
+                });
+
                 return {
                     tool_use_id: this.taskId,
                     tool_name: 'list_checkpoints',
@@ -3037,22 +4201,139 @@ ${dynamicContext}\`;
 
             // Format checkpoint list
             const checkpointList = checkpoints.map((cp, index) => {
-                const date = new Date(cp.timestamp).toLocaleString();
-                return `${index + 1}. ${cp.id}\n   Description: ${cp.description || 'No description'}\n   Created: ${date}`;
+                const date = cp.timestamp ? new Date(cp.timestamp).toLocaleString() : cp.date;
+                return `${index + 1}. **${cp.checkpointId}**\n   Messages: ${cp.messageCount || 0}\n   Created: ${date}`;
             }).join('\n\n');
 
             console.log(`✅ Found ${checkpoints.length} checkpoint(s)`);
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('list_checkpoints', 'completed', {
+                success: true,
+                checkpointCount: checkpoints.length
+            });
 
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'list_checkpoints',
                 content: `Found ${checkpoints.length} checkpoint(s):\n\n${checkpointList}\n\nUse restore_checkpoint with the checkpoint ID to restore any of these states.`,
                 success: true,
-                checkpoints
+                checkpoints: checkpoints.map(cp => ({
+                    checkpointId: cp.checkpointId,
+                    commit: cp.commit,
+                    timestamp: cp.timestamp,
+                    messageCount: cp.messageCount,
+                    date: cp.date
+                }))
             };
 
         } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('list_checkpoints', 'failed', {
+                error: error.message
+            });
+
             console.error('Failed to list checkpoints:', error);
+            this.errors.push(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute get_checkpoint_diff - Get diff between current state and a checkpoint
+     */
+    async _executeGetCheckpointDiff(toolCall) {
+        const { checkpoint_id } = toolCall;
+
+        if (!checkpoint_id) {
+            throw new Error('get_checkpoint_diff requires a checkpoint_id parameter');
+        }
+
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('get_checkpoint_diff', 'started', {
+                checkpointId: checkpoint_id
+            });
+
+            // Initialize checkpoint service if needed
+            if (!this.checkpointService) {
+                this._emitStreamingUpdate('get_checkpoint_diff', 'processing', {
+                    checkpointId: checkpoint_id,
+                    step: 'initializing checkpoint service'
+                });
+                await this._initializeCheckpointService();
+            }
+
+            if (!this.checkpointService) {
+                this._emitStreamingUpdate('get_checkpoint_diff', 'failed', {
+                    error: 'Checkpoint service not available'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'get_checkpoint_diff',
+                    content: 'Error: Checkpoint service not available. Ensure workspace and storage directories are configured.',
+                    success: false
+                };
+            }
+
+            console.log(`🔍 Getting diff for checkpoint: ${checkpoint_id}`);
+
+            // Emit streaming update - calculating diff
+            this._emitStreamingUpdate('get_checkpoint_diff', 'processing', {
+                checkpointId: checkpoint_id,
+                step: 'calculating diff from git'
+            });
+
+            const diffSummary = await this.checkpointService.getDiff(checkpoint_id);
+
+            // Format diff summary
+            let content = `Checkpoint Diff: ${checkpoint_id}\n\n`;
+            content += `**Summary:**\n`;
+            content += `- Files changed: ${diffSummary.changed}\n`;
+            content += `- Insertions: +${diffSummary.insertions}\n`;
+            content += `- Deletions: -${diffSummary.deletions}\n\n`;
+
+            if (diffSummary.files && diffSummary.files.length > 0) {
+                content += `**Changed Files:**\n`;
+                diffSummary.files.forEach((file, index) => {
+                    content += `${index + 1}. ${file.file}\n`;
+                    content += `   +${file.insertions} -${file.deletions} (${file.changes} changes)\n`;
+                });
+            } else {
+                content += `No changes detected between current state and checkpoint.\n`;
+            }
+
+            console.log(`✅ Diff calculated for checkpoint: ${checkpoint_id}`);
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('get_checkpoint_diff', 'completed', {
+                success: true,
+                checkpointId: checkpoint_id,
+                filesChanged: diffSummary.changed
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'get_checkpoint_diff',
+                content,
+                success: true,
+                details: {
+                    checkpointId: checkpoint_id,
+                    changed: diffSummary.changed,
+                    insertions: diffSummary.insertions,
+                    deletions: diffSummary.deletions,
+                    files: diffSummary.files
+                }
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('get_checkpoint_diff', 'failed', {
+                error: error.message
+            });
+
+            console.error(`Failed to get checkpoint diff ${checkpoint_id}:`, error);
             this.errors.push(error);
             throw error;
         }
@@ -3245,20 +4526,101 @@ ${dynamicContext}\`;
     /**
      * Execute read_file tool
      */
-    async _executeReadFile(filePath) {
+    /**
+     * Execute read_file tool - Enhanced version with multi-file and line range support
+     *
+     * Supports:
+     * - Single file: {path: "file.js"}
+     * - Multi-file: {args: "<files><file><path>...</path></file></files>"}
+     * - Line ranges: {path: "file.js", start_line: 10, end_line: 50}
+     * - Token budget validation (basic)
+     */
+    async _executeReadFile(toolCall) {
         const fs = require('fs').promises;
         const pathModule = require('path');
 
         try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('read_file', 'started', {
+                fileCount: toolCall.path ? 1 : 'multiple'
+            });
+
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
                 throw new Error('No workspace folder open');
             }
-
             const workspacePath = workspaceFolders[0].uri.fsPath;
-            const fullPath = pathModule.join(workspacePath, filePath);
 
-            const content = await fs.readFile(fullPath, 'utf8');
+            // Parse file entries (support both old single-file and new multi-file format)
+            const fileEntries = this._parseReadFileArgs(toolCall);
+
+            if (fileEntries.length === 0) {
+                throw new Error('No files specified in read_file tool call');
+            }
+
+            // Emit streaming update - processing
+            this._emitStreamingUpdate('read_file', 'processing', {
+                step: 'reading files',
+                fileCount: fileEntries.length
+            });
+
+            // Read all files
+            const results = [];
+            for (let i = 0; i < fileEntries.length; i++) {
+                const entry = fileEntries[i];
+
+                // Emit progress for each file
+                this._emitStreamingUpdate('read_file', 'processing', {
+                    step: `reading file ${i + 1}/${fileEntries.length}`,
+                    filePath: entry.path
+                });
+
+                const result = await this._readSingleFile(workspacePath, entry);
+                results.push(result);
+
+                // Track file access for context
+                this._trackFileAccess(entry.path, 'read', {
+                    tool: 'read_file',
+                    lineRanges: entry.lineRanges,
+                    size: result.content.length,
+                    truncated: result.notice ? result.notice.includes('truncated') : false
+                });
+            }
+
+            // Emit streaming update - formatting output
+            this._emitStreamingUpdate('read_file', 'processing', {
+                step: 'formatting output',
+                fileCount: results.length
+            });
+
+            // Format output
+            let content;
+            if (results.length === 1) {
+                // Single file - return simple content
+                content = results[0].content;
+            } else {
+                // Multiple files - return XML format
+                content = '<files>\n';
+                for (const result of results) {
+                    content += `<file>\n`;
+                    content += `  <path>${result.path}</path>\n`;
+                    if (result.lineRange) {
+                        content += `  <line_range>${result.lineRange}</line_range>\n`;
+                    }
+                    content += `  <content>\n${result.content}\n  </content>\n`;
+                    if (result.notice) {
+                        content += `  <notice>${result.notice}</notice>\n`;
+                    }
+                    content += `</file>\n`;
+                }
+                content += '</files>';
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('read_file', 'completed', {
+                success: true,
+                fileCount: results.length
+            });
 
             return {
                 tool_use_id: this.taskId,
@@ -3268,8 +4630,485 @@ ${dynamicContext}\`;
             };
 
         } catch (error) {
-            throw new Error(`Failed to read file ${filePath}: ${error.message}`);
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('read_file', 'failed', {
+                error: error.message
+            });
+
+            throw new Error(`Failed to read file: ${error.message}`);
         }
+    }
+
+    /**
+     * Parse read_file arguments - supports legacy and new formats
+     */
+    _parseReadFileArgs(toolCall) {
+        const entries = [];
+
+        // New multi-file format with args
+        if (toolCall.args) {
+            try {
+                // Simple XML parsing for <file> entries
+                const files = toolCall.args.match(/<file>[\s\S]*?<\/file>/g) || [];
+                for (const fileXml of files) {
+                    const pathMatch = fileXml.match(/<path>(.*?)<\/path>/);
+                    const lineRangeMatches = fileXml.match(/<line_range>(\d+)-(\d+)<\/line_range>/g) || [];
+
+                    if (pathMatch) {
+                        const entry = {
+                            path: pathMatch[1],
+                            lineRanges: []
+                        };
+
+                        for (const rangeMatch of lineRangeMatches) {
+                            const [_, start, end] = rangeMatch.match(/(\d+)-(\d+)/);
+                            entry.lineRanges.push({
+                                start: parseInt(start),
+                                end: parseInt(end)
+                            });
+                        }
+
+                        entries.push(entry);
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to parse multi-file args, falling back to single file');
+            }
+        }
+
+        // Legacy single-file format
+        if (entries.length === 0 && toolCall.path) {
+            const entry = { path: toolCall.path, lineRanges: [] };
+
+            if (toolCall.start_line && toolCall.end_line) {
+                entry.lineRanges.push({
+                    start: parseInt(toolCall.start_line),
+                    end: parseInt(toolCall.end_line)
+                });
+            }
+
+            entries.push(entry);
+        }
+
+        return entries;
+    }
+
+    /**
+     * Read a single file with line range support
+     */
+    async _readSingleFile(workspacePath, entry) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        const fullPath = pathModule.join(workspacePath, entry.path);
+        let content = await fs.readFile(fullPath, 'utf8');
+        const lines = content.split('\n');
+        const totalLines = lines.length;
+
+        let notice = null;
+        let lineRange = null;
+
+        // Apply line ranges if specified
+        if (entry.lineRanges && entry.lineRanges.length > 0) {
+            const selectedLines = [];
+            for (const range of entry.lineRanges) {
+                const start = Math.max(1, range.start);
+                const end = Math.min(totalLines, range.end);
+
+                if (start > end) {
+                    throw new Error(`Invalid line range: ${start}-${end}`);
+                }
+
+                // Extract lines (1-indexed to 0-indexed)
+                const rangeLines = lines.slice(start - 1, end);
+
+                // Add line numbers
+                const numberedLines = rangeLines.map((line, idx) => {
+                    return `${start + idx}: ${line}`;
+                });
+
+                selectedLines.push(...numberedLines);
+                lineRange = entry.lineRanges.map(r => `${r.start}-${r.end}`).join(', ');
+            }
+
+            content = selectedLines.join('\n');
+            notice = `Showing lines ${lineRange} of ${totalLines} total lines`;
+        } else {
+            // Full file read - add line numbers
+            content = lines.map((line, idx) => `${idx + 1}: ${line}`).join('\n');
+
+            // Basic token budget check (rough estimate: 1 token ≈ 4 characters)
+            const estimatedTokens = content.length / 4;
+            const MAX_FILE_TOKENS = 50000; // Conservative limit
+
+            if (estimatedTokens > MAX_FILE_TOKENS) {
+                // Truncate large files
+                const maxChars = MAX_FILE_TOKENS * 4;
+                content = content.substring(0, maxChars);
+                notice = `File truncated: showing first ~${MAX_FILE_TOKENS} tokens of ${Math.floor(estimatedTokens)} total tokens. Use line_range to read specific sections.`;
+            }
+        }
+
+        return {
+            path: entry.path,
+            content,
+            lineRange,
+            notice
+        };
+    }
+
+    /**
+     * Execute list_files tool - List files in a directory
+     *
+     * Supports:
+     * - path: Directory path (default: workspace root)
+     * - recursive: true/false (default: false)
+     * - pattern: glob pattern to filter files (e.g., "*.js", "*\/*\/*.ts")
+     */
+    async _executeListFiles(toolCall) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        try {
+            // Emit streaming update - started
+            const targetPath = toolCall.path || '.';
+            this._emitStreamingUpdate('list_files', 'started', {
+                path: targetPath,
+                recursive: toolCall.recursive,
+                pattern: toolCall.pattern
+            });
+
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+
+            const recursive = toolCall.recursive === true || toolCall.recursive === 'true';
+            const pattern = toolCall.pattern;
+
+            const fullPath = pathModule.join(workspacePath, targetPath);
+
+            // Emit streaming update - checking path
+            this._emitStreamingUpdate('list_files', 'processing', {
+                path: targetPath,
+                step: 'checking path'
+            });
+
+            // Check if path exists
+            const stats = await fs.stat(fullPath);
+            if (!stats.isDirectory()) {
+                throw new Error(`Path is not a directory: ${targetPath}`);
+            }
+
+            // Emit streaming update - listing files
+            this._emitStreamingUpdate('list_files', 'processing', {
+                path: targetPath,
+                step: 'scanning directory'
+            });
+
+            // List files
+            const files = await this._listFilesRecursive(fullPath, recursive, pattern);
+
+            // Track file access for each file found
+            for (const file of files.filter(f => !f.isDirectory)) {
+                this._trackFileAccess(file.relativePath, 'list', {
+                    tool: 'list_files',
+                    size: file.size,
+                    pattern: pattern || 'all'
+                });
+            }
+
+            // Emit streaming update - formatting
+            this._emitStreamingUpdate('list_files', 'processing', {
+                path: targetPath,
+                step: 'formatting results',
+                fileCount: files.length
+            });
+
+            // Format output
+            let content = `Files in ${targetPath}:\n\n`;
+
+            if (files.length === 0) {
+                content += '(no files found)';
+            } else {
+                // Group by type
+                const dirs = files.filter(f => f.isDirectory);
+                const regularFiles = files.filter(f => !f.isDirectory);
+
+                if (dirs.length > 0) {
+                    content += `Directories (${dirs.length}):\n`;
+                    dirs.forEach(f => {
+                        content += `  📁 ${f.relativePath}/\n`;
+                    });
+                    content += '\n';
+                }
+
+                if (regularFiles.length > 0) {
+                    content += `Files (${regularFiles.length}):\n`;
+                    regularFiles.forEach(f => {
+                        const size = f.size < 1024 ? `${f.size}B` :
+                                     f.size < 1024*1024 ? `${Math.round(f.size/1024)}KB` :
+                                     `${Math.round(f.size/(1024*1024))}MB`;
+                        content += `  📄 ${f.relativePath} (${size})\n`;
+                    });
+                }
+
+                content += `\nTotal: ${files.length} items`;
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('list_files', 'completed', {
+                path: targetPath,
+                success: true,
+                fileCount: files.length
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_files',
+                content,
+                success: true
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('list_files', 'failed', {
+                path: toolCall.path || '.',
+                error: error.message
+            });
+
+            throw new Error(`Failed to list files: ${error.message}`);
+        }
+    }
+
+    /**
+     * Helper function to recursively list files
+     */
+    async _listFilesRecursive(dirPath, recursive, pattern) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+        const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+
+        const files = [];
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+            // Skip hidden files and common ignore patterns
+            if (entry.name.startsWith('.')) continue;
+            if (entry.name === 'node_modules') continue;
+            if (entry.name === '__pycache__') continue;
+            if (entry.name === 'dist') continue;
+            if (entry.name === 'build') continue;
+
+            const fullPath = pathModule.join(dirPath, entry.name);
+            const relativePath = pathModule.relative(workspacePath, fullPath);
+
+            // Apply pattern filter if provided
+            if (pattern) {
+                const minimatch = require('minimatch');
+                if (!minimatch(relativePath, pattern)) {
+                    if (!entry.isDirectory() || !recursive) continue;
+                }
+            }
+
+            if (entry.isDirectory()) {
+                files.push({
+                    relativePath,
+                    isDirectory: true,
+                    size: 0
+                });
+
+                if (recursive) {
+                    const subFiles = await this._listFilesRecursive(fullPath, recursive, pattern);
+                    files.push(...subFiles);
+                }
+            } else {
+                const stats = await fs.stat(fullPath);
+                files.push({
+                    relativePath,
+                    isDirectory: false,
+                    size: stats.size
+                });
+            }
+        }
+
+        return files;
+    }
+
+    /**
+     * Execute search_files tool - Search for files by content using regex
+     *
+     * Supports:
+     * - regex: Regular expression to search for
+     * - path: Directory to search in (default: workspace root)
+     * - file_pattern: Glob pattern to filter files (e.g., "*.js")
+     */
+    async _executeSearchFiles(toolCall) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        try {
+            // Emit streaming update - started
+            const regex = toolCall.regex;
+            const targetPath = toolCall.path || '.';
+            this._emitStreamingUpdate('search_files', 'started', {
+                regex,
+                path: targetPath,
+                filePattern: toolCall.file_pattern
+            });
+
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+
+            if (!regex) {
+                throw new Error('regex parameter is required for search_files');
+            }
+
+            const filePattern = toolCall.file_pattern || '**/*';
+
+            const fullPath = pathModule.join(workspacePath, targetPath);
+
+            // Emit streaming update - searching
+            this._emitStreamingUpdate('search_files', 'processing', {
+                regex,
+                path: targetPath,
+                step: 'searching files'
+            });
+
+            // Search files
+            const results = await this._searchFilesForPattern(fullPath, regex, filePattern);
+
+            // Track file access for each file with matches
+            for (const result of results) {
+                this._trackFileAccess(result.file, 'search', {
+                    tool: 'search_files',
+                    regex,
+                    matchCount: result.matches.length
+                });
+            }
+
+            // Emit streaming update - formatting
+            this._emitStreamingUpdate('search_files', 'processing', {
+                regex,
+                path: targetPath,
+                step: 'formatting results',
+                matchCount: results.length
+            });
+
+            // Format output
+            let content = `Search results for pattern "${regex}":\n\n`;
+
+            if (results.length === 0) {
+                content += '(no matches found)';
+            } else {
+                content += `Found ${results.length} file(s) with matches:\n\n`;
+
+                for (const result of results) {
+                    content += `📄 ${result.file}:\n`;
+                    result.matches.forEach(match => {
+                        content += `  Line ${match.line}: ${match.text}\n`;
+                    });
+                    content += '\n';
+                }
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('search_files', 'completed', {
+                regex,
+                path: targetPath,
+                success: true,
+                matchCount: results.length
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'search_files',
+                content,
+                success: true
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('search_files', 'failed', {
+                regex: toolCall.regex,
+                path: toolCall.path || '.',
+                error: error.message
+            });
+
+            throw new Error(`Failed to search files: ${error.message}`);
+        }
+    }
+
+    /**
+     * Helper function to search files for a pattern
+     */
+    async _searchFilesForPattern(dirPath, regexPattern, filePattern) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+        const minimatch = require('minimatch');
+        const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+
+        const results = [];
+        const regex = new RegExp(regexPattern, 'gmi');
+
+        async function searchDirectory(currentPath) {
+            const entries = await fs.readdir(currentPath, { withFileTypes: true });
+
+            for (const entry of entries) {
+                // Skip hidden and ignored directories
+                if (entry.name.startsWith('.')) continue;
+                if (entry.name === 'node_modules') continue;
+                if (entry.name === '__pycache__') continue;
+                if (entry.name === 'dist') continue;
+                if (entry.name === 'build') continue;
+
+                const fullPath = pathModule.join(currentPath, entry.name);
+                const relativePath = pathModule.relative(workspacePath, fullPath);
+
+                if (entry.isDirectory()) {
+                    await searchDirectory(fullPath);
+                } else {
+                    // Check if file matches pattern
+                    if (!minimatch(relativePath, filePattern)) continue;
+
+                    try {
+                        const content = await fs.readFile(fullPath, 'utf8');
+                        const lines = content.split('\n');
+                        const matches = [];
+
+                        lines.forEach((line, idx) => {
+                            if (regex.test(line)) {
+                                matches.push({
+                                    line: idx + 1,
+                                    text: line.trim()
+                                });
+                            }
+                            // Reset regex lastIndex
+                            regex.lastIndex = 0;
+                        });
+
+                        if (matches.length > 0) {
+                            results.push({
+                                file: relativePath,
+                                matches: matches.slice(0, 10) // Limit to 10 matches per file
+                            });
+                        }
+                    } catch (error) {
+                        // Skip binary files or files that can't be read
+                        if (error.code !== 'EACCES') {
+                            console.warn(`Could not read file ${relativePath}:`, error.message);
+                        }
+                    }
+                }
+            }
+        }
+
+        await searchDirectory(dirPath);
+        return results.slice(0, 20); // Limit total results to 20 files
     }
 
     /**
@@ -3340,105 +5179,306 @@ ${dynamicContext}\`;
      * Execute terminal command in VS Code's integrated terminal
      * Shows command execution in the terminal panel at bottom of VS Code
      */
+    /**
+     * Execute terminal command - Enhanced with output capture, timeout, and exit codes
+     *
+     * Features:
+     * - Captures command output and exit code
+     * - Configurable timeout support
+     * - Output compression for large outputs
+     * - Background execution option (future enhancement)
+     * - Falls back to VS Code terminal for interactive commands
+     */
     async _executeTerminalCommand(command, description) {
-        // v3.4.3: Track command execution for task reports
+        const { spawn } = require('child_process');
+        const pathModule = require('path');
+
+        // Emit streaming update - started
+        this._emitStreamingUpdate('execute_command', 'started', {
+            command,
+            description
+        });
+
+        // Track command execution
         const commandRecord = {
             command,
             description: description || command,
             timestamp: new Date().toISOString(),
             riskLevel: null,
-            status: 'pending'
+            status: 'pending',
+            startTime: Date.now()
         };
         this.executedCommands.push(commandRecord);
-        const commandIndex = this.executedCommands.length - 1;
 
         try {
-            // 🔒 Smart risk-based confirmation (inline in chat, no popup)
+            // Risk-based confirmation
             const riskLevel = this._getCommandRiskLevel(command);
             commandRecord.riskLevel = riskLevel;
 
             if (riskLevel === 'high' || riskLevel === 'moderate') {
-                // Send command confirmation request to chat UI (no modal popup)
-                const confirmed = await this._requestCommandConfirmation(command, riskLevel);
+                this._emitStreamingUpdate('execute_command', 'processing', {
+                    command,
+                    step: 'awaiting user confirmation',
+                    riskLevel
+                });
 
+                const confirmed = await this._requestCommandConfirmation(command, riskLevel);
                 if (!confirmed) {
+                    this._emitStreamingUpdate('execute_command', 'failed', {
+                        command,
+                        error: 'Command cancelled by user'
+                    });
                     throw new Error('Command cancelled by user');
                 }
             }
-            // 'safe' commands run without confirmation
 
             // Get workspace path
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders) {
                 throw new Error('No workspace folder open');
             }
-
             const workspacePath = workspaceFolders[0].uri.fsPath;
 
-            console.log(`💻 Executing command in terminal: ${command}`);
+            console.log(`💻 Executing command: ${command}`);
             console.log(`📁 Working directory: ${workspacePath}`);
 
-            // Get or create Oropendola terminal
-            let terminal = this._getOropendolaTerminal();
+            // Determine if we should use child_process or terminal
+            const useTerminal = this._shouldUseTerminalUI(command);
 
-            if (!terminal) {
-                // Create new dedicated terminal for Oropendola AI
-                terminal = vscode.window.createTerminal({
-                    name: 'Oropendola AI',
-                    cwd: workspacePath,
-                    hideFromUser: false // Make visible in terminal panel
+            // Emit streaming update - executing
+            this._emitStreamingUpdate('execute_command', 'executing', {
+                command,
+                mode: useTerminal ? 'terminal' : 'captured',
+                workspacePath
+            });
+
+            if (useTerminal) {
+                // Use VS Code terminal for interactive commands
+                const result = await this._executeInTerminal(command, workspacePath, commandRecord);
+
+                this._emitStreamingUpdate('execute_command', 'completed', {
+                    command,
+                    success: true,
+                    mode: 'terminal'
                 });
 
-                // Store reference for reuse
-                this._terminal = terminal;
-
-                console.log('✨ Created new Oropendola AI terminal');
+                return result;
             }
 
-            // Show the terminal panel (but don't steal focus from editor)
-            terminal.show(false);
+            // Use child_process for commands that need output capture
+            const result = await this._executeWithOutputCapture(command, workspacePath, commandRecord);
 
-            // Show notification based on risk level
-            if (riskLevel === 'safe') {
-                // Silent execution for safe commands (output visible in terminal)
-                console.log(`✅ Executing safe command: ${command}`);
-            } else if (riskLevel === 'moderate') {
-                vscode.window.showInformationMessage(`⚙️ Running: ${description || command}`);
-            }
-            // High risk commands already showed confirmation dialog
+            this._emitStreamingUpdate('execute_command', 'completed', {
+                command,
+                success: true,
+                exitCode: result.exitCode,
+                duration: result.duration
+            });
 
-            // Send command to terminal (will be visible to user)
-            terminal.sendText(command);
-
-            console.log(`✅ Command sent to terminal: ${command}`);
-
-            // Note: We can't wait for command completion with terminal.sendText()
-            // It executes asynchronously. User sees real-time output in terminal.
-
-            // v3.4.3: Mark command as successful
-            commandRecord.status = 'success';
-
-            return {
-                tool_use_id: this.taskId,
-                tool_name: 'run_terminal_command',
-                content: `Command executed successfully: $ ${command}
-
-Output will appear in the "Oropendola AI" terminal.`,
-                success: true
-            };
+            return result;
 
         } catch (error) {
-            console.error(`❌ Terminal command failed: ${command}`);
+            console.error(`❌ Command failed: ${command}`);
             console.error(`Error: ${error.message}`);
 
-            // v3.4.3: Mark command as failed
             commandRecord.status = 'failed';
             commandRecord.error = error.message;
+            commandRecord.duration = Date.now() - commandRecord.startTime;
 
-            vscode.window.showErrorMessage(`❌ Command failed: ${command}`);
+            this._emitStreamingUpdate('execute_command', 'failed', {
+                command,
+                error: error.message,
+                duration: commandRecord.duration
+            });
 
             throw new Error(`Failed to execute command "${command}": ${error.message}`);
         }
+    }
+
+    /**
+     * Determine if command should use terminal UI or output capture
+     */
+    _shouldUseTerminalUI(command) {
+        const lowerCommand = command.toLowerCase();
+
+        // Commands that benefit from terminal UI
+        const interactivePatterns = [
+            'npm run dev',
+            'npm start',
+            'yarn dev',
+            'yarn start',
+            'python -m',
+            'node server',
+            'docker run',
+            'tail -f',
+            'watch',
+            'serve'
+        ];
+
+        return interactivePatterns.some(pattern => lowerCommand.includes(pattern));
+    }
+
+    /**
+     * Execute command in VS Code terminal (visible UI)
+     */
+    async _executeInTerminal(command, workspacePath, commandRecord) {
+        let terminal = this._getOropendolaTerminal();
+
+        if (!terminal) {
+            terminal = vscode.window.createTerminal({
+                name: 'Oropendola AI',
+                cwd: workspacePath,
+                hideFromUser: false
+            });
+            this._terminal = terminal;
+            console.log('✨ Created new Oropendola AI terminal');
+        }
+
+        terminal.show(false);
+        terminal.sendText(command);
+
+        commandRecord.status = 'success';
+        commandRecord.duration = Date.now() - commandRecord.startTime;
+
+        console.log(`✅ Command sent to terminal: ${command}`);
+
+        return {
+            tool_use_id: this.taskId,
+            tool_name: 'execute_command',
+            content: `Command executing in terminal: $ ${command}\n\nOutput will appear in the "Oropendola AI" terminal.`,
+            success: true
+        };
+    }
+
+    /**
+     * Execute command with output capture and timeout
+     */
+    async _executeWithOutputCapture(command, workspacePath, commandRecord) {
+        const { spawn } = require('child_process');
+
+        return new Promise((resolve, reject) => {
+            // Parse command into executable and args
+            const parts = command.split(' ');
+            const executable = parts[0];
+            const args = parts.slice(1);
+
+            // Configuration
+            const TIMEOUT_MS = 120000; // 2 minutes default
+            const MAX_OUTPUT_LINES = 500;
+            const MAX_OUTPUT_CHARS = 50000;
+
+            let stdout = '';
+            let stderr = '';
+            let killed = false;
+
+            // Spawn process
+            const child = spawn(executable, args, {
+                cwd: workspacePath,
+                shell: true,
+                env: { ...process.env }
+            });
+
+            // Set timeout
+            const timeout = setTimeout(() => {
+                killed = true;
+                child.kill('SIGTERM');
+
+                // Force kill after 5 seconds if not dead
+                setTimeout(() => {
+                    if (!child.killed) {
+                        child.kill('SIGKILL');
+                    }
+                }, 5000);
+            }, TIMEOUT_MS);
+
+            // Capture stdout
+            child.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+
+            // Capture stderr
+            child.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+
+            // Handle completion
+            child.on('close', (code) => {
+                clearTimeout(timeout);
+
+                // Compress output if too large
+                const output = this._compressCommandOutput(
+                    stdout + stderr,
+                    MAX_OUTPUT_LINES,
+                    MAX_OUTPUT_CHARS
+                );
+
+                commandRecord.status = code === 0 ? 'success' : 'failed';
+                commandRecord.exitCode = code;
+                commandRecord.duration = Date.now() - commandRecord.startTime;
+
+                if (killed) {
+                    reject(new Error(`Command timed out after ${TIMEOUT_MS/1000} seconds`));
+                    return;
+                }
+
+                const result = {
+                    tool_use_id: this.taskId,
+                    tool_name: 'execute_command',
+                    content: `Command: $ ${command}\nExit code: ${code}\n\nOutput:\n${output}`,
+                    success: code === 0,
+                    exitCode: code,
+                    duration: commandRecord.duration
+                };
+
+                if (code === 0) {
+                    console.log(`✅ Command completed successfully: ${command} (${commandRecord.duration}ms)`);
+                    resolve(result);
+                } else {
+                    console.error(`❌ Command failed with exit code ${code}: ${command}`);
+                    reject(new Error(`Command exited with code ${code}\n${output}`));
+                }
+            });
+
+            // Handle errors
+            child.on('error', (error) => {
+                clearTimeout(timeout);
+                commandRecord.status = 'failed';
+                commandRecord.error = error.message;
+                commandRecord.duration = Date.now() - commandRecord.startTime;
+
+                reject(new Error(`Failed to execute command: ${error.message}`));
+            });
+        });
+    }
+
+    /**
+     * Compress command output to prevent overwhelming context
+     */
+    _compressCommandOutput(output, maxLines, maxChars) {
+        if (!output) return '(no output)';
+
+        // Truncate by characters first
+        if (output.length > maxChars) {
+            output = output.substring(0, maxChars) +
+                    `\n\n... [Output truncated: showing first ${maxChars} characters of ${output.length}]`;
+        }
+
+        // Then by lines
+        const lines = output.split('\n');
+        if (lines.length > maxLines) {
+            const keepStart = Math.floor(maxLines * 0.7); // Keep 70% from start
+            const keepEnd = maxLines - keepStart; // Keep 30% from end
+
+            const truncated = [
+                ...lines.slice(0, keepStart),
+                `\n... [${lines.length - maxLines} lines omitted] ...\n`,
+                ...lines.slice(-keepEnd)
+            ].join('\n');
+
+            return truncated;
+        }
+
+        return output;
     }
 
     /**
@@ -4193,37 +6233,6 @@ IMMEDIATELY create the first file for this project. Start with package.json or a
         return context;
     }
 
-    /**
-     * Add message to conversation
-     */
-    addMessage(role, content, images = [], toolName = null) {
-        // No truncation - Claude API supports 200K tokens (~800K characters)
-        // Backend handles any necessary limits
-        // System prompts need full length for autonomous execution mode
-
-        this.messages.push({
-            role,
-            content, // Send full content without truncation
-            images,
-            toolName,
-            timestamp: new Date()
-        });
-    }
-
-    /**
-     * Abort the task
-     */
-    abortTask() {
-        console.log(`⏹ Aborting task ${this.taskId}`);
-        this.abort = true;
-        this.status = 'completed';
-
-        if (this.abortController) {
-            this.abortController.abort();
-        }
-
-        this.emit('taskAborted', this.taskId);
-    }
 
     /**
      * Get task summary
@@ -5360,6 +7369,412 @@ ${result.content}
                 tool_use_id: toolCall.id,
                 tool_name: 'codebase_search',
                 content: `Error performing semantic search: ${error.message}`,
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Execute browser_action tool - Browser automation using Puppeteer
+     *
+     * Actions supported:
+     * - launch: Launch browser
+     * - navigate: Navigate to URL
+     * - click: Click element by selector or coordinates
+     * - type: Type text into element
+     * - screenshot: Take screenshot
+     * - close: Close browser
+     *
+     * Note: Requires puppeteer dependency. Run: npm install puppeteer
+     */
+    async _executeBrowserAction(toolCall) {
+        const { action, url, selector, text, x, y, path: screenshotPath } = toolCall;
+
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('browser_action', 'started', {
+                action,
+                url,
+                selector
+            });
+
+            // Check if puppeteer is available
+            let puppeteer;
+            try {
+                puppeteer = require('puppeteer');
+            } catch (error) {
+                this._emitStreamingUpdate('browser_action', 'failed', {
+                    action,
+                    error: 'Puppeteer not installed'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'browser_action',
+                    content: `⚠️ Puppeteer not installed\n\nTo use browser automation, install puppeteer:\n\n  npm install puppeteer\n\nThen restart VS Code.`,
+                    success: false,
+                    requiresSetup: true
+                };
+            }
+
+            // Initialize browser if needed
+            if (!this._browser && action !== 'close') {
+                this._emitStreamingUpdate('browser_action', 'processing', {
+                    action,
+                    step: 'launching browser'
+                });
+
+                console.log('🌐 Launching browser...');
+                this._browser = await puppeteer.launch({
+                    headless: true,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                });
+                this._browserPage = await this._browser.newPage();
+                console.log('✅ Browser launched');
+            }
+
+            const page = this._browserPage;
+
+            // Emit streaming update - executing action
+            this._emitStreamingUpdate('browser_action', 'processing', {
+                action,
+                step: `executing ${action} action`
+            });
+
+            // Execute action
+            let result;
+            switch (action) {
+                case 'launch':
+                    result = {
+                        tool_use_id: this.taskId,
+                        tool_name: 'browser_action',
+                        content: '✅ Browser launched and ready',
+                        success: true
+                    };
+                    break;
+
+                case 'navigate':
+                    if (!url) throw new Error('url parameter required for navigate action');
+                    console.log(`🔗 Navigating to: ${url}`);
+                    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+                    const title = await page.title();
+                    result = {
+                        tool_use_id: this.taskId,
+                        tool_name: 'browser_action',
+                        content: `✅ Navigated to: ${url}\nPage title: ${title}`,
+                        success: true
+                    };
+                    break;
+
+                case 'click':
+                    if (selector) {
+                        console.log(`🖱️ Clicking element: ${selector}`);
+                        await page.waitForSelector(selector, { timeout: 10000 });
+                        await page.click(selector);
+                        result = {
+                            tool_use_id: this.taskId,
+                            tool_name: 'browser_action',
+                            content: `✅ Clicked element: ${selector}`,
+                            success: true
+                        };
+                    } else if (x !== undefined && y !== undefined) {
+                        console.log(`🖱️ Clicking coordinates: (${x}, ${y})`);
+                        await page.mouse.click(x, y);
+                        result = {
+                            tool_use_id: this.taskId,
+                            tool_name: 'browser_action',
+                            content: `✅ Clicked at coordinates: (${x}, ${y})`,
+                            success: true
+                        };
+                    } else {
+                        throw new Error('Either selector or (x, y) coordinates required for click action');
+                    }
+                    break;
+
+                case 'type':
+                    if (!selector) throw new Error('selector parameter required for type action');
+                    if (!text) throw new Error('text parameter required for type action');
+                    console.log(`⌨️ Typing into element: ${selector}`);
+                    await page.waitForSelector(selector, { timeout: 10000 });
+                    await page.type(selector, text);
+                    result = {
+                        tool_use_id: this.taskId,
+                        tool_name: 'browser_action',
+                        content: `✅ Typed text into: ${selector}`,
+                        success: true
+                    };
+                    break;
+
+                case 'screenshot':
+                    const fs = require('fs').promises;
+                    const pathModule = require('path');
+                    const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath;
+                    const fullPath = pathModule.join(workspacePath, screenshotPath || 'screenshot.png');
+
+                    console.log(`📸 Taking screenshot: ${fullPath}`);
+                    await page.screenshot({ path: fullPath, fullPage: true });
+
+                    // Track file access for screenshot
+                    this._trackFileAccess(screenshotPath || 'screenshot.png', 'create', {
+                        tool: 'browser_action',
+                        action: 'screenshot',
+                        url: page.url()
+                    });
+
+                    result = {
+                        tool_use_id: this.taskId,
+                        tool_name: 'browser_action',
+                        content: `✅ Screenshot saved: ${screenshotPath || 'screenshot.png'}`,
+                        success: true,
+                        screenshotPath: fullPath
+                    };
+                    break;
+
+                case 'close':
+                    if (this._browser) {
+                        console.log('🔒 Closing browser...');
+                        await this._browser.close();
+                        this._browser = null;
+                        this._browserPage = null;
+                        result = {
+                            tool_use_id: this.taskId,
+                            tool_name: 'browser_action',
+                            content: '✅ Browser closed',
+                            success: true
+                        };
+                    } else {
+                        result = {
+                            tool_use_id: this.taskId,
+                            tool_name: 'browser_action',
+                            content: '⚠️ No browser to close',
+                            success: true
+                        };
+                    }
+                    break;
+
+                default:
+                    throw new Error(`Unknown browser action: ${action}`);
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('browser_action', 'completed', {
+                action,
+                success: true
+            });
+
+            return result;
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('browser_action', 'failed', {
+                action,
+                error: error.message
+            });
+
+            console.error(`❌ Browser action failed: ${error.message}`);
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'browser_action',
+                content: `❌ Browser action failed: ${error.message}`,
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Execute generate_image tool - Generate images using AI
+     *
+     * Supports multiple backends:
+     * - OpenAI DALL-E (requires OPENAI_API_KEY)
+     * - Stable Diffusion (future)
+     *
+     * Note: Requires API keys to be configured
+     */
+    async _executeGenerateImage(toolCall) {
+        const { prompt, size = '1024x1024', path: imagePath = 'generated-image.png', backend = 'dalle' } = toolCall;
+
+        if (!prompt) {
+            throw new Error('prompt parameter is required for generate_image');
+        }
+
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('generate_image', 'started', {
+                prompt: prompt.substring(0, 100),
+                size,
+                imagePath
+            });
+
+            console.log(`🎨 Generating image with prompt: "${prompt.substring(0, 50)}..."`);
+
+            // For now, return a setup message - actual implementation requires API keys
+            this._emitStreamingUpdate('generate_image', 'failed', {
+                error: 'Image generation not yet configured',
+                requiresSetup: true
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'generate_image',
+                content: `⚠️ Image generation not yet configured\n\nTo enable image generation:\n\n1. Set up an image generation API (e.g., OpenAI DALL-E)\n2. Configure API key in settings\n3. Install required packages\n\nPrompt: "${prompt}"\nSize: ${size}\nPath: ${imagePath}`,
+                success: false,
+                requiresSetup: true
+            };
+
+            // Future implementation:
+            // if (backend === 'dalle') {
+            //     this._emitStreamingUpdate('generate_image', 'processing', { step: 'calling DALL-E API' });
+            //     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            //     const response = await openai.images.generate({
+            //         prompt,
+            //         n: 1,
+            //         size
+            //     });
+            //     const imageUrl = response.data[0].url;
+            //     this._emitStreamingUpdate('generate_image', 'processing', { step: 'downloading image' });
+            //     // Download and save image
+            //     this._trackFileAccess(imagePath, 'create', { tool: 'generate_image', prompt });
+            //     this._emitStreamingUpdate('generate_image', 'completed', { success: true, imagePath });
+            //     // Return success with path
+            // }
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('generate_image', 'failed', {
+                error: error.message
+            });
+
+            console.error(`❌ Image generation failed: ${error.message}`);
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'generate_image',
+                content: `❌ Image generation failed: ${error.message}`,
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Execute run_slash_command tool - Run custom slash commands
+     *
+     * Slash commands are stored in .claude/commands/ directory
+     * Each command is a markdown file with the command prompt
+     *
+     * Example: .claude/commands/review-code.md
+     */
+    async _executeRunSlashCommand(toolCall) {
+        const fs = require('fs').promises;
+        const pathModule = require('path');
+
+        const { command, args } = toolCall;
+
+        if (!command) {
+            throw new Error('command parameter is required for run_slash_command');
+        }
+
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('run_slash_command', 'started', {
+                command,
+                args
+            });
+
+            // Get workspace path
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder open');
+            }
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+
+            // Look for command file in .claude/commands/
+            const commandFileName = command.startsWith('/') ? command.substring(1) : command;
+            const commandPath = pathModule.join(workspacePath, '.claude', 'commands', `${commandFileName}.md`);
+
+            console.log(`🔧 Looking for slash command: ${commandPath}`);
+
+            // Emit streaming update - searching
+            this._emitStreamingUpdate('run_slash_command', 'processing', {
+                command,
+                step: 'searching for command file'
+            });
+
+            // Check if command exists
+            try {
+                await fs.access(commandPath);
+            } catch (error) {
+                this._emitStreamingUpdate('run_slash_command', 'failed', {
+                    command,
+                    error: 'Command not found'
+                });
+
+                return {
+                    tool_use_id: this.taskId,
+                    tool_name: 'run_slash_command',
+                    content: `⚠️ Slash command not found: /${commandFileName}\n\nTo create this command:\n1. Create file: .claude/commands/${commandFileName}.md\n2. Add command prompt/instructions\n3. Save and retry`,
+                    success: false,
+                    notFound: true
+                };
+            }
+
+            // Emit streaming update - reading
+            this._emitStreamingUpdate('run_slash_command', 'processing', {
+                command,
+                step: 'reading command file'
+            });
+
+            // Read command file
+            const commandContent = await fs.readFile(commandPath, 'utf8');
+
+            console.log(`✅ Loaded slash command: /${commandFileName}`);
+
+            // Track file access for the command file
+            this._trackFileAccess(`.claude/commands/${commandFileName}.md`, 'read', {
+                tool: 'run_slash_command',
+                command: commandFileName,
+                size: commandContent.length
+            });
+
+            // Emit streaming update - processing args
+            this._emitStreamingUpdate('run_slash_command', 'processing', {
+                command,
+                step: 'processing arguments'
+            });
+
+            // Replace arguments if provided
+            let processedContent = commandContent;
+            if (args && typeof args === 'object') {
+                Object.keys(args).forEach(key => {
+                    const placeholder = new RegExp(`\\{${key}\\}`, 'g');
+                    processedContent = processedContent.replace(placeholder, args[key]);
+                });
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('run_slash_command', 'completed', {
+                command,
+                success: true
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'run_slash_command',
+                content: `✅ Executing slash command: /${commandFileName}\n\n${processedContent}`,
+                success: true,
+                commandContent: processedContent
+            };
+
+        } catch (error) {
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('run_slash_command', 'failed', {
+                command,
+                error: error.message
+            });
+
+            console.error(`❌ Slash command failed: ${error.message}`);
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'run_slash_command',
+                content: `❌ Slash command failed: ${error.message}`,
                 success: false
             };
         }

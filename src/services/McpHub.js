@@ -16,7 +16,11 @@ class McpHub extends EventEmitter {
         this.servers = new Map(); // serverName -> serverConnection
         this.tools = new Map(); // toolName -> { server, toolSchema }
         this.resources = new Map(); // resourceUri -> { server, resourceSchema }
+        this.prompts = new Map(); // promptName -> { server, promptSchema }
         this.isInitialized = false;
+        this.reconnectAttempts = new Map(); // serverName -> attemptCount
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 1000; // Start with 1 second
     }
 
     /**
@@ -87,6 +91,7 @@ class McpHub extends EventEmitter {
                 config,
                 tools: [],
                 resources: [],
+                prompts: [],
                 status: 'connecting'
             };
 
@@ -107,13 +112,42 @@ class McpHub extends EventEmitter {
             });
 
             serverProcess.stderr.on('data', (data) => {
-                console.error(`MCP server ${serverName} stderr:`, data.toString());
+                const errorMessage = data.toString();
+                console.error(`MCP server ${serverName} stderr:`, errorMessage);
+                this.emit('serverError', { serverName, error: errorMessage });
             });
 
-            serverProcess.on('exit', (code) => {
-                console.log(`MCP server ${serverName} exited with code ${code}`);
+            serverProcess.on('error', (error) => {
+                console.error(`MCP server ${serverName} process error:`, error);
+                connection.status = 'error';
+                this.emit('serverError', { serverName, error: error.message });
+            });
+
+            serverProcess.on('exit', (code, signal) => {
+                console.log(`MCP server ${serverName} exited with code ${code}, signal ${signal}`);
+
+                // Clean up connection
+                const wasConnected = connection.status === 'connected';
+                connection.status = 'disconnected';
+
+                // Remove tools, resources, and prompts for this server
+                for (const tool of connection.tools) {
+                    this.tools.delete(tool.name);
+                }
+                for (const resource of connection.resources) {
+                    this.resources.delete(resource.uri);
+                }
+                for (const prompt of connection.prompts) {
+                    this.prompts.delete(prompt.name);
+                }
+
                 this.servers.delete(serverName);
                 this.emit('serverDisconnected', serverName);
+
+                // Attempt reconnection if it was connected and didn't exit cleanly
+                if (wasConnected && code !== 0) {
+                    this._attemptReconnect(serverName, config);
+                }
             });
 
             this.servers.set(serverName, connection);
@@ -133,6 +167,14 @@ class McpHub extends EventEmitter {
             // List available resources
             await this._sendServerRequest(serverName, 'resources/list', {});
 
+            // List available prompts
+            try {
+                await this._sendServerRequest(serverName, 'prompts/list', {});
+            } catch (error) {
+                // Prompts are optional, server might not support them
+                console.log(`Server ${serverName} does not support prompts`);
+            }
+
             connection.status = 'connected';
             this.emit('serverConnected', serverName);
 
@@ -151,12 +193,15 @@ class McpHub extends EventEmitter {
             return;
         }
 
-        // Remove tools and resources
+        // Remove tools, resources, and prompts
         for (const tool of connection.tools) {
             this.tools.delete(tool.name);
         }
         for (const resource of connection.resources) {
             this.resources.delete(resource.uri);
+        }
+        for (const prompt of connection.prompts) {
+            this.prompts.delete(prompt.name);
         }
 
         // Kill server process
@@ -177,6 +222,13 @@ class McpHub extends EventEmitter {
             const connection = this.servers.get(serverName);
 
             if (!connection) {
+                console.warn(`Received message from unknown server: ${serverName}`);
+                return;
+            }
+
+            // Validate JSON-RPC format
+            if (!data.jsonrpc || data.jsonrpc !== '2.0') {
+                console.warn(`Invalid JSON-RPC message from ${serverName}:`, data);
                 return;
             }
 
@@ -207,11 +259,32 @@ class McpHub extends EventEmitter {
                 }
 
                 console.log(`Registered ${connection.resources.length} resources from ${serverName}`);
+            } else if (data.method === 'prompts/list') {
+                // Server sent prompts list
+                connection.prompts = data.result?.prompts || [];
+
+                // Register prompts
+                for (const prompt of connection.prompts) {
+                    this.prompts.set(prompt.name, {
+                        server: serverName,
+                        schema: prompt
+                    });
+                }
+
+                console.log(`Registered ${connection.prompts.length} prompts from ${serverName}`);
             }
 
             this.emit('serverMessage', { serverName, data });
         } catch (error) {
             console.error(`Failed to parse MCP message from ${serverName}:`, error);
+            console.error('Raw message:', message);
+
+            // Emit error event for monitoring
+            this.emit('serverError', {
+                serverName,
+                error: `Message parsing error: ${error.message}`,
+                rawMessage: message.substring(0, 200) // Truncate for safety
+            });
         }
     }
 
@@ -357,6 +430,84 @@ class McpHub extends EventEmitter {
     }
 
     /**
+     * List available prompts
+     */
+    listPrompts() {
+        const promptsList = [];
+
+        for (const [name, info] of this.prompts) {
+            promptsList.push({
+                name,
+                server: info.server,
+                description: info.schema.description,
+                arguments: info.schema.arguments
+            });
+        }
+
+        return promptsList;
+    }
+
+    /**
+     * Get a prompt with arguments
+     */
+    async getPrompt(promptName, args = {}) {
+        const promptInfo = this.prompts.get(promptName);
+
+        if (!promptInfo) {
+            throw new Error(`MCP prompt not found: ${promptName}`);
+        }
+
+        const { server } = promptInfo;
+
+        try {
+            const result = await this._sendServerRequest(server, 'prompts/get', {
+                name: promptName,
+                arguments: args
+            });
+
+            return {
+                success: true,
+                messages: result.messages || [],
+                description: result.description
+            };
+        } catch (error) {
+            return {
+                success: false,
+                content: error.message,
+                isError: true
+            };
+        }
+    }
+
+    /**
+     * Create a message using sampling (LLM completion)
+     * This allows MCP servers to request AI completions
+     */
+    async createSamplingMessage(params) {
+        const { messages, modelPreferences, systemPrompt, maxTokens } = params;
+
+        // This method should be implemented by the client
+        // For now, we'll emit an event that the ConversationTask can handle
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Sampling request timeout'));
+            }, 60000);
+
+            this.once('samplingResponse', (response) => {
+                clearTimeout(timeout);
+                resolve(response);
+            });
+
+            this.emit('samplingRequest', {
+                messages,
+                modelPreferences,
+                systemPrompt,
+                maxTokens: maxTokens || 1000
+            });
+        });
+    }
+
+    /**
      * Get server status
      */
     getServerStatus(serverName) {
@@ -369,7 +520,8 @@ class McpHub extends EventEmitter {
         return {
             status: connection.status,
             toolCount: connection.tools.length,
-            resourceCount: connection.resources.length
+            resourceCount: connection.resources.length,
+            promptCount: connection.prompts.length
         };
     }
 
@@ -380,6 +532,57 @@ class McpHub extends EventEmitter {
         for (const serverName of this.servers.keys()) {
             await this.disconnectServer(serverName);
         }
+    }
+
+    /**
+     * Attempt to reconnect to a server with exponential backoff
+     */
+    async _attemptReconnect(serverName, config) {
+        const attempts = this.reconnectAttempts.get(serverName) || 0;
+
+        if (attempts >= this.maxReconnectAttempts) {
+            console.error(`Max reconnection attempts reached for ${serverName}`);
+            this.reconnectAttempts.delete(serverName);
+            return;
+        }
+
+        this.reconnectAttempts.set(serverName, attempts + 1);
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        const delay = this.reconnectDelay * Math.pow(2, attempts);
+
+        console.log(`Attempting to reconnect to ${serverName} in ${delay}ms (attempt ${attempts + 1}/${this.maxReconnectAttempts})`);
+
+        setTimeout(async () => {
+            try {
+                await this.connectServer(serverName, config);
+                console.log(`Successfully reconnected to ${serverName}`);
+                this.reconnectAttempts.delete(serverName);
+            } catch (error) {
+                console.error(`Failed to reconnect to ${serverName}:`, error);
+                // Will try again if attempts < max
+                this._attemptReconnect(serverName, config);
+            }
+        }, delay);
+    }
+
+    /**
+     * Check connection health and reconnect if needed
+     */
+    async checkConnectionHealth() {
+        for (const [serverName, connection] of this.servers) {
+            if (connection.status === 'error' || connection.status === 'disconnected') {
+                console.log(`Connection health check: ${serverName} is ${connection.status}, attempting reconnect`);
+                this._attemptReconnect(serverName, connection.config);
+            }
+        }
+    }
+
+    /**
+     * Reset reconnection attempts for a server
+     */
+    resetReconnectAttempts(serverName) {
+        this.reconnectAttempts.delete(serverName);
     }
 }
 

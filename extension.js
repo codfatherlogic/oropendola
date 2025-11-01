@@ -725,6 +725,50 @@ function registerCommands(context) {
         })
     );
 
+    // Oropendola: Show History (Panel Toolbar)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showHistory', () => {
+            if (sidebarProvider && sidebarProvider._view) {
+                sidebarProvider._view.webview.postMessage({
+                    type: 'switchTab',
+                    tab: 'history'
+                });
+            }
+        })
+    );
+
+    // Oropendola: Show Settings (Panel Toolbar)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showSettings', () => {
+            if (sidebarProvider && sidebarProvider._view) {
+                sidebarProvider._view.webview.postMessage({
+                    type: 'switchTab',
+                    tab: 'settings'
+                });
+            }
+        })
+    );
+
+    // Oropendola: Show Account (Panel Toolbar)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showAccount', () => {
+            if (sidebarProvider && sidebarProvider._view) {
+                sidebarProvider._view.webview.postMessage({
+                    type: 'switchTab',
+                    tab: 'account'
+                });
+            }
+        })
+    );
+
+    // Oropendola: Show More Options (Panel Toolbar)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('oropendola.showMoreOptions', () => {
+            // TODO: Implement menu with additional options
+            vscode.window.showInformationMessage('More options menu coming soon!');
+        })
+    );
+
     // Oropendola: Chat - Open sidebar instead of panel
     context.subscriptions.push(
         vscode.commands.registerCommand('oropendola.openChat', async () => {
@@ -3063,10 +3107,9 @@ function setupProviders(_context) {
  */
 function updateStatusBarForLogin() {
     if (statusBarItem) {
-        statusBarItem.text = '🔒 Oropendola: Sign In';
-        statusBarItem.tooltip = 'Sign in to Oropendola AI\nShortcut: F2\nClick to open login window';
-        statusBarItem.command = 'oropendola.login';
-        statusBarItem.show();
+        // Don't show status bar when not authenticated
+        // Authentication is now handled via sidebar Sign In button
+        statusBarItem.hide();
     }
 }
 

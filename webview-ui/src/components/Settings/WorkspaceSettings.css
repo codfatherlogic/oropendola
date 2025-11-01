@@ -1,0 +1,435 @@
+/* Workspace Settings Styles */
+
+.workspace-settings {
+  margin-bottom: 32px;
+}
+
+/* Setting Section Container */
+.setting-section {
+  margin-bottom: 24px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.setting-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.setting-info {
+  flex: 1;
+}
+
+.setting-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--vscode-foreground);
+  margin-bottom: 4px;
+}
+
+.setting-description {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.4;
+}
+
+.setting-content {
+  padding: 16px;
+}
+
+.setting-row {
+  margin-bottom: 12px;
+}
+
+/* Sub-Settings (nested settings) */
+.sub-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--vscode-input-background);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.sub-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sub-setting-label {
+  font-size: 13px;
+  color: var(--vscode-foreground);
+}
+
+.sub-setting-label.disabled {
+  color: var(--vscode-disabledForeground);
+}
+
+/* List Editor */
+.list-editor {
+  margin-top: 16px;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.list-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+}
+
+.load-defaults-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.load-defaults-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.list-input-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.list-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+}
+
+.list-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.add-btn {
+  padding: 8px 16px;
+  font-size: 12px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-btn:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--vscode-input-background);
+  border-radius: 6px;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.list-items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.list-items::-webkit-scrollbar-track {
+  background: var(--vscode-editor-background);
+}
+
+.list-items::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 4px;
+}
+
+.list-items::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--vscode-editor-background);
+  border-radius: 4px;
+  border: 1px solid var(--vscode-panel-border);
+  transition: all 0.2s ease;
+}
+
+.list-item:hover {
+  border-color: var(--vscode-focusBorder);
+}
+
+.item-text {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  color: var(--vscode-textLink-foreground);
+  flex: 1;
+  word-break: break-all;
+}
+
+.remove-btn {
+  padding: 2px 8px;
+  font-size: 16px;
+  font-weight: bold;
+  background: transparent;
+  color: var(--vscode-errorForeground);
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.remove-btn:hover {
+  background: var(--vscode-inputValidation-errorBackground);
+}
+
+.empty-list {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+/* File Types List - Grid Layout */
+.file-types-list .list-item {
+  display: inline-flex;
+  width: auto;
+  margin: 4px;
+}
+
+.file-types-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.file-type-item {
+  min-width: 80px;
+}
+
+/* Auto-Save Delay Input */
+.delay-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.delay-input {
+  width: 120px;
+  padding: 8px 12px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+}
+
+.delay-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.delay-label {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.delay-presets {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* File Size Input */
+.file-size-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.file-size-input {
+  width: 150px;
+  padding: 8px 12px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+}
+
+.file-size-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.file-size-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+}
+
+.file-size-presets {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* Preset Buttons */
+.preset-btn {
+  padding: 6px 12px;
+  font-size: 11px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.preset-btn.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Commit Message Template */
+.commit-template-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 13px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  resize: vertical;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.commit-template-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.template-examples {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.example-label {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-right: 4px;
+}
+
+.example-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.example-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .setting-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .list-input-wrapper {
+    flex-direction: column;
+  }
+
+  .add-btn {
+    width: 100%;
+  }
+
+  .delay-input-wrapper,
+  .file-size-input-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .delay-input,
+  .file-size-input {
+    width: 100%;
+  }
+
+  .delay-label,
+  .file-size-label {
+    text-align: left;
+  }
+
+  .sub-setting-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .file-types-list {
+    flex-direction: column;
+  }
+
+  .file-type-item {
+    width: 100%;
+    margin: 0;
+  }
+
+  .template-examples {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .example-btn {
+    width: 100%;
+  }
+}

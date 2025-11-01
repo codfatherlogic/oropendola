@@ -96,17 +96,34 @@ build.sh
 install-extension.sh
 install-fix.sh
 convert-icon.js
+scripts/**
 
 # Test files
 test/**
+tests/**
 *.test.js
 *.spec.js
+*.test.ts
+*.spec.ts
+playwright.config.ts
 
 # Configuration files
 .eslintrc*
 .prettierrc*
 tsconfig.json
 jsconfig.json
+
+# Archive and summaries
+archive/**
+*_SUMMARY.md
+*_COMPLETE*.md
+*_IMPLEMENTATION*.md
+*_GUIDE.md
+SESSION_*.md
+LAUNCH_*.md
+PHASE_*.md
+CI_CD_*.md
+INFRASTRUCTURE_*.md
 
 # Misc
 *.log
@@ -115,6 +132,7 @@ package-lock.json
 yarn.lock
 .DS_Store
 settings-template.json
+.claude/**
 
 # Keep these important docs
 !README.md

@@ -1,0 +1,190 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run type check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package extension
+        run: npx vsce package
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v3
+        with:
+          name: vsix-release
+          path: '*.vsix'
+
+  publish-marketplace:
+    name: Publish to VS Code Marketplace
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Publish to Marketplace
+        run: npx vsce publish -p ${{ secrets.VSCE_TOKEN }}
+
+  publish-open-vsx:
+    name: Publish to Open VSX
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Publish to Open VSX
+        run: npx ovsx publish -p ${{ secrets.OVSX_TOKEN }}
+
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [publish-marketplace, publish-open-vsx]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package extension
+        run: npx vsce package
+
+      - name: Extract release notes
+        id: extract-release-notes
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          NOTES=$(sed -n "/## \[${VERSION}\]/,/## \[/p" CHANGELOG.md | sed '1d;$d')
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: '*.vsix'
+          body: ${{ steps.extract-release-notes.outputs.notes }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: create-github-release
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🚀 Oropendola AI Assistant v${{ steps.version.outputs.version }} has been released!",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Oropendola AI Assistant v${{ steps.version.outputs.version }}* has been successfully released! 🎉"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Marketplace:*\n<https://marketplace.visualstudio.com/items?itemName=oropendola.oropendola-ai-assistant|View Extension>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*GitHub:*\n<${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}|Release Notes>"
+                    }
+                  ]
+                }
+              ]
+            }'
+
+      - name: Send Discord notification
+        if: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -X POST ${{ secrets.DISCORD_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "content": "🚀 **Oropendola AI Assistant v${{ steps.version.outputs.version }}** has been released!",
+              "embeds": [{
+                "title": "Release v${{ steps.version.outputs.version }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}",
+                "color": 5814783,
+                "fields": [
+                  {
+                    "name": "Marketplace",
+                    "value": "[View Extension](https://marketplace.visualstudio.com/items?itemName=oropendola.oropendola-ai-assistant)"
+                  }
+                ]
+              }]
+            }'

@@ -41,13 +41,19 @@ When using tool_call blocks, follow this EXACT format:
 - update_todo_list: Manage task list dynamically (todos = markdown checklist)
 - list_code_definition_names: Extract functions/classes/methods from code files
 - codebase_search: Semantic code search by meaning/functionality (query + limit + min_similarity)
+- list_mcp_servers: List all configured MCP servers and status
+- list_mcp_tools: List all available MCP tools
+- list_mcp_resources: List all available MCP resources
+- list_mcp_prompts: List all available MCP prompts
 - use_mcp_tool: Execute external MCP server tool (tool_name + arguments)
 - access_mcp_resource: Access external MCP resource (uri)
+- get_mcp_prompt: Get MCP prompt template (prompt_name + arguments)
 - switch_mode: Change conversation mode dynamically (mode)
 - new_task: Create sub-task in different mode (mode + prompt)
 - save_checkpoint: Save current conversation state (description + force)
 - restore_checkpoint: Restore previous conversation state (checkpoint_id)
 - list_checkpoints: List all saved checkpoints
+- get_checkpoint_diff: Get diff between current state and checkpoint (checkpoint_id)
 - ask_followup_question: Ask interactive question with suggested answers (question + suggested_answers + timeout)
 - run_command: Execute terminal command (command = string)
 
@@ -165,8 +171,55 @@ Example:
 - Understanding patterns across codebase
 - Finding code when you don't know exact names
 
+**MCP (Model Context Protocol) TOOLS:**
+MCP allows connection to external servers that provide tools, resources, and prompts.
+
+**LIST_MCP_SERVERS:**
+List all configured MCP servers and their connection status.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "list_mcp_servers",
+  "description": "Show all MCP servers"
+}
+\`\`\`
+
+**LIST_MCP_TOOLS:**
+List all available tools from connected MCP servers.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "list_mcp_tools",
+  "description": "Show available MCP tools"
+}
+\`\`\`
+
+**LIST_MCP_RESOURCES:**
+List all available resources from connected MCP servers.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "list_mcp_resources",
+  "description": "Show available MCP resources"
+}
+\`\`\`
+
+**LIST_MCP_PROMPTS:**
+List all available prompts from connected MCP servers. Prompts are templates provided by MCP servers.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "list_mcp_prompts",
+  "description": "Show available MCP prompts"
+}
+\`\`\`
+
 **USE_MCP_TOOL:**
-Use this tool to execute tools from connected MCP servers. MCP tools extend AI capabilities with database access, API calls, and more.
+Execute a tool from a connected MCP server. MCP tools extend AI capabilities with database access, API calls, and more.
 
 Example:
 \`\`\`tool_call
@@ -188,7 +241,7 @@ Example:
 - Extending capabilities beyond code editing
 
 **ACCESS_MCP_RESOURCE:**
-Use this tool to access resources from MCP servers (documentation, data files, etc.)
+Access a resource from an MCP server (documentation, data files, etc.)
 
 Example:
 \`\`\`tool_call
@@ -203,6 +256,27 @@ Example:
 - Reading external documentation
 - Accessing data files from MCP servers
 - Getting context from external sources
+
+**GET_MCP_PROMPT:**
+Get a specific prompt from an MCP server with arguments. Prompts are context-aware templates.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "get_mcp_prompt",
+  "prompt_name": "code_review",
+  "arguments": {
+    "language": "javascript",
+    "focus": "security"
+  },
+  "description": "Get code review prompt for JavaScript"
+}
+\`\`\`
+
+**When to use:**
+- Getting specialized prompt templates
+- Accessing context-aware guidance
+- Using MCP server-provided best practices
 
 **SWITCH_MODE TOOL:**
 Use this tool to change the conversation mode dynamically based on the task at hand.
@@ -247,7 +321,7 @@ Example:
 - Delegating research while continuing main task
 
 **SAVE_CHECKPOINT TOOL:**
-Use this tool to save the current conversation state for later restoration. Perfect for creating save points before risky changes.
+Use this tool to save the current conversation state (messages, API history, mode) to a git-based checkpoint. Perfect for creating restore points before risky changes.
 
 Example:
 \`\`\`tool_call
@@ -258,9 +332,15 @@ Example:
 }
 \`\`\`
 
+**What gets saved:**
+- All conversation messages and history
+- API conversation history
+- Current mode (code/architect/ask/debug)
+- Timestamp and metadata
+
 **Parameters:**
 - description: Human-readable description of this checkpoint (required)
-- force: Force save even if there are uncommitted changes (default: false)
+- force: Force save even if no changes detected (default: false)
 
 **When to use:**
 - Before making major refactoring changes
@@ -270,16 +350,22 @@ Example:
 - Preserving state before risky operations
 
 **RESTORE_CHECKPOINT TOOL:**
-Use this tool to restore conversation and workspace state from a previously saved checkpoint.
+Use this tool to restore conversation state from a previously saved checkpoint. This will reset the conversation history to the saved state.
 
 Example:
 \`\`\`tool_call
 {
   "action": "restore_checkpoint",
-  "checkpoint_id": "abc123-def456-ghi789",
+  "checkpoint_id": "cp-1234567890-abc123",
   "description": "Restore to pre-refactoring state"
 }
 \`\`\`
+
+**What gets restored:**
+- Conversation messages and history
+- API conversation history
+- Mode setting
+- All metadata from checkpoint
 
 **Parameters:**
 - checkpoint_id: ID of checkpoint to restore (required, get from list_checkpoints)
@@ -287,7 +373,7 @@ Example:
 **When to use:**
 - Experimental changes didn't work out
 - Need to try different approach
-- Revert to known-good state
+- Revert to known-good conversation state
 - Recover from mistakes
 - Compare different implementation paths
 
@@ -307,6 +393,27 @@ Example:
 - Review conversation history
 - Find specific save point
 - Check when last checkpoint was created
+
+**GET_CHECKPOINT_DIFF TOOL:**
+Use this tool to see what changed between current state and a checkpoint. Shows file-level differences.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "get_checkpoint_diff",
+  "checkpoint_id": "cp-1234567890-abc123",
+  "description": "Compare current state to pre-refactoring checkpoint"
+}
+\`\`\`
+
+**Parameters:**
+- checkpoint_id: ID of checkpoint to compare against (required)
+
+**When to use:**
+- Before restoring a checkpoint, to see what you'll lose
+- Review what changed since a checkpoint was created
+- Understand impact of changes made
+- Decide if restoration is needed
 
 **ASK_FOLLOWUP_QUESTION TOOL:**
 Use this tool to ask the user interactive questions and get their input. Perfect for clarifying requirements or getting user preferences.

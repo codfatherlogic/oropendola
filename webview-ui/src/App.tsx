@@ -14,19 +14,21 @@
  * - Overlays mount on top when tab !== 'chat'
  */
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { ChatProvider, useChatContext } from './context/ChatContext'
 import { ChatView } from './components/Chat/ChatView'
 import { HistoryView } from './components/History/HistoryView'
 import { SettingsView } from './components/Settings/SettingsView'
+import { AccountSettings } from './components/Account/AccountSettings'
 import './AppIntegrated.css'
 
-// Tab type matching Roo Code pattern - only chat, history, settings for now
-type Tab = 'chat' | 'history' | 'settings'
+// Tab type matching Roo Code pattern - chat, history, settings, account
+type Tab = 'chat' | 'history' | 'settings' | 'account'
 
 /**
  * Main interface - Roo Code pattern
  * ChatView always rendered, overlays conditionally shown
+ * Toolbar buttons in native VS Code Panel Toolbar
  */
 const ChatInterface: React.FC = () => {
   const {
@@ -55,8 +57,23 @@ const ChatInterface: React.FC = () => {
     setTab(newTab)
   }, [])
 
+  // Listen for switchTab messages from extension (Panel Toolbar buttons)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data
+      if (message.type === 'switchTab') {
+        switchTab(message.tab as Tab)
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [switchTab])
+
   return (
     <div className="app-container">
+      {/* Panel Toolbar buttons are in native VS Code UI - see package.json view/title menu */}
+
       {/* Error banner */}
       {error && (
         <div className="error-banner">
@@ -82,6 +99,12 @@ const ChatInterface: React.FC = () => {
       {tab === 'settings' && (
         <SettingsView onDone={() => switchTab('chat')} />
       )}
+      {tab === 'account' && (
+        <AccountSettings
+          onDone={() => switchTab('chat')}
+          isAuthenticated={isAuthenticated}
+        />
+      )}
 
       {/* ChatView ALWAYS rendered - hidden when overlays active */}
       <ChatView
@@ -99,8 +122,7 @@ const ChatInterface: React.FC = () => {
         onRejectMessage={rejectMessage}
         onAutoApprovalEnabledChange={setAutoApprovalEnabled}
         onAutoApproveToggleChange={setAutoApproveToggle}
-        onOpenHistory={() => switchTab('history')}
-        onOpenSettings={() => switchTab('settings')}
+        onOpenAccount={() => switchTab('account')}
       />
     </div>
   )

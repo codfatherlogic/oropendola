@@ -251,7 +251,6 @@ class AuthManager {
             this._subscription = null;
 
             console.log('🚪 [AuthManager] Logged out');
-            vscode.window.showInformationMessage('Logged out successfully');
         } catch (error) {
             console.error('❌ [AuthManager] Logout error:', error);
         }

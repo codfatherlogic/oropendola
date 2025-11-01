@@ -270,6 +270,12 @@ class OropendolaSidebarProvider {
                     case 'logout':
                         await this._handleLogout();
                         break;
+                    case 'getAccountData':
+                        await this._handleGetAccountData();
+                        break;
+                    case 'openPricingPage':
+                        await vscode.env.openExternal(vscode.Uri.parse('https://oropendola.ai/pricing'));
+                        break;
                     case 'addContext':
                         await this._handleAddContext();
                         break;
@@ -861,7 +867,7 @@ class OropendolaSidebarProvider {
     async _handleLogout() {
         // OAuth logout
         await this._authManager.logout();
-        
+
         // Clear local state
         this._isLoggedIn = false;
         this._messages = [];
@@ -886,6 +892,54 @@ class OropendolaSidebarProvider {
                 message: 'You have been logged out. Please sign in to continue.'
             });
             console.log('✅ Sign-in prompt shown');
+        }
+    }
+
+    /**
+     * Handle get account data - Fetches user profile, subscription, usage, and analytics
+     */
+    async _handleGetAccountData() {
+        try {
+            console.log('📊 Fetching account data...');
+
+            // Get profile data from auth manager
+            const profileData = await this._authManager.getMyProfile();
+
+            if (!profileData) {
+                throw new Error('Failed to fetch profile data');
+            }
+
+            // Send data to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'accountData',
+                    data: profileData
+                });
+                console.log('✅ Account data sent to webview');
+            }
+
+        } catch (error) {
+            console.error('❌ Failed to get account data:', error);
+
+            // Check if user is still authenticated after error
+            const isStillAuthenticated = await this._authManager.isAuthenticated();
+
+            // Send error to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    type: 'accountDataError',
+                    error: error.message || 'Failed to load account data. Please try again.'
+                });
+
+                // If authentication was cleared (e.g., due to 403), update auth status
+                if (!isStillAuthenticated) {
+                    this._view.webview.postMessage({
+                        type: 'authenticationStatus',
+                        isAuthenticated: false,
+                        message: 'Your session has expired. Please sign in again.'
+                    });
+                }
+            }
         }
     }
 
@@ -2610,23 +2664,12 @@ class OropendolaSidebarProvider {
             const apiUrl = config.get('api.url', 'https://oropendola.ai');
             const userEmail = config.get('user.email');
 
-            // Validate session - show friendly Sign In button if not authenticated
-            if (!userEmail && !this._sessionId) {
+            // Validate OAuth authentication
+            if (!this._isLoggedIn) {
                 if (this._view) {
                     this._view.webview.postMessage({
                         type: 'showSignInPrompt',
                         message: 'Please sign in to start chatting with Oropendola AI'
-                    });
-                }
-                return;
-            }
-
-            if (!this._sessionCookies) {
-                console.error('❌ No session cookies available!');
-                if (this._view) {
-                    this._view.webview.postMessage({
-                        type: 'showSignInPrompt',
-                        message: 'Your session has expired. Please sign in again.'
                     });
                 }
                 return;
