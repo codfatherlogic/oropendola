@@ -126,6 +126,9 @@ class OropendolaSidebarProvider {
         console.log('🔍 SidebarProvider: resolveWebviewView called');
         this._view = webviewView;
 
+        // Set webview reference in auth manager for subscription updates
+        this._authManager.setWebview(webviewView.webview);
+
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._context.extensionUri]
@@ -275,6 +278,9 @@ class OropendolaSidebarProvider {
                         break;
                     case 'openPricingPage':
                         await vscode.env.openExternal(vscode.Uri.parse('https://oropendola.ai/pricing'));
+                        // Start fast polling to detect subscription activation
+                        console.log('🚀 User opened pricing page - starting fast subscription polling');
+                        this._authManager.startFastSubscriptionPolling();
                         break;
                     case 'addContext':
                         await this._handleAddContext();

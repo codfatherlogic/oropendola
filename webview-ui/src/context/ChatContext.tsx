@@ -184,6 +184,14 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           }
           break
 
+        case 'subscriptionActivated':
+          // Subscription just became active - update UI to show chat
+          console.log('🎉 [ChatContext] Subscription activated!', message.subscription)
+          setSubscription(message.subscription)
+          // Clear any error messages
+          setError(null)
+          break
+
         case 'showSignInPrompt':
           // Show sign-in prompt as a system message
           const signInMessage: ClineMessage = {

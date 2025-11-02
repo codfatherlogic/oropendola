@@ -12,6 +12,7 @@ class AuthManager {
         this.currentUser = null;
         this.sessionToken = null;
         this.onAuthSuccess = null;
+        this._webview = null; // Webview reference for sending updates
 
         // API configuration
         const config = vscode.workspace.getConfiguration('oropendola');
@@ -19,8 +20,10 @@ class AuthManager {
 
         // Polling intervals
         this.authPollInterval = 2000; // 2 seconds
-        this.subscriptionPollInterval = 5 * 60 * 1000; // 5 minutes
+        this.subscriptionPollInterval = 5 * 60 * 1000; // 5 minutes (slow poll)
+        this.fastPollInterval = 10 * 1000; // 10 seconds (fast poll when waiting for subscription)
         this.subscriptionPollTimer = null;
+        this.isFastPolling = false;
 
         // Last subscription check timestamp
         this.lastSubscriptionCheck = null;
@@ -36,6 +39,14 @@ class AuthManager {
      */
     setAuthSuccessCallback(callback) {
         this.onAuthSuccess = callback;
+    }
+
+    /**
+     * Set webview reference for sending subscription updates
+     */
+    setWebview(webview) {
+        this._webview = webview;
+        console.log('📺 Webview reference set for subscription updates');
     }
 
     /**
@@ -335,40 +346,56 @@ class AuthManager {
                 return;
             }
 
-            const params = {};
-            if (this.lastSubscriptionCheck) {
-                params.last_check = this.lastSubscriptionCheck;
-            }
+            // Fetch current subscription status
+            const subscription = await this.checkSubscription();
 
-            const response = await axios.get(
-                `${this.apiUrl}/api/method/oropendola_ai.oropendola_ai.api.vscode_auth.poll_subscription_changes`,
-                {
-                    params,
-                    headers: {
-                        'X-Access-Token': accessToken,
-                        'Content-Type': 'application/json'
-                    }
+            // Check if subscription just became active
+            const wasInactive = this.currentUser?.subscription && !this.currentUser.subscription.is_active;
+            const isNowActive = subscription && subscription.is_active;
+
+            if (wasInactive && isNowActive) {
+                console.log('🎉 Subscription activated! Notifying webview...');
+
+                // Update subscription in currentUser
+                if (this.currentUser) {
+                    this.currentUser.subscription = subscription;
                 }
-            );
 
-            const result = response.data.message;
+                // Send update to webview to switch from Subscribe Now to Chat
+                if (this._webview) {
+                    this._webview.postMessage({
+                        type: 'subscriptionActivated',
+                        subscription: subscription
+                    });
+                }
 
-            if (result.has_changes) {
-                console.log(`✅ Subscription changed: ${result.change_type}`);
+                // Update UI
+                this.updateStatusBar(subscription);
 
-                if (result.change_type === 'renewed') {
-                    // Update subscription in currentUser
-                    if (this.currentUser) {
-                        this.currentUser.subscription = result.subscription;
-                    }
+                // Show notification
+                vscode.window.showInformationMessage(
+                    `🎉 Subscription activated! Welcome to Oropendola AI.`
+                );
 
-                    // Update UI
-                    this.updateStatusBar(result.subscription);
+                // Switch to slow polling now that subscription is active
+                if (this.isFastPolling) {
+                    this.startSubscriptionPolling(); // Switch back to slow poll
+                }
+            } else if (subscription) {
+                // Update subscription in currentUser
+                if (this.currentUser) {
+                    this.currentUser.subscription = subscription;
+                }
 
-                    // Show notification
-                    vscode.window.showInformationMessage(
-                        `🎉 Subscription renewed! Active until ${result.subscription.end_date}`
-                    );
+                // Send update to webview
+                if (this._webview) {
+                    this._webview.postMessage({
+                        type: 'accountData',
+                        data: {
+                            ...this.currentUser,
+                            subscription: subscription
+                        }
+                    });
                 }
             }
 
@@ -387,7 +414,7 @@ class AuthManager {
     }
 
     /**
-     * Start subscription polling
+     * Start subscription polling (slow - every 5 minutes)
      */
     startSubscriptionPolling() {
         // Clear existing timer
@@ -401,7 +428,31 @@ class AuthManager {
             this.subscriptionPollInterval
         );
 
+        this.isFastPolling = false;
         console.log('✅ Subscription polling started (every 5 minutes)');
+    }
+
+    /**
+     * Start fast subscription polling (every 10 seconds)
+     * Used when waiting for subscription activation
+     */
+    startFastSubscriptionPolling() {
+        // Clear existing timer
+        if (this.subscriptionPollTimer) {
+            clearInterval(this.subscriptionPollTimer);
+        }
+
+        // Poll every 10 seconds
+        this.subscriptionPollTimer = setInterval(
+            () => this.pollSubscriptionChanges(),
+            this.fastPollInterval
+        );
+
+        this.isFastPolling = true;
+        console.log('🚀 Fast subscription polling started (every 10 seconds)');
+
+        // Do an immediate check
+        this.pollSubscriptionChanges();
     }
 
     /**
