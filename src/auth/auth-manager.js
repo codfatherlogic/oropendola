@@ -283,6 +283,9 @@ class AuthManager {
                 hasSubscription: !!response.data.message?.subscription
             });
 
+            // Log the FULL response to see what backend is returning
+            console.log('🔍 [SUBSCRIPTION] Full API response.data:', JSON.stringify(response.data, null, 2));
+
             const subscription = response.data.message.subscription;
 
             if (!subscription) {
