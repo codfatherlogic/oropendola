@@ -1180,30 +1180,40 @@ ${dynamicContext}\`;
             const response = await agentClient.agent(agentParams);
 
             console.log('✅ Received Agent Mode response');
-            console.log('🤖 Auto-selected model:', response.model);
-            if (response.selection_reason) {
-                console.log('📊 Selection reason:', response.selection_reason);
+            console.log('🔍 [DEBUG] Full response structure:', JSON.stringify(response, null, 2).substring(0, 500));
+            console.log('🔍 [DEBUG] Response keys:', Object.keys(response));
+
+            // Handle backend response structure: response.message.{content, model, etc}
+            const responseData = response.message || response.data?.message || response;
+
+            console.log('🔍 [DEBUG] Response data keys:', Object.keys(responseData));
+            console.log('🤖 Auto-selected model:', responseData.model);
+            if (responseData.selection_reason) {
+                console.log('📊 Selection reason:', responseData.selection_reason);
             }
 
             // Store model selection info
-            this.selectedModel = response.model;
-            this.modelSelectionReason = response.selection_reason;
+            this.selectedModel = responseData.model;
+            this.modelSelectionReason = responseData.selection_reason;
 
             // Save conversation ID if provided
-            if (response.conversation_id) {
-                this.conversationId = response.conversation_id;
+            if (responseData.conversation_id) {
+                this.conversationId = responseData.conversation_id;
                 console.log('💬 Conversation ID:', this.conversationId);
             }
 
-            // Extract response content
-            const responseText = response.message?.content ||
-                                response.response?.content ||
-                                response.response?.text ||
+            // Extract response content - try multiple possible locations
+            const responseText = responseData.content ||
+                                responseData.text ||
+                                responseData.response?.content ||
+                                responseData.response?.text ||
                                 response.content ||
                                 response.text;
 
             if (!responseText) {
-                console.error('❌ No response content found in:', response);
+                console.error('❌ No response content found');
+                console.error('❌ Response data:', responseData);
+                console.error('❌ Full response:', response);
                 throw new Error('No AI response in Agent Mode reply');
             }
 
