@@ -150,7 +150,7 @@
 
 /* Refresh Button */
 .refresh-button {
-  background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+  background: linear-gradient(135deg, #7B61FF 0%, #00D9FF 100%);
   color: white;
   border: none;
   padding: 10px 20px;
@@ -168,9 +168,9 @@
 }
 
 .refresh-button:hover {
-  background: linear-gradient(135deg, #4338CA 0%, #0891B2 100%);
+  background: linear-gradient(135deg, #8B71FF 0%, #10E9FF 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 4px 12px rgba(123, 97, 255, 0.5);
 }
 
 .refresh-icon {
@@ -207,7 +207,7 @@
 
 .update-profile-button,
 .manage-plan-button {
-  background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+  background: linear-gradient(135deg, #7B61FF 0%, #00D9FF 100%);
   color: white;
   border: none;
   padding: 6px 12px;
@@ -223,9 +223,9 @@
 
 .update-profile-button:hover,
 .manage-plan-button:hover {
-  background: linear-gradient(135deg, #4338CA 0%, #0891B2 100%);
+  background: linear-gradient(135deg, #8B71FF 0%, #10E9FF 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 4px 12px rgba(123, 97, 255, 0.5);
 }
 
 /* Info Grid */
@@ -293,7 +293,7 @@
 }
 
 .input-icon {
-  background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+  background: linear-gradient(135deg, #7B61FF 0%, #00D9FF 100%);
   color: white;
 }
 

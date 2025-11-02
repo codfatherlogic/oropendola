@@ -120,7 +120,7 @@
   width: 100%;
   max-width: 300px;
   padding: 14px 28px;
-  background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+  background: linear-gradient(135deg, #7B61FF 0%, #00D9FF 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -128,13 +128,13 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  box-shadow: 0 4px 12px rgba(123, 97, 255, 0.5);
 }
 
 .subscribe-prompt-button:hover {
-  background: linear-gradient(135deg, #4338CA 0%, #0891B2 100%);
+  background: linear-gradient(135deg, #8B71FF 0%, #10E9FF 100%);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 6px 16px rgba(123, 97, 255, 0.6);
 }
 
 .subscribe-prompt-button:active {
