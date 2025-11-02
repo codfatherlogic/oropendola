@@ -285,12 +285,22 @@ class AuthManager {
                 return null;
             }
 
+            // Ensure is_active field is set based on status
+            if (subscription.is_active === undefined) {
+                subscription.is_active = subscription.status === 'Active' || subscription.status === 'Trial';
+            }
+
+            // Set is_trial field
+            if (subscription.is_trial === undefined) {
+                subscription.is_trial = subscription.status === 'Trial';
+            }
+
+            console.log(`✅ Subscription status: ${subscription.status}, is_active: ${subscription.is_active}`);
+
             // Store subscription in currentUser
             if (this.currentUser) {
                 this.currentUser.subscription = subscription;
             }
-
-            console.log(`✅ Subscription status: ${subscription.status}`);
 
             // Handle different subscription states
             if (subscription.status === 'Expired') {
