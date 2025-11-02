@@ -11,7 +11,7 @@ import {
   KeyboardShortcut,
   KeyBinding,
 } from '../types/keyboard-shortcuts'
-import { getPlatformBinding } from '../config/default-shortcuts'
+import { getPlatformBinding, DEFAULT_SHORTCUTS } from '../config/default-shortcuts'
 
 /**
  * Check if a keyboard event matches a key binding
@@ -142,7 +142,6 @@ function getShortcuts(): KeyboardShortcut[] {
   }
 
   // Return defaults from config
-  const { DEFAULT_SHORTCUTS } = require('../config/default-shortcuts')
   return DEFAULT_SHORTCUTS
 }
 

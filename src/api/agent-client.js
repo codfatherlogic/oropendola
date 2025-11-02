@@ -39,25 +39,34 @@ class AgentClient {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
-            }
+            },
+            withCredentials: true, // Enable credentials for cross-origin requests
+            maxRedirects: 5
         });
 
         // Request interceptor - add authentication
         this.client.interceptors.request.use(
             config => {
                 console.log(`[AgentAPI] ${config.method?.toUpperCase()} ${config.url}`);
-                
-                // Add authentication - prefer session cookies over API key
+
+                // Add session cookie authentication if available
+                // Note: API key is added in each method's payload, not here
                 if (this.sessionCookies) {
+                    // Ensure Cookie header is set properly
+                    if (!config.headers) {
+                        config.headers = {};
+                    }
                     config.headers['Cookie'] = this.sessionCookies;
+                    config.headers['cookie'] = this.sessionCookies; // Try lowercase too
                     console.log('[AgentAPI] Using session cookie authentication');
+                    console.log('[AgentAPI] Cookie header length:', this.sessionCookies.length);
+                    console.log('[AgentAPI] Cookie preview:', this.sessionCookies.substring(0, 50) + '...');
                 } else if (this.apiKey) {
-                    // Fallback to API key if no session
-                    config.data = config.data || {};
-                    config.data.api_key = this.apiKey;
-                    console.log('[AgentAPI] Using API key authentication');
+                    console.log('[AgentAPI] Using API key authentication (in payload)');
+                } else {
+                    console.warn('[AgentAPI] ⚠️ No authentication credentials available!');
                 }
-                
+
                 return config;
             },
             error => Promise.reject(error)
@@ -302,6 +311,37 @@ class AgentClient {
         
         if (response.data?.model) {
             console.log(`[AgentAPI] Code refactor model: ${response.data.model}`);
+        }
+
+        return response.data;
+    }
+
+    /**
+     * Generate an image using Agent Mode
+     *
+     * @param {Object} params - Image generation parameters
+     * @param {string} params.prompt - Image description/prompt
+     * @param {string} [params.size] - Image size (e.g., '1024x1024', '512x512')
+     * @param {string} [params.style] - Style preference (e.g., 'realistic', 'artistic')
+     * @param {number} [params.quality] - Quality level (1-100)
+     * @returns {Promise<Object>} Image generation response with auto-selected model
+     */
+    async generateImage(params) {
+        if (!this.isAuthenticated()) {
+            throw new Error('Please sign in to use Oropendola AI. Click the "Sign In" button in the sidebar.');
+        }
+
+        const endpoint = `${this.baseEndpoint}.generate_image`;
+        const payload = { ...params };
+
+        if (!this.sessionCookies && this.apiKey) {
+            payload.api_key = this.apiKey;
+        }
+
+        const response = await this.client.post(endpoint, payload);
+
+        if (response.data?.model) {
+            console.log(`[AgentAPI] Image generation model: ${response.data.model}`);
         }
 
         return response.data;

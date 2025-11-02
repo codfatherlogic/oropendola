@@ -18,6 +18,8 @@ const RealtimeManager = require('./RealtimeManager');
 const { MessageQueueService } = require('./MessageQueueService');
 const SearchReplaceDiffStrategy = require('./diff/SearchReplaceDiffStrategy');
 const CheckpointService = require('../services/CheckpointService');
+const CodeDefinitionsService = require('../services/CodeDefinitionsService');
+const ToolRepetitionDetector = require('../services/ToolRepetitionDetector');
 const McpHub = require('../services/McpHub');
 const { AutoApproveManager } = require('../services/AutoApproveManager');
 const { SettingsProvider } = require('../settings/SettingsProvider');
@@ -96,6 +98,12 @@ class ConversationTask extends EventEmitter {
         // New services (Kilos-inspired architecture)
         this.messageQueue = new MessageQueueService();
         this.checkpointService = null;  // Initialized on first use
+        this.codeDefinitionsService = new CodeDefinitionsService();  // Code definitions extraction
+        this.toolRepetitionDetector = new ToolRepetitionDetector({
+            exactRepetitionThreshold: 3,
+            patternRepetitionThreshold: 4,
+            similarityThreshold: 0.85
+        });
         this.isPaused = false;          // Pause/resume support
         this.storageDir = options.storageDir;  // For persistence
 
@@ -1175,6 +1183,9 @@ ${dynamicContext}\`;
             console.log('🤖 Calling Agent Mode API...');
             console.log('🔍 Prompt length:', promptText.length);
             console.log('🔍 Has context:', !!contextData);
+            console.log('🔍 AgentClient authenticated:', agentClient.isAuthenticated());
+            console.log('🔍 AgentClient has session cookies:', !!agentClient.sessionCookies);
+            console.log('🔍 AgentClient has API key:', !!agentClient.apiKey);
 
             // Call the agent API
             const response = await agentClient.agent(agentParams);
@@ -1187,6 +1198,23 @@ ${dynamicContext}\`;
             const responseData = response.message || response.data?.message || response;
 
             console.log('🔍 [DEBUG] Response data keys:', Object.keys(responseData));
+
+            // Check for error responses
+            if (response.session_expired === 1 || responseData.error || responseData.status >= 400) {
+                const errorMsg = responseData.error || responseData.message || 'Unknown error';
+                console.error('❌ Backend API error:', errorMsg);
+                console.error('❌ Session expired:', response.session_expired === 1);
+                console.error('❌ Response status:', responseData.status);
+
+                if (response.session_expired === 1) {
+                    throw new Error('Your session has expired. Please sign in again.');
+                } else if (errorMsg === 'API key is required') {
+                    throw new Error('API authentication failed. Please sign in again or configure an API key.');
+                } else {
+                    throw new Error(`Backend API error: ${errorMsg}`);
+                }
+            }
+
             console.log('🤖 Auto-selected model:', responseData.model);
             if (responseData.selection_reason) {
                 console.log('📊 Selection reason:', responseData.selection_reason);
@@ -1213,7 +1241,11 @@ ${dynamicContext}\`;
             if (!responseText) {
                 console.error('❌ No response content found');
                 console.error('❌ Response data:', responseData);
+                console.error('❌ Response data type:', typeof responseData);
+                console.error('❌ Response data keys:', Object.keys(responseData));
                 console.error('❌ Full response:', response);
+                console.error('❌ Full response type:', typeof response);
+                console.error('❌ Full response keys:', Object.keys(response));
                 throw new Error('No AI response in Agent Mode reply');
             }
 
@@ -1295,6 +1327,13 @@ ${dynamicContext}\`;
             }
 
             console.error(`❌ Agent Mode request error (attempt ${retryCount + 1}):`, error.message);
+            console.error(`❌ Error details:`, {
+                name: error.name,
+                code: error.code,
+                status: error.status,
+                details: error.details,
+                stack: error.stack?.split('\n').slice(0, 3).join('\n')
+            });
 
             // Retry logic
             if (retryCount < this.maxRetries && this._shouldRetry(error)) {
@@ -1942,6 +1981,9 @@ ${dynamicContext}\`;
     async _executeSingleTool(toolCall) {
         const { action, path, content, description, command, old_string, new_string } = toolCall;
 
+        // Record tool call for repetition detection
+        this.toolRepetitionDetector.recordToolCall(action, toolCall);
+
         // Check auto-approval before execution
         const approvalCheck = await this._checkToolApproval(toolCall);
 
@@ -1961,7 +2003,48 @@ ${dynamicContext}\`;
             }
         }
 
+        // Check for tool repetition before execution
+        const repetitionDetection = this.toolRepetitionDetector.detectRepetition();
+        if (repetitionDetection) {
+            console.warn(`⚠️ [Tool Repetition] ${repetitionDetection.warning}`);
+
+            // Create warning message for the AI
+            const warningMessage = {
+                type: 'repetition_warning',
+                tool: repetitionDetection.type === 'exact' ? repetitionDetection.tool : repetitionDetection.pattern,
+                count: repetitionDetection.count,
+                warning: repetitionDetection.warning,
+                suggestion: repetitionDetection.suggestion,
+                recentSummary: this.toolRepetitionDetector.getRecentSummary(5)
+            };
+
+            // Log for debugging
+            console.log(`📊 [Tool Repetition] Recent calls:\n${warningMessage.recentSummary}`);
+        }
+
         // Tool is approved (either auto or manual), proceed with execution
+        let result;
+        try {
+            result = await this._executeToolSwitch(action, toolCall, path, content, description, command, old_string, new_string);
+        } catch (error) {
+            throw error;
+        }
+
+        // Add repetition warning to result if detected
+        if (repetitionDetection && result && result.content) {
+            const warningText = `\n\n⚠️ **Repetition Detected**: ${repetitionDetection.warning}\n\n💡 **Suggestion**: ${repetitionDetection.suggestion}`;
+            result.content = result.content + warningText;
+            result.repetitionWarning = repetitionDetection;
+        }
+
+        return result;
+    }
+
+    /**
+     * Execute tool based on action type (extracted for clarity)
+     * @private
+     */
+    async _executeToolSwitch(action, toolCall, path, content, description, command, old_string, new_string) {
         switch (action) {
             case 'create_file':
                 return await this._executeCreateFile(path, content, description);
@@ -2017,6 +2100,9 @@ ${dynamicContext}\`;
 
             case 'insert_content':
                 return await this._executeInsertContent(toolCall);
+
+            case 'list_code_definitions':
+                return await this._executeListCodeDefinitions(toolCall);
 
             case 'use_mcp_tool':
                 return await this._executeUseMcpTool(toolCall);
@@ -3077,6 +3163,104 @@ ${dynamicContext}\`;
 
             // Emit streaming update - failed
             this._emitStreamingUpdate('insert_content', 'failed', {
+                filePath,
+                error: error.message
+            });
+
+            throw error;
+        }
+    }
+
+    /**
+     * Execute list_code_definitions - Extract code definitions from a file using tree-sitter
+     * Returns classes, functions, methods, and other code symbols with line numbers
+     */
+    async _executeListCodeDefinitions(toolCall) {
+        const { path: filePath, description } = toolCall;
+
+        if (!filePath) {
+            throw new Error('list_code_definitions requires a path parameter');
+        }
+
+        try {
+            // Emit streaming update - started
+            this._emitStreamingUpdate('list_code_definitions', 'started', {
+                filePath,
+                description
+            });
+
+            // Resolve file path
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                throw new Error('No workspace folder is open');
+            }
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const path = require('path');
+            const fs = require('fs').promises;
+
+            const absolutePath = path.isAbsolute(filePath)
+                ? filePath
+                : path.join(workspacePath, filePath);
+
+            // Check if file exists
+            try {
+                await fs.access(absolutePath);
+            } catch (error) {
+                throw new Error(`File not found: ${filePath}`);
+            }
+
+            // Check if file type is supported
+            if (!this.codeDefinitionsService.isSupportedFile(absolutePath)) {
+                const ext = path.extname(absolutePath);
+                throw new Error(`File type ${ext} is not supported for code definitions extraction. Supported types: .js, .jsx, .ts, .tsx, .py, .rs, .go, .c, .h, .cpp, .hpp, .cs, .rb, .java, .php`);
+            }
+
+            // Emit streaming update - extracting
+            this._emitStreamingUpdate('list_code_definitions', 'processing', {
+                filePath,
+                step: 'extracting definitions using tree-sitter'
+            });
+
+            // Extract definitions
+            const definitions = await this.codeDefinitionsService.extractDefinitions(absolutePath);
+
+            // Format output
+            const formattedOutput = this.codeDefinitionsService.formatDefinitions(definitions, filePath);
+
+            // Track file access for context
+            this._trackFileAccess(filePath, 'read', {
+                tool: 'list_code_definitions',
+                description,
+                definitionsFound: definitions.length
+            });
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('list_code_definitions', 'completed', {
+                filePath,
+                success: true,
+                definitionsCount: definitions.length
+            });
+
+            return {
+                tool_use_id: this.taskId,
+                tool_name: 'list_code_definitions',
+                content: formattedOutput,
+                success: true,
+                details: {
+                    filePath,
+                    definitionsCount: definitions.length,
+                    definitions: definitions.map(def => ({
+                        type: def.type,
+                        name: def.name,
+                        line: def.line
+                    }))
+                }
+            };
+        } catch (error) {
+            console.error(`❌ [ConversationTask] list_code_definitions failed: ${error.message}`);
+
+            // Emit streaming update - failed
+            this._emitStreamingUpdate('list_code_definitions', 'failed', {
                 filePath,
                 error: error.message
             });
@@ -7593,16 +7777,13 @@ ${result.content}
     }
 
     /**
-     * Execute generate_image tool - Generate images using AI
+     * Execute generate_image tool - Generate images using Oropendola Agent Mode
      *
-     * Supports multiple backends:
-     * - OpenAI DALL-E (requires OPENAI_API_KEY)
-     * - Stable Diffusion (future)
-     *
-     * Note: Requires API keys to be configured
+     * Uses Oropendola backend API which automatically selects the best image generation model
+     * (DALL-E, Stable Diffusion, etc.) based on availability and user plan.
      */
     async _executeGenerateImage(toolCall) {
-        const { prompt, size = '1024x1024', path: imagePath = 'generated-image.png', backend = 'dalle' } = toolCall;
+        const { prompt, size = '1024x1024', path: imagePath, style, quality, description } = toolCall;
 
         if (!prompt) {
             throw new Error('prompt parameter is required for generate_image');
@@ -7616,38 +7797,100 @@ ${result.content}
                 imagePath
             });
 
-            console.log(`🎨 Generating image with prompt: "${prompt.substring(0, 50)}..."`);
+            console.log(`🎨 [ConversationTask] Generating image: "${prompt.substring(0, 50)}..."`);
 
-            // For now, return a setup message - actual implementation requires API keys
-            this._emitStreamingUpdate('generate_image', 'failed', {
-                error: 'Image generation not yet configured',
-                requiresSetup: true
+            // Get agentClient
+            const { agentClient } = require('../api/agent-client');
+
+            // Emit streaming update - calling backend
+            this._emitStreamingUpdate('generate_image', 'processing', {
+                step: 'calling Oropendola Agent Mode API'
+            });
+
+            // Call backend image generation API
+            const response = await agentClient.generateImage({
+                prompt,
+                size,
+                style,
+                quality
+            });
+
+            console.log(`✅ [ConversationTask] Image generated with model: ${response.model || 'unknown'}`);
+
+            // Check if response contains image data
+            if (!response.image_url && !response.image_data) {
+                throw new Error('No image data received from backend');
+            }
+
+            // Determine save path
+            const path = require('path');
+            const fs = require('fs').promises;
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+
+            let finalImagePath = imagePath || 'generated-image.png';
+            if (workspaceFolders) {
+                const workspacePath = workspaceFolders[0].uri.fsPath;
+                finalImagePath = path.isAbsolute(finalImagePath)
+                    ? finalImagePath
+                    : path.join(workspacePath, finalImagePath);
+            }
+
+            // Emit streaming update - saving image
+            this._emitStreamingUpdate('generate_image', 'processing', {
+                step: 'saving image to file'
+            });
+
+            // Save image to file
+            if (response.image_url) {
+                // Download from URL
+                const axios = require('axios');
+                const imageResponse = await axios.get(response.image_url, {
+                    responseType: 'arraybuffer'
+                });
+                await fs.writeFile(finalImagePath, Buffer.from(imageResponse.data));
+            } else if (response.image_data) {
+                // Save base64 data
+                const buffer = Buffer.from(response.image_data, 'base64');
+                await fs.writeFile(finalImagePath, buffer);
+            }
+
+            console.log(`💾 [ConversationTask] Image saved to: ${finalImagePath}`);
+
+            // Track file access
+            this._trackFileAccess(finalImagePath, 'create', {
+                tool: 'generate_image',
+                prompt,
+                model: response.model
+            });
+
+            // Open image in editor
+            try {
+                const uri = vscode.Uri.file(finalImagePath);
+                await vscode.commands.executeCommand('vscode.open', uri);
+                console.log(`👁️ [ConversationTask] Opened image in editor`);
+            } catch (openError) {
+                console.warn(`⚠️ [ConversationTask] Could not open image: ${openError.message}`);
+            }
+
+            // Emit streaming update - completed
+            this._emitStreamingUpdate('generate_image', 'completed', {
+                success: true,
+                imagePath: finalImagePath,
+                model: response.model
             });
 
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'generate_image',
-                content: `⚠️ Image generation not yet configured\n\nTo enable image generation:\n\n1. Set up an image generation API (e.g., OpenAI DALL-E)\n2. Configure API key in settings\n3. Install required packages\n\nPrompt: "${prompt}"\nSize: ${size}\nPath: ${imagePath}`,
-                success: false,
-                requiresSetup: true
+                content: `✅ Image generated successfully!\n\n**Model**: ${response.model || 'Auto-selected'}\n**Prompt**: ${prompt}\n**Size**: ${size}\n**Saved to**: ${finalImagePath}\n\n${description ? `**Description**: ${description}` : ''}`,
+                success: true,
+                details: {
+                    imagePath: finalImagePath,
+                    model: response.model,
+                    size,
+                    prompt
+                }
             };
-
-            // Future implementation:
-            // if (backend === 'dalle') {
-            //     this._emitStreamingUpdate('generate_image', 'processing', { step: 'calling DALL-E API' });
-            //     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-            //     const response = await openai.images.generate({
-            //         prompt,
-            //         n: 1,
-            //         size
-            //     });
-            //     const imageUrl = response.data[0].url;
-            //     this._emitStreamingUpdate('generate_image', 'processing', { step: 'downloading image' });
-            //     // Download and save image
-            //     this._trackFileAccess(imagePath, 'create', { tool: 'generate_image', prompt });
-            //     this._emitStreamingUpdate('generate_image', 'completed', { success: true, imagePath });
-            //     // Return success with path
-            // }
 
         } catch (error) {
             // Emit streaming update - failed
@@ -7655,11 +7898,12 @@ ${result.content}
                 error: error.message
             });
 
-            console.error(`❌ Image generation failed: ${error.message}`);
+            console.error(`❌ [ConversationTask] Image generation failed: ${error.message}`);
+
             return {
                 tool_use_id: this.taskId,
                 tool_name: 'generate_image',
-                content: `❌ Image generation failed: ${error.message}`,
+                content: `❌ Image generation failed: ${error.message}\n\nPrompt: "${prompt}"\nSize: ${size}\n\nPlease ensure you're authenticated and have access to image generation features.`,
                 success: false
             };
         }
