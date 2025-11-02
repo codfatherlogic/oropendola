@@ -55,11 +55,10 @@ const ChatInterface: React.FC = () => {
   const [tab, setTab] = useState<Tab>('chat')
 
   // Determine if we should show subscription prompt
-  // Show when: authenticated + subscription exists + not active + on chat tab
+  // Show when: authenticated + (no subscription data OR subscription not active) + on chat tab
   const shouldShowSubscribePrompt =
     isAuthenticated &&
-    subscription !== null &&
-    !subscription.is_active &&
+    (subscription === null || !subscription.is_active) &&
     tab === 'chat'
 
   console.log('🔒 [App] shouldShowSubscribePrompt:', shouldShowSubscribePrompt, {
