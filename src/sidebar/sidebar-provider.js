@@ -909,11 +909,23 @@ class OropendolaSidebarProvider {
                 throw new Error('Failed to fetch profile data');
             }
 
+            // Fetch subscription data separately
+            console.log('📊 Fetching subscription data...');
+            const subscription = await this._authManager.checkSubscription();
+
+            // Add subscription to profile data
+            const accountData = {
+                ...profileData,
+                subscription: subscription
+            };
+
+            console.log('📊 Account data includes subscription:', !!subscription);
+
             // Send data to webview
             if (this._view) {
                 this._view.webview.postMessage({
                     type: 'accountData',
-                    data: profileData
+                    data: accountData
                 });
                 console.log('✅ Account data sent to webview');
             }

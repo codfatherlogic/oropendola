@@ -21,6 +21,7 @@ import { HistoryView } from './components/History/HistoryView'
 import { SettingsView } from './components/Settings/SettingsView'
 import { AccountSettings } from './components/Account/AccountSettings'
 import { SubscribePrompt } from './components/Auth/SubscribePrompt'
+import vscode from './vscode-api'
 import './AppIntegrated.css'
 
 // Tab type matching Roo Code pattern - chat, history, settings, account
@@ -76,8 +77,6 @@ const ChatInterface: React.FC = () => {
   // Handle subscription - open pricing page
   const handleSubscribe = useCallback(() => {
     console.log('🔒 [App] Opening pricing page')
-    // @ts-ignore - vscode is available in webview
-    const vscode = acquireVsCodeApi()
     vscode.postMessage({ type: 'openPricingPage' })
   }, [])
 
