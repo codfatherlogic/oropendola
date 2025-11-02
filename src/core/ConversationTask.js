@@ -1196,7 +1196,8 @@ ${dynamicContext}\`;
             }
 
             // Extract response content
-            const responseText = response.response?.content || 
+            const responseText = response.message?.content ||
+                                response.response?.content ||
                                 response.response?.text ||
                                 response.content ||
                                 response.text;
