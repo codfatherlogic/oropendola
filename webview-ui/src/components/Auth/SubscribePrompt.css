@@ -120,21 +120,21 @@
   width: 100%;
   max-width: 300px;
   padding: 14px 28px;
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+  color: white;
   border: none;
   border-radius: 6px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
 
 .subscribe-prompt-button:hover {
-  background: var(--vscode-button-hoverBackground);
+  background: linear-gradient(135deg, #4338CA 0%, #0891B2 100%);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
 }
 
 .subscribe-prompt-button:active {
