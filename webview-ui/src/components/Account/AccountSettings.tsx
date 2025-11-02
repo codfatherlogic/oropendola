@@ -130,6 +130,18 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onDone, isAuth
     })
   }
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+
   const formatNumber = (num: number | undefined) => {
     if (num === undefined || num === null) return '0'
     return num.toLocaleString()
@@ -309,7 +321,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onDone, isAuth
               <div className="info-item">
                 <label>Expires:</label>
                 <div className={`info-value ${!subscription.is_active ? 'expired' : ''}`}>
-                  {formatDate(subscription.end_date)} {!subscription.is_active && '(Expired)'}
+                  {formatDateTime(subscription.end_date)} {!subscription.is_active && '(Expired)'}
                 </div>
               </div>
             </div>
