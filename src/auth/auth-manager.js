@@ -267,6 +267,7 @@ class AuthManager {
                 return null;
             }
 
+            console.log('🔍 [SUBSCRIPTION] Fetching subscription from API...');
             const response = await axios.get(
                 `${this.apiUrl}/api/method/oropendola_ai.oropendola_ai.api.vscode_auth.get_subscription_status`,
                 {
@@ -277,25 +278,44 @@ class AuthManager {
                 }
             );
 
+            console.log('🔍 [SUBSCRIPTION] API response received:', {
+                hasMessage: !!response.data.message,
+                hasSubscription: !!response.data.message?.subscription
+            });
+
             const subscription = response.data.message.subscription;
 
             if (!subscription) {
-                console.log('ℹ️ No active subscription found');
+                console.log('ℹ️ [SUBSCRIPTION] No active subscription found in API response');
                 this.showSubscriptionPrompt('no_subscription');
                 return null;
             }
 
+            console.log('🔍 [SUBSCRIPTION] Raw subscription from API:', {
+                status: subscription.status,
+                is_active: subscription.is_active,
+                plan_name: subscription.plan_name,
+                end_date: subscription.end_date
+            });
+
             // Ensure is_active field is set based on status
             if (subscription.is_active === undefined) {
                 subscription.is_active = subscription.status === 'Active' || subscription.status === 'Trial';
+                console.log(`🔧 [SUBSCRIPTION] Computed is_active from status: ${subscription.status} → ${subscription.is_active}`);
             }
 
             // Set is_trial field
             if (subscription.is_trial === undefined) {
                 subscription.is_trial = subscription.status === 'Trial';
+                console.log(`🔧 [SUBSCRIPTION] Computed is_trial from status: ${subscription.status} → ${subscription.is_trial}`);
             }
 
-            console.log(`✅ Subscription status: ${subscription.status}, is_active: ${subscription.is_active}`);
+            console.log(`✅ [SUBSCRIPTION] Final subscription data:`, {
+                status: subscription.status,
+                is_active: subscription.is_active,
+                is_trial: subscription.is_trial,
+                plan_name: subscription.plan_name
+            });
 
             // Store subscription in currentUser
             if (this.currentUser) {

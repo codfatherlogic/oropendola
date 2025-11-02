@@ -62,10 +62,16 @@ const ChatInterface: React.FC = () => {
     (subscription === null || !subscription.is_active) &&
     tab === 'chat'
 
-  console.log('🔒 [App] shouldShowSubscribePrompt:', shouldShowSubscribePrompt, {
+  console.log('🔒 [App] Subscription gate evaluation:', {
+    shouldShowSubscribePrompt,
     isAuthenticated,
-    hasSubscription: subscription !== null,
-    isActive: subscription?.is_active,
+    subscription: subscription ? {
+      status: subscription.status,
+      is_active: subscription.is_active,
+      is_trial: subscription.is_trial,
+      plan_name: subscription.plan_name
+    } : null,
+    subscriptionIsNull: subscription === null,
     tab
   })
 

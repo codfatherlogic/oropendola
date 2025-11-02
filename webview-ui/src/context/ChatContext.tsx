@@ -177,10 +177,17 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           console.log('📊 [ChatContext] Received accountData message:', message.data)
           console.log('📊 [ChatContext] Subscription field exists?', !!message.data?.subscription)
           if (message.data?.subscription) {
-            console.log('📊 [ChatContext] Setting subscription data:', message.data.subscription)
+            console.log('📊 [ChatContext] Setting subscription data:', {
+              status: message.data.subscription.status,
+              is_active: message.data.subscription.is_active,
+              is_trial: message.data.subscription.is_trial,
+              plan_name: message.data.subscription.plan_name
+            })
             setSubscription(message.data.subscription)
           } else {
             console.log('⚠️ [ChatContext] No subscription data in accountData message')
+            // Set subscription to null explicitly when no data
+            setSubscription(null)
           }
           break
 

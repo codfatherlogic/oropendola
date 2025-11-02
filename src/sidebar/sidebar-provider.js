@@ -143,11 +143,32 @@ class OropendolaSidebarProvider {
             const userEmail = this._authManager.getUserEmail();
             const apiKey = this._authManager.getApiKey();
             console.log(`✅ Loaded OAuth authentication for: ${userEmail}`);
-            
+
             // Update agent client with API key
             const { agentClient } = require('../api/agent-client');
             agentClient.updateCredentials(apiKey);
             console.log('✅ Updated agent client with API key');
+
+            // Immediately fetch subscription data on initialization
+            console.log('📊 [INIT] Fetching subscription data on webview initialization...');
+            try {
+                const subscription = await this._authManager.checkSubscription();
+                console.log('📊 [INIT] Subscription fetched:', subscription ? {
+                    status: subscription.status,
+                    is_active: subscription.is_active,
+                    plan_name: subscription.plan_name
+                } : 'null');
+
+                // Store for later use
+                this._initialSubscription = subscription;
+            } catch (error) {
+                console.error('❌ [INIT] Failed to fetch subscription:', error);
+                this._initialSubscription = null;
+            }
+
+            // Start subscription polling for authenticated users
+            console.log('🔄 [INIT] Starting subscription polling...');
+            this._authManager.startSubscriptionPolling();
         } else {
             console.log('ℹ️ No OAuth authentication found');
         }
@@ -167,7 +188,7 @@ class OropendolaSidebarProvider {
         // Send authentication status to webview - retry multiple times to ensure delivery
         const sendAuthStatus = () => {
             if (this._view) {
-                console.log('📤 Sending authentication status to webview');
+                console.log('📤 [INIT] Sending authentication status to webview');
                 this._view.webview.postMessage({
                     type: 'authenticationStatus',
                     isAuthenticated: this._isLoggedIn,
@@ -175,12 +196,34 @@ class OropendolaSidebarProvider {
                 });
             }
         };
-        
+
+        // Send subscription data to webview
+        const sendSubscriptionData = () => {
+            if (this._view && this._isLoggedIn && this._initialSubscription !== undefined) {
+                console.log('📤 [INIT] Sending initial subscription data to webview:', this._initialSubscription ? {
+                    status: this._initialSubscription.status,
+                    is_active: this._initialSubscription.is_active
+                } : 'null');
+                this._view.webview.postMessage({
+                    type: 'accountData',
+                    data: {
+                        subscription: this._initialSubscription
+                    }
+                });
+            }
+        };
+
         // Send immediately and retry to ensure webview receives it
         setTimeout(sendAuthStatus, 500);
         setTimeout(sendAuthStatus, 1000);
         setTimeout(sendAuthStatus, 2000);
         setTimeout(sendAuthStatus, 3000);
+
+        // Send subscription data with delays to ensure webview is ready
+        setTimeout(sendSubscriptionData, 600);
+        setTimeout(sendSubscriptionData, 1100);
+        setTimeout(sendSubscriptionData, 2100);
+        setTimeout(sendSubscriptionData, 3100);
 
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async message => {
@@ -906,7 +949,7 @@ class OropendolaSidebarProvider {
      */
     async _handleGetAccountData() {
         try {
-            console.log('📊 Fetching account data...');
+            console.log('📊 [GET_ACCOUNT_DATA] Handler called - fetching account data...');
 
             // Get profile data from auth manager
             const profileData = await this._authManager.getMyProfile();
@@ -915,8 +958,10 @@ class OropendolaSidebarProvider {
                 throw new Error('Failed to fetch profile data');
             }
 
+            console.log('📊 [GET_ACCOUNT_DATA] Profile data fetched successfully');
+
             // Fetch subscription data separately
-            console.log('📊 Fetching subscription data...');
+            console.log('📊 [GET_ACCOUNT_DATA] Fetching subscription data...');
             const subscription = await this._authManager.checkSubscription();
 
             // Add subscription to profile data
@@ -925,7 +970,12 @@ class OropendolaSidebarProvider {
                 subscription: subscription
             };
 
-            console.log('📊 Account data includes subscription:', !!subscription);
+            console.log('📊 [GET_ACCOUNT_DATA] Account data prepared:', {
+                hasProfile: !!profileData,
+                hasSubscription: !!subscription,
+                subscriptionStatus: subscription?.status,
+                subscriptionIsActive: subscription?.is_active
+            });
 
             // Send data to webview
             if (this._view) {
