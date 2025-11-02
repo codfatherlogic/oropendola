@@ -10,9 +10,41 @@
 .gitignore
 .gitattributes
 
-# Node modules - Keep only production dependencies
-# DO NOT IGNORE node_modules - we need runtime dependencies!
-# node_modules is REQUIRED for the extension to work
+# Source files (we only need dist/)
+src/**/*.backup*
+src/**/*.bak
+src/**/*.orig
+*.js.backup*
+*.ts.backup*
+
+# Source maps (not needed in production)
+**/*.map
+**/*.js.map
+**/*.ts.map
+dist/**/*.map
+
+# Node modules optimization
+# Keep runtime dependencies but exclude dev files
+node_modules/**/test/**
+node_modules/**/tests/**
+node_modules/**/*.test.js
+node_modules/**/*.spec.js
+node_modules/**/*.md
+node_modules/**/README*
+node_modules/**/CHANGELOG*
+node_modules/**/LICENSE*
+node_modules/**/.github/**
+node_modules/**/.git/**
+node_modules/**/docs/**
+node_modules/**/examples/**
+node_modules/**/coverage/**
+node_modules/**/.nyc_output/**
+node_modules/**/benchmark/**
+node_modules/**/*.d.ts.map
+node_modules/**/*.ts
+node_modules/**/tsconfig.json
+node_modules/**/.eslintrc*
+node_modules/**/.prettierrc*
 
 # Documentation (keep only essential ones)
 AGENT_ASK_MODE_GUIDE.md

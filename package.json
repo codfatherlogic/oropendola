@@ -1,8 +1,8 @@
 {
   "name": "oropendola-ai-assistant",
   "displayName": "Oropendola AI Assistant",
-  "description": "AI-powered assistant - v3.12.0: Complete Feature Parity (Auto-Condense, Sound Notifications, Full Roo-Code UX)",
-  "version": "3.12.0",
+  "description": "AI-powered assistant - v3.14.0: UI Parity with Roo-Code (Tailwind CSS v4, VSCode Theme Integration)",
+  "version": "3.14.0",
   "publisher": "oropendola",
   "repository": {
     "type": "git",

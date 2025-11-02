@@ -1,12 +1,11 @@
 /**
- * ChatRow Component - Roo Code Style Implementation
- * 
- * Renders individual messages in the chat with proper styling for:
- * - User messages (user_feedback)
- * - Assistant messages (text, api_req_started, reasoning, etc.)
- * - Tool usage displays
- * - Error messages
- * - Code blocks and markdown
+ * ChatRow Component - Roo-Code UI Implementation for Oropendola
+ *
+ * Exact visual match to Roo-Code's ChatRow.tsx:
+ * - Pure Tailwind utility classes (no CSS imports)
+ * - Tailwind padding: px-[15px] py-[10px] pr-[6px]
+ * - VSCode theme integration via Tailwind variables
+ * - Preserves all Oropendola authentication & subscription features
  */
 
 import React from 'react'
@@ -17,8 +16,8 @@ import { ProgressIndicator } from './ProgressIndicator'
 import { ReasoningBlock } from './ReasoningBlock'
 import { AgentModelBadge } from './AgentModelBadge'
 import { DiffViewer } from '../Diff'
+import { cn } from '../../lib/utils'
 import vscode from '../../vscode-api'
-import './ChatRow.css'
 
 interface ChatRowProps {
   message: ClineMessage
@@ -40,65 +39,31 @@ export const ChatRow: React.FC<ChatRowProps> = ({
   const isUser = message.type === 'ask' && message.ask === 'user_feedback'
   const isError = message.say === 'error' || message.ask === 'error'
   const isApiRequest = message.say === 'api_req_started'
-  const isToolApproval = message.type === 'ask' && message.ask === 'tool'  // ✅ Added
-  const isSignInRequired = message.say === 'sign_in_required'  // Sign in prompt
+  const isToolApproval = message.type === 'ask' && message.ask === 'tool'
+  const isSignInRequired = message.say === 'sign_in_required'
 
-  // Header style for tool/action messages
-  const headerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    marginBottom: '10px',
-    wordBreak: 'break-word',
-  }
-
-  // Render Sign In prompt with big yellow button
+  // Render Sign In prompt (Oropendola auth feature)
   if (isSignInRequired) {
     return (
-      <div className="chat-row chat-row-sign-in" style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '40px 20px',
-        gap: '20px',
-        backgroundColor: 'var(--vscode-editor-background)',
-        borderRadius: '8px',
-        margin: '20px 0'
-      }}>
-        <div style={{
-          fontSize: '16px',
-          color: 'var(--vscode-foreground)',
-          textAlign: 'center',
-          marginBottom: '10px'
-        }}>
-          {message.text || 'Please sign in to use Oropendola AI'}
+      <div className="px-[15px] py-[10px] pr-[6px]">
+        <div className="flex flex-col items-center justify-center py-10 px-5 gap-5 bg-vscode-editor-background rounded-lg my-5">
+          <div className="text-base text-vscode-foreground text-center mb-2.5">
+            {message.text || 'Please sign in to use Oropendola AI'}
+          </div>
+          <button
+            onClick={() => {
+              vscode.postMessage({ type: 'login' })
+            }}
+            className={cn(
+              "bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground",
+              "border border-vscode-button-border rounded-sm py-1.5 px-3.5 text-[13px]",
+              "cursor-pointer transition-colors duration-100",
+              "hover:bg-vscode-button-secondaryHoverBackground"
+            )}
+          >
+            Sign in
+          </button>
         </div>
-        <button
-          onClick={() => {
-            // Trigger sign in via VS Code command
-            vscode.postMessage({ type: 'login' });
-          }}
-          style={{
-            backgroundColor: 'var(--vscode-button-secondaryBackground)',
-            color: 'var(--vscode-button-secondaryForeground)',
-            border: '1px solid var(--vscode-button-border)',
-            borderRadius: '2px',
-            padding: '6px 14px',
-            fontSize: '13px',
-            fontWeight: 'normal',
-            cursor: 'pointer',
-            transition: 'background-color 0.1s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryHoverBackground)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--vscode-button-secondaryBackground)';
-          }}
-        >
-          Sign in
-        </button>
       </div>
     )
   }
@@ -106,18 +71,23 @@ export const ChatRow: React.FC<ChatRowProps> = ({
   // Render user message
   if (isUser) {
     return (
-      <div className="chat-row chat-row-user">
-        <div style={headerStyle}>
+      <div className="px-[15px] py-[10px] pr-[6px]">
+        <div className="flex items-center gap-2.5 mb-2.5 break-words">
           <User className="w-4 h-4" aria-label="User icon" />
-          <span style={{ fontWeight: 'bold' }}>You said</span>
+          <span className="font-bold">You said</span>
         </div>
-        <div className="chat-row-user-content">
+        <div className="text-vscode-foreground">
           {message.text}
         </div>
         {message.images && message.images.length > 0 && (
-          <div className="chat-row-images">
+          <div className="flex gap-2 flex-wrap mt-2">
             {message.images.map((img, i) => (
-              <img key={i} src={img} alt={`Attachment ${i + 1}`} className="chat-row-image" />
+              <img
+                key={i}
+                src={img}
+                alt={`Attachment ${i + 1}`}
+                className="max-w-[200px] max-h-[200px] rounded border border-vscode-panel-border"
+              />
             ))}
           </div>
         )}
@@ -125,7 +95,7 @@ export const ChatRow: React.FC<ChatRowProps> = ({
     )
   }
 
-  // ✅ Render tool approval message - SHOWS INLINE IN CHAT
+  // Render tool approval message (Oropendola feature)
   if (isToolApproval && message.tool) {
     // Check if this is an apply_diff tool with diff content
     const isApplyDiff = message.tool.action === 'apply_diff' && message.tool.diff
@@ -134,50 +104,42 @@ export const ChatRow: React.FC<ChatRowProps> = ({
                        message.tool.action === 'editedExistingFile'
 
     return (
-      <div className="chat-row chat-row-tool-approval" style={{
-        border: '1px solid var(--vscode-notifications-border)',
-        borderRadius: '4px',
-        padding: '12px',
-        backgroundColor: 'var(--vscode-notifications-background)',
-        margin: '8px 0'
-      }}>
-        <div style={headerStyle}>
-          <AlertCircle className="w-4 h-4" style={{ color: 'var(--vscode-notificationsWarningIcon-foreground)' }} />
-          <span style={{ fontWeight: 'bold' }}>
-            {isDiffTool ? 'File Changes Require Approval' : 'Tool Requires Approval'}
-          </span>
-        </div>
-
-        {/* Show diff viewer for apply_diff */}
-        {isApplyDiff ? (
-          <>
-            <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--vscode-descriptionForeground)' }}>
-              {message.tool.description || 'Review the changes below'}
-            </div>
-            <DiffViewer
-              diff={message.tool.diff}
-              path={message.tool.path}
-              language={message.tool.language}
-              viewMode="unified"
-              showLineNumbers={true}
-              collapsible={false}
-              defaultExpanded={true}
-              showFileActions={false}
-            />
-          </>
-        ) : (
-          <div className="chat-row-tool-content" style={{ marginBottom: '12px' }}>
-            <MarkdownBlock markdown={message.text} />
+      <div className="px-[15px] py-[10px] pr-[6px]">
+        <div className="border border-vscode-notifications-border rounded p-3 bg-vscode-notifications-background my-2">
+          <div className="flex items-center gap-2.5 mb-2.5 break-words">
+            <AlertCircle className="w-4 h-4 text-vscode-notificationsWarningIcon-foreground" />
+            <span className="font-bold">
+              {isDiffTool ? 'File Changes Require Approval' : 'Tool Requires Approval'}
+            </span>
           </div>
-        )}
 
-        {/* Note: Approval buttons are rendered by ChatView at bottom of chat */}
-        <div style={{
-          fontSize: '0.9em',
-          color: 'var(--vscode-descriptionForeground)',
-          fontStyle: 'italic'
-        }}>
-          ⏳ Waiting for your approval...
+          {/* Show diff viewer for apply_diff */}
+          {isApplyDiff ? (
+            <>
+              <div className="mb-3 text-[13px] text-vscode-descriptionForeground">
+                {message.tool.description || 'Review the changes below'}
+              </div>
+              <DiffViewer
+                diff={message.tool.diff}
+                path={message.tool.path}
+                language={message.tool.language}
+                viewMode="unified"
+                showLineNumbers={true}
+                collapsible={false}
+                defaultExpanded={true}
+                showFileActions={false}
+              />
+            </>
+          ) : (
+            <div className="mb-3">
+              <MarkdownBlock markdown={message.text} />
+            </div>
+          )}
+
+          {/* Note: Approval buttons are rendered by ChatView at bottom of chat */}
+          <div className="text-sm text-vscode-descriptionForeground italic">
+            ⏳ Waiting for your approval...
+          </div>
         </div>
       </div>
     )
@@ -186,12 +148,12 @@ export const ChatRow: React.FC<ChatRowProps> = ({
   // Render error message
   if (isError) {
     return (
-      <div className="chat-row chat-row-error">
-        <div style={headerStyle}>
-          <AlertCircle className="w-4 h-4" style={{ color: 'var(--vscode-errorForeground)' }} />
-          <span style={{ fontWeight: 'bold', color: 'var(--vscode-errorForeground)' }}>Error</span>
+      <div className="px-[15px] py-[10px] pr-[6px]">
+        <div className="flex items-center gap-2.5 mb-2.5 break-words">
+          <AlertCircle className="w-4 h-4 text-vscode-errorForeground" />
+          <span className="font-bold text-vscode-errorForeground">Error</span>
         </div>
-        <div className="chat-row-error-content">
+        <div className="text-vscode-errorForeground">
           {message.text || 'An error occurred'}
         </div>
       </div>
@@ -202,9 +164,9 @@ export const ChatRow: React.FC<ChatRowProps> = ({
   if (isApiRequest) {
     const cost = message.apiMetrics?.cost
     return (
-      <div className="chat-row chat-row-api">
-        <div style={{ ...headerStyle, justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div className="px-[15px] py-[10px] pr-[6px]">
+        <div className="flex items-center justify-between gap-2.5 mb-2.5 break-words">
+          <div className="flex items-center gap-2.5">
             {isStreaming ? (
               <ProgressIndicator />
             ) : (
@@ -213,7 +175,7 @@ export const ChatRow: React.FC<ChatRowProps> = ({
             <span>{isStreaming ? 'Streaming...' : 'API Request'}</span>
           </div>
           {cost !== null && cost !== undefined && cost > 0 && (
-            <div className="chat-row-cost">
+            <div className="text-vscode-descriptionForeground text-sm">
               ${cost.toFixed(4)}
             </div>
           )}
@@ -225,7 +187,7 @@ export const ChatRow: React.FC<ChatRowProps> = ({
   // Render reasoning/thinking message
   if (isAssistant && message.say === 'reasoning') {
     return (
-      <div className="chat-row chat-row-assistant">
+      <div className="px-[15px] py-[10px] pr-[6px]">
         <ReasoningBlock
           content={message.text || ''}
           ts={message.ts}
@@ -241,24 +203,29 @@ export const ChatRow: React.FC<ChatRowProps> = ({
     const hasAgentMode = message.apiMetrics?.agentMode && message.apiMetrics?.selectedModel
 
     return (
-      <div className="chat-row chat-row-assistant">
-        <div style={headerStyle}>
+      <div className="px-[15px] py-[10px] pr-[6px]">
+        <div className="flex items-center gap-2.5 mb-2.5 break-words">
           <MessageCircle className="w-4 h-4" aria-label="Assistant icon" />
-          <span style={{ fontWeight: 'bold' }}>Oropendola said</span>
+          <span className="font-bold">Oropendola said</span>
           {hasAgentMode && message.apiMetrics && (
-            <AgentModelBadge 
+            <AgentModelBadge
               model={message.apiMetrics.selectedModel || ''}
               selectionReason={message.apiMetrics.selectionReason}
               compact={true}
             />
           )}
         </div>
-        <div className="chat-row-assistant-content">
+        <div className="text-vscode-foreground">
           <MarkdownBlock markdown={message.text} partial={message.partial} />
           {message.images && message.images.length > 0 && (
-            <div className="chat-row-images">
+            <div className="flex gap-2 flex-wrap mt-2">
               {message.images.map((img, i) => (
-                <img key={i} src={img} alt={`Image ${i + 1}`} className="chat-row-image" />
+                <img
+                  key={i}
+                  src={img}
+                  alt={`Image ${i + 1}`}
+                  className="max-w-[200px] max-h-[200px] rounded border border-vscode-panel-border"
+                />
               ))}
             </div>
           )}
@@ -269,17 +236,22 @@ export const ChatRow: React.FC<ChatRowProps> = ({
 
   // Default rendering for other message types
   return (
-    <div className={`chat-row ${isAssistant ? 'chat-row-assistant' : 'chat-row-default'}`}>
-      <div className="chat-row-content">
+    <div className="px-[15px] py-[10px] pr-[6px]">
+      <div className="text-vscode-foreground">
         {message.text && (
-          <div className="chat-row-text">
+          <div>
             <MarkdownBlock markdown={message.text} partial={message.partial} />
           </div>
         )}
         {message.images && message.images.length > 0 && (
-          <div className="chat-row-images">
+          <div className="flex gap-2 flex-wrap mt-2">
             {message.images.map((img, i) => (
-              <img key={i} src={img} alt={`Image ${i + 1}`} className="chat-row-image" />
+              <img
+                key={i}
+                src={img}
+                alt={`Image ${i + 1}`}
+                className="max-w-[200px] max-h-[200px] rounded border border-vscode-panel-border"
+              />
             ))}
           </div>
         )}

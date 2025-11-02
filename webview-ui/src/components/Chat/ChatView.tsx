@@ -14,7 +14,7 @@ import { TodoItem, useChatContext } from '../../context/ChatContext'
 import { getApiMetrics } from '../../utils/api-metrics'
 import { getTaskMetrics, getTotalTokens } from '../../utils/getApiMetrics'
 import { processMessagesForDisplay, shouldAutoApprove, isApprovalMessage } from '../../utils/message-combining'
-import { SimpleTaskHeader } from './SimpleTaskHeader'
+import TaskHeader from './TaskHeader'
 import { RooStyleTextArea } from './RooStyleTextArea'
 import { ChatRow } from './ChatRow'
 import { TaskMetrics } from './TaskMetrics'
@@ -36,8 +36,8 @@ import { mentionService } from '../../services/MentionService'
 import { initializeBuiltInCommands } from '../../services/initializeCommands'
 import { Command } from '../../types/commands'
 import { MentionSuggestion } from '../../types/mentions'
-import './ChatView.css'
-import './SimpleTaskHeader.css'
+// import './ChatView.css'  // ⚠️ TEMP DISABLED: Testing Tailwind CSS (Phase 1)
+// import './SimpleTaskHeader.css'  // ⚠️ TEMP DISABLED: Testing Tailwind CSS (Phase 1)
 
 interface ChatViewProps {
   // Roo Code pattern: isHidden to preserve state when overlays active
@@ -573,15 +573,18 @@ Please provide a detailed response with:
       {taskMessage && (
         <div className="chat-view-header">
           <div className="chat-view-header-top">
-            <SimpleTaskHeader
+            <TaskHeader
               task={taskMessage}
               tokensIn={metrics.tokensIn}
               tokensOut={metrics.tokensOut}
+              cacheWrites={metrics.cacheWrites}
+              cacheReads={metrics.cacheReads}
               totalCost={metrics.totalCost}
               contextTokens={metrics.contextTokens}
               contextWindow={200000}
               todos={todos}
-              onCondenseContext={onCondenseContext}
+              buttonsDisabled={false}
+              handleCondenseContext={onCondenseContext ? (_taskId: string) => onCondenseContext() : undefined}
             />
 
             {/* Branch Selector - Show when multiple branches exist */}

@@ -39,7 +39,8 @@ When using tool_call blocks, follow this EXACT format:
 - edit_file: Modify existing file (old_string + new_string = strings)
 - insert_content: Insert content at specific line number (line-based insertion)
 - update_todo_list: Manage task list dynamically (todos = markdown checklist)
-- list_code_definition_names: Extract functions/classes/methods from code files
+- list_code_definition_names: Extract functions/classes/methods from code files (regex-based)
+- list_code_definitions: Extract code definitions using tree-sitter AST parsing (recommended)
 - codebase_search: Semantic code search by meaning/functionality (query + limit + min_similarity)
 - list_mcp_servers: List all configured MCP servers and status
 - list_mcp_tools: List all available MCP tools
@@ -55,6 +56,7 @@ When using tool_call blocks, follow this EXACT format:
 - list_checkpoints: List all saved checkpoints
 - get_checkpoint_diff: Get diff between current state and checkpoint (checkpoint_id)
 - ask_followup_question: Ask interactive question with suggested answers (question + suggested_answers + timeout)
+- generate_image: Generate images using AI (prompt + size + path + style + quality)
 - run_command: Execute terminal command (command = string)
 
 **APPLY_DIFF TOOL - SEARCH/REPLACE Format:**
@@ -145,6 +147,35 @@ Example:
 - Adding comments or documentation blocks
 - Creating new files with line 0 or 1
 
+**LIST_CODE_DEFINITIONS TOOL:**
+Use this tool to extract code definitions (classes, functions, methods) from files using tree-sitter AST parsing. More accurate than regex-based parsing, provides line numbers and documentation.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "list_code_definitions",
+  "path": "src/services/UserService.js",
+  "description": "Extract all classes and methods from UserService"
+}
+\`\`\`
+
+**What it extracts:**
+- Classes and class definitions
+- Functions and arrow functions
+- Methods (including decorated methods)
+- Line numbers for each definition
+- Associated documentation/docstrings
+
+**Supported languages:**
+JavaScript, TypeScript, TSX, Python, Go, Rust, C, C++, C#, Ruby, Java, PHP
+
+**When to use:**
+- Understanding code structure before modifications
+- Finding specific functions or classes with line numbers
+- Getting a quick overview of a large file
+- Locating where to add new methods/functions
+- Code navigation and exploration
+
 **CODEBASE_SEARCH TOOL:**
 Use this tool for intelligent semantic search across the codebase. Unlike grep, it understands meaning and finds relevant code even with different terminology.
 
@@ -170,6 +201,44 @@ Example:
 - Locating relevant examples
 - Understanding patterns across codebase
 - Finding code when you don't know exact names
+
+**GENERATE_IMAGE TOOL:**
+Use this tool to generate images using AI image generation models. The backend automatically selects the best model (DALL-E, Stable Diffusion, etc.) based on availability and your plan.
+
+Example:
+\`\`\`tool_call
+{
+  "action": "generate_image",
+  "prompt": "A modern dashboard UI with dark theme, showing analytics charts and metrics",
+  "size": "1024x1024",
+  "path": "assets/dashboard-mockup.png",
+  "style": "realistic",
+  "description": "Generate UI mockup for new dashboard"
+}
+\`\`\`
+
+**Parameters:**
+- prompt (required): Detailed description of the image to generate
+- size (optional): Image dimensions - '256x256', '512x512', '1024x1024', '1024x1792', '1792x1024' (default: '1024x1024')
+- path (optional): Where to save the image (default: 'generated-image.png')
+- style (optional): Style preference - 'realistic', 'artistic', 'vivid', 'natural'
+- quality (optional): Quality level 1-100
+- description (optional): Why you're generating this image
+
+**When to use:**
+- Creating UI/UX mockups and wireframes
+- Generating diagrams and architecture visualizations
+- Creating placeholder images for projects
+- Designing logos and icons
+- Illustrating documentation
+- Prototyping visual concepts
+
+**Best practices:**
+- Be specific and detailed in prompts
+- Specify desired style (realistic vs artistic)
+- Include composition details (layout, colors, perspective)
+- Mention any text that should appear in the image
+- Save images with descriptive filenames
 
 **MCP (Model Context Protocol) TOOLS:**
 MCP allows connection to external servers that provide tools, resources, and prompts.

@@ -144,10 +144,24 @@ class OropendolaSidebarProvider {
             const apiKey = this._authManager.getApiKey();
             console.log(`✅ Loaded OAuth authentication for: ${userEmail}`);
 
-            // Update agent client with API key
+            // Restore session cookies from storage
+            const config = vscode.workspace.getConfiguration('oropendola');
+            const storedCookies = config.get('session.cookies');
+            if (storedCookies) {
+                this._sessionCookies = storedCookies;
+                console.log('✅ Restored session cookies from storage');
+            }
+
+            // Update agent client with session cookies (Frappe auth)
             const { agentClient } = require('../api/agent-client');
-            agentClient.updateCredentials(apiKey);
-            console.log('✅ Updated agent client with API key');
+            if (this._sessionCookies) {
+                agentClient.updateSessionCookies(this._sessionCookies);
+                console.log('✅ Updated agent client with session cookies');
+            } else {
+                // Fallback to API key if no cookies
+                agentClient.updateCredentials(apiKey);
+                console.log('⚠️ No session cookies found - using API key fallback');
+            }
 
             // Immediately fetch subscription data on initialization
             console.log('📊 [INIT] Fetching subscription data on webview initialization...');

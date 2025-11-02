@@ -15,7 +15,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react'
 import type { ClineMessage } from '../../types/cline-message'
 import { TodoItem } from '../../context/ChatContext'
 import { TodoListDisplay } from './TodoListDisplay'
-import './SimpleTaskHeader.css'
+// import './SimpleTaskHeader.css'  // ⚠️ TEMP DISABLED: Testing Tailwind CSS (Phase 1)
 
 interface SimpleTaskHeaderProps {
   // Task info
