@@ -23,13 +23,28 @@ interface SubscriptionBannerProps {
 }
 
 export const SubscriptionBanner: React.FC<SubscriptionBannerProps> = ({ subscription, onRenew }) => {
-  if (!subscription) return null
+  console.log('🎗️ [SubscriptionBanner] Rendering with subscription:', subscription)
+
+  if (!subscription) {
+    console.log('🎗️ [SubscriptionBanner] No subscription data - hiding banner')
+    return null
+  }
+
+  console.log('🎗️ [SubscriptionBanner] Subscription status:', subscription.status, 'is_active:', subscription.is_active)
 
   // Don't show banner if subscription is active
-  if (subscription.is_active) return null
+  if (subscription.is_active) {
+    console.log('🎗️ [SubscriptionBanner] Subscription is active - hiding banner')
+    return null
+  }
 
   // Show banner only for expired subscriptions
-  if (subscription.status !== 'Expired') return null
+  if (subscription.status !== 'Expired') {
+    console.log('🎗️ [SubscriptionBanner] Subscription not expired (status:', subscription.status, ') - hiding banner')
+    return null
+  }
+
+  console.log('🎗️ [SubscriptionBanner] SHOWING BANNER - subscription expired')
 
   const isTrial = subscription.is_trial
   const daysAgo = subscription.expired_days_ago || 0

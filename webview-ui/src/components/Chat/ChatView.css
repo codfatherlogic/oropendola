@@ -8,14 +8,22 @@
 .chat-view {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  height: 100%;
+  width: 100%;
   background: var(--vscode-editor-background);
   color: var(--vscode-foreground);
+  position: relative;
 }
 
 /* Roo Code pattern: Hide when overlays active but preserve state */
+/* Use visibility instead of display:none to maintain layout and prevent reflow */
 .chat-view.hidden {
-  display: none;
+  visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* Navigation Bar */

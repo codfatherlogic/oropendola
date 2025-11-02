@@ -149,6 +149,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     console.log('🔐 [ChatContext] Webview ready - requesting auth status')
     vscode.postMessage({ type: 'getAuthStatus' })
 
+    // Request account data (includes subscription info)
+    console.log('📊 [ChatContext] Requesting account data for subscription info')
+    vscode.postMessage({ type: 'getAccountData' })
+
     // Listen for messages from extension
     const handleMessage = (event: MessageEvent) => {
       const message = event.data
@@ -160,13 +164,23 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
           setIsAuthenticated(message.isAuthenticated)
           setAuthMessage(message.message || null)
           console.log(`🔐 [ChatContext] Set isAuthenticated=${message.isAuthenticated}, authMessage="${message.message}"`)
+
+          // If user just authenticated, request account data
+          if (message.isAuthenticated) {
+            console.log('📊 [ChatContext] User authenticated - requesting account data')
+            vscode.postMessage({ type: 'getAccountData' })
+          }
           break
 
         case 'accountData':
           // Update subscription data from account data
+          console.log('📊 [ChatContext] Received accountData message:', message.data)
+          console.log('📊 [ChatContext] Subscription field exists?', !!message.data?.subscription)
           if (message.data?.subscription) {
-            console.log('📊 [ChatContext] Received subscription data:', message.data.subscription)
+            console.log('📊 [ChatContext] Setting subscription data:', message.data.subscription)
             setSubscription(message.data.subscription)
+          } else {
+            console.log('⚠️ [ChatContext] No subscription data in accountData message')
           }
           break
 
