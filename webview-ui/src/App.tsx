@@ -20,6 +20,7 @@ import { ChatView } from './components/Chat/ChatView'
 import { HistoryView } from './components/History/HistoryView'
 import { SettingsView } from './components/Settings/SettingsView'
 import { AccountSettings } from './components/Account/AccountSettings'
+import { SubscribePrompt } from './components/Auth/SubscribePrompt'
 import './AppIntegrated.css'
 
 // Tab type matching Roo Code pattern - chat, history, settings, account
@@ -39,6 +40,7 @@ const ChatInterface: React.FC = () => {
     error,
     isAuthenticated,
     authMessage,
+    subscription,
     autoApprovalEnabled,
     autoApproveToggles,
     sendMessage,
@@ -52,9 +54,32 @@ const ChatInterface: React.FC = () => {
   // Tab state - Roo Code pattern
   const [tab, setTab] = useState<Tab>('chat')
 
+  // Determine if we should show subscription prompt
+  // Show when: authenticated + subscription exists + not active + on chat tab
+  const shouldShowSubscribePrompt =
+    isAuthenticated &&
+    subscription !== null &&
+    !subscription.is_active &&
+    tab === 'chat'
+
+  console.log('🔒 [App] shouldShowSubscribePrompt:', shouldShowSubscribePrompt, {
+    isAuthenticated,
+    hasSubscription: subscription !== null,
+    isActive: subscription?.is_active,
+    tab
+  })
+
   // Switch tab with callback - like Roo Code
   const switchTab = useCallback((newTab: Tab) => {
     setTab(newTab)
+  }, [])
+
+  // Handle subscription - open pricing page
+  const handleSubscribe = useCallback(() => {
+    console.log('🔒 [App] Opening pricing page')
+    // @ts-ignore - vscode is available in webview
+    const vscode = acquireVsCodeApi()
+    vscode.postMessage({ type: 'openPricingPage' })
   }, [])
 
   // Listen for switchTab messages from extension (Panel Toolbar buttons)
@@ -106,9 +131,18 @@ const ChatInterface: React.FC = () => {
         />
       )}
 
-      {/* ChatView ALWAYS rendered - hidden when overlays active */}
+      {/* Subscription gate - show when authenticated but no active subscription */}
+      {shouldShowSubscribePrompt && (
+        <SubscribePrompt
+          subscription={subscription}
+          userEmail={null}
+          onSubscribe={handleSubscribe}
+        />
+      )}
+
+      {/* ChatView ALWAYS rendered - hidden when overlays active OR subscription prompt shown */}
       <ChatView
-        isHidden={tab !== 'chat'}
+        isHidden={tab !== 'chat' || shouldShowSubscribePrompt}
         messages={messages}
         taskMessage={taskMessage || undefined}
         todos={todos}

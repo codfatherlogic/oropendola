@@ -1,0 +1,167 @@
+/**
+ * Subscribe Prompt Styles
+ *
+ * Full-screen overlay shown when user has no active subscription
+ */
+
+.subscribe-prompt {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--vscode-editor-background);
+  z-index: 1000;
+  padding: 20px;
+}
+
+.subscribe-prompt-container {
+  max-width: 600px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Icon */
+.subscribe-prompt-icon {
+  margin-bottom: 32px;
+  color: var(--vscode-textLink-foreground);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Content */
+.subscribe-prompt-content {
+  width: 100%;
+}
+
+.subscribe-prompt-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  margin: 0 0 12px 0;
+  line-height: 1.2;
+}
+
+.subscribe-prompt-email {
+  font-size: 14px;
+  color: var(--vscode-descriptionForeground);
+  margin: 0 0 16px 0;
+  opacity: 0.8;
+}
+
+.subscribe-prompt-message {
+  font-size: 16px;
+  color: var(--vscode-descriptionForeground);
+  margin: 0 0 32px 0;
+  line-height: 1.5;
+}
+
+/* Features */
+.subscribe-prompt-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+  text-align: left;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--vscode-foreground);
+  transition: all 0.2s ease;
+}
+
+.feature-item:hover {
+  background: var(--vscode-list-hoverBackground);
+  transform: translateY(-2px);
+}
+
+.feature-icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* CTA Button */
+.subscribe-prompt-button {
+  width: 100%;
+  max-width: 300px;
+  padding: 14px 28px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.subscribe-prompt-button:hover {
+  background: var(--vscode-button-hoverBackground);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.subscribe-prompt-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Note */
+.subscribe-prompt-note {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .subscribe-prompt-features {
+    grid-template-columns: 1fr;
+  }
+
+  .subscribe-prompt-title {
+    font-size: 24px;
+  }
+
+  .subscribe-prompt-message {
+    font-size: 14px;
+  }
+}
