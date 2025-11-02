@@ -9,10 +9,10 @@ import vscode from '../../vscode-api'
 import './AccountSettings.css'
 
 interface UserProfile {
-  name: string
-  email: string
-  phone: string
-  country: string
+  name?: string
+  email?: string
+  phone?: string
+  country?: string
 }
 
 interface Subscription {
@@ -49,11 +49,11 @@ interface RequestAnalytics {
 }
 
 interface AccountData {
-  profile: UserProfile
-  subscription: Subscription | null
-  usage: UsageStatistics
-  daily_limit: DailyLimit
-  analytics: RequestAnalytics
+  profile?: UserProfile
+  subscription?: Subscription | null
+  usage?: UsageStatistics
+  daily_limit?: DailyLimit
+  analytics?: RequestAnalytics
 }
 
 interface AccountSettingsProps {
@@ -273,19 +273,19 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onDone, isAuth
           <div className="info-grid">
             <div className="info-item">
               <label>Name:</label>
-              <div className="info-value">{accountData.profile.name}</div>
+              <div className="info-value">{accountData.profile?.name || 'Not available'}</div>
             </div>
             <div className="info-item">
               <label>Email:</label>
-              <div className="info-value">{accountData.profile.email}</div>
+              <div className="info-value">{accountData.profile?.email || 'Not available'}</div>
             </div>
             <div className="info-item">
               <label>Phone:</label>
-              <div className="info-value">{accountData.profile.phone}</div>
+              <div className="info-value">{accountData.profile?.phone || 'Not available'}</div>
             </div>
             <div className="info-item">
               <label>Country:</label>
-              <div className="info-value">{accountData.profile.country}</div>
+              <div className="info-value">{accountData.profile?.country || 'Not available'}</div>
             </div>
           </div>
         </div>
@@ -328,7 +328,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onDone, isAuth
                 <div className="usage-label">Input Tokens</div>
                 <div className="usage-sublabel">Tokens sent to AI</div>
               </div>
-              <div className="usage-value">{formatNumber(accountData.usage.input_tokens)}</div>
+              <div className="usage-value">{formatNumber(accountData.usage?.input_tokens)}</div>
             </div>
 
             <div className="usage-card">
@@ -337,7 +337,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onDone, isAuth
                 <div className="usage-label">Output Tokens</div>
                 <div className="usage-sublabel">Tokens received from AI</div>
               </div>
-              <div className="usage-value">{formatNumber(accountData.usage.output_tokens)}</div>
+              <div className="usage-value">{formatNumber(accountData.usage?.output_tokens)}</div>
             </div>
 
             <div className="usage-card">
@@ -346,7 +346,7 @@ export const AccountSettings: React.FC<AccountSettingsProps> = ({ onDone, isAuth
                 <div className="usage-label">Cached Tokens</div>
                 <div className="usage-sublabel">Optimized cached responses</div>
               </div>
-              <div className="usage-value">{formatNumber(accountData.usage.cached_tokens)}</div>
+              <div className="usage-value">{formatNumber(accountData.usage?.cached_tokens)}</div>
             </div>
           </div>
         </div>
